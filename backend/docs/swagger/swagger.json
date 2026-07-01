@@ -1,0 +1,19 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Nesting Optimizer API",
+    "description": "Backend API for nonlinear dense nesting of flat surfaces.",
+    "contact": {
+      "name": "Diana Podshivalenko"
+    },
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8082",
+      "description": " Local server"
+    }
+  ],
+  "paths": {},
+  "components": {}
+}

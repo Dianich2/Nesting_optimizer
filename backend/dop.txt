@@ -1,0 +1,15 @@
+// устанавливаем fiberV3
+go get github.com/gofiber/fiber/v3
+
+//устанавливаем cleanenv
+go get github.com/ilyakaznacheev/cleanenv
+
+// ставим sqlx и драйвер для postgres
+go get github.com/jmoiron/sqlx
+go get github.com/lib/pq
+
+// ставим goose
+go install github.com/pressly/goose/v3/cmd/goose@latest
+
+// ставим swagger
+go install github.com/parvez3019/go-swagger3@latest
