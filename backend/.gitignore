@@ -1,0 +1,23 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+bin/
+dist/
+tmp/
+coverage/
+*.out
+*.test
+*.exe
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Swagger generated files
+docs/swagger/swagger.json
