@@ -1,0 +1,115 @@
+definitions:
+  apperror.FieldCode:
+    enum:
+    - required
+    - invalid
+    - too_long
+    - already_exists
+    type: string
+    x-enum-varnames:
+    - FieldCodeRequired
+    - FieldCodeInvalid
+    - FieldCodeTooLong
+    - FieldCodeAlreadyExists
+  apperror.FieldError:
+    properties:
+      code:
+        $ref: '#/definitions/apperror.FieldCode'
+      field:
+        type: string
+      message:
+        type: string
+    type: object
+  dto.CreateUserRequest:
+    properties:
+      email:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      login:
+        type: string
+      password:
+        type: string
+    type: object
+  dto.CreateUserResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: integer
+      last_name:
+        type: string
+      login:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  httperror.ErrorBody:
+    properties:
+      code:
+        type: string
+      details:
+        items:
+          $ref: '#/definitions/apperror.FieldError'
+        type: array
+      message:
+        type: string
+    type: object
+  httperror.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/httperror.ErrorBody'
+    type: object
+info:
+  contact: {}
+  description: Backend API for nonlinear dense nesting of flat surfaces.
+  title: Nesting Optimizer API
+  version: 1.0.0
+paths:
+  /api/v1/users:
+    post:
+      consumes:
+      - application/json
+      description: Create User
+      parameters:
+      - description: User
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.CreateUserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      summary: Create User
+swagger: "2.0"

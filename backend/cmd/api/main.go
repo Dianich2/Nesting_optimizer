@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	_ "server_nesting_optimizer/docs"
 	"server_nesting_optimizer/internal/app"
 	"syscall"
 )

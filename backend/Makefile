@@ -48,11 +48,7 @@ migrate-reset:
 	goose -dir $(MIGRATIONS_DIR) postgres "$(MIGRATE_DSN)" reset
 
 swag:
-	mkdir -p docs/swagger
-	go-swagger3 --module-path . \
-		--main-file-path ./cmd/api/main.go \
-		--output ./docs/swagger/swagger.json \
-		--schema-without-pkg
+	swag init -g ./cmd/api/main.go -o ./docs
 
 dev: up migrate-up swag run
 

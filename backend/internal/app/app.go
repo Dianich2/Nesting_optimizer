@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"server_nesting_optimizer/internal/app/container"
 	"server_nesting_optimizer/internal/config"
 	"server_nesting_optimizer/internal/repository/postgres"
 	httptransport "server_nesting_optimizer/internal/transport/http"
@@ -14,10 +15,11 @@ import (
 )
 
 type App struct {
-	cfg    config.Config
-	log    *slog.Logger
-	server *fiber.App
-	db     *sqlx.DB
+	cfg       config.Config
+	log       *slog.Logger
+	server    *fiber.App
+	db        *sqlx.DB
+	container *container.Container
 }
 
 func New() (*App, error) {
@@ -36,13 +38,16 @@ func New() (*App, error) {
 		return nil, fmt.Errorf("create db connection pool: %w", err)
 	}
 
-	server := httptransport.NewRouter()
+	deps := container.New(db, cfg)
+
+	server := httptransport.NewRouter(deps)
 
 	return &App{
-		cfg:    cfg,
-		log:    log,
-		server: server,
-		db:     db,
+		cfg:       cfg,
+		log:       log,
+		server:    server,
+		db:        db,
+		container: deps,
 	}, nil
 }
 

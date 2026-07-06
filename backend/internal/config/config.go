@@ -7,10 +7,11 @@ import (
 )
 
 type Config struct {
-	App  AppConfig  `env-prefix:"APP_"`
-	HTTP HTTPConfig `env-prefix:"HTTP_"`
-	Log  LogConfig  `env-prefix:"LOG_"`
-	DB   DBConfig   `env-prefix:"DB_"`
+	App      AppConfig      `env-prefix:"APP_"`
+	HTTP     HTTPConfig     `env-prefix:"HTTP_"`
+	Log      LogConfig      `env-prefix:"LOG_"`
+	DB       DBConfig       `env-prefix:"DB_"`
+	Security SecurityConfig `env-prefix:"SECURITY_"`
 }
 
 type AppConfig struct {
@@ -32,6 +33,10 @@ type DBConfig struct {
 	Password string `env:"PASSWORD" env-default:"postgres"`
 	DBName   string `env:"NAME" env-default:"nesting_optimizer"`
 	SSLMode  string `env:"SSL_MODE" env-default:"disable"`
+}
+
+type SecurityConfig struct {
+	BcryptCost int `env:"BCRYPT_COST" env-default:"12"`
 }
 
 func Load() (Config, error) {
