@@ -2,6 +2,9 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
 
 	domainuser "server_nesting_optimizer/internal/domain/user"
 
@@ -18,12 +21,30 @@ func NewUserRepository(db *sqlx.DB) *UserRepository {
 	}
 }
 
-func (ur *UserRepository) Create(
+func mapCreateUserError(err error) error {
+	constraint, ok := uniqueViolationConstraint(err)
+	if !ok {
+		return err
+	}
+
+	switch constraint {
+	case "users_login_unique":
+		return domainuser.ErrLoginAlreadyExists
+
+	case "users_email_unique":
+		return domainuser.ErrEmailAlreadyExists
+
+	default:
+		return err
+	}
+}
+
+func (r *UserRepository) Create(
 	ctx context.Context,
 	user domainuser.User,
 ) (domainuser.User, error) {
 	var createdUser domainuser.User
-	if err := ur.db.GetContext(
+	if err := r.db.GetContext(
 		ctx,
 		&createdUser,
 		createUserQuery,
@@ -33,29 +54,60 @@ func (ur *UserRepository) Create(
 		user.FirstName,
 		user.LastName,
 	); err != nil {
-		return domainuser.User{}, err
+		mappedErr := mapCreateUserError(err)
+		return domainuser.User{}, fmt.Errorf(
+			"create user: %w",
+			mappedErr,
+		)
 	}
 	return createdUser, nil
 }
 
-func (ur *UserRepository) ExistsByLogin(
+func (r *UserRepository) ExistsByLogin(
 	ctx context.Context,
 	login string,
 ) (bool, error) {
 	var exists bool
-	if err := ur.db.GetContext(ctx, &exists, existUserByLoginQuery, login); err != nil {
-		return false, err
+	if err := r.db.GetContext(ctx, &exists, existsUserByLoginQuery, login); err != nil {
+		return false, fmt.Errorf(
+			"exists by login: %w",
+			err,
+		)
 	}
 	return exists, nil
 }
 
-func (ur *UserRepository) ExistsByEmail(
+func (r *UserRepository) ExistsByEmail(
 	ctx context.Context,
 	email string,
 ) (bool, error) {
 	var exists bool
-	if err := ur.db.GetContext(ctx, &exists, existUserByEmailQuery, email); err != nil {
-		return false, err
+	if err := r.db.GetContext(ctx, &exists, existsUserByEmailQuery, email); err != nil {
+		return false, fmt.Errorf(
+			"exists by email: %w",
+			err,
+		)
 	}
 	return exists, nil
+}
+
+func (r *UserRepository) GetByIdentifier(
+	ctx context.Context,
+	identifier string,
+) (domainuser.User, error) {
+	var user domainuser.User
+	if err := r.db.GetContext(ctx, &user, getByIdentifierQuery, identifier); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domainuser.User{}, fmt.Errorf(
+				"get user by identifier: %w",
+				domainuser.ErrNotFound,
+			)
+		}
+
+		return domainuser.User{}, fmt.Errorf(
+			"get user by identifier: %w",
+			err,
+		)
+	}
+	return user, nil
 }

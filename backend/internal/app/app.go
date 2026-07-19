@@ -59,6 +59,7 @@ func (a *App) Run() error {
 		"addr", addr,
 		"env", a.cfg.App.Env,
 	)
+
 	return a.server.Listen(addr)
 }
 

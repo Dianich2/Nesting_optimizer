@@ -1,4 +1,4 @@
-FROM golang:1.24 as builder
+FROM golang:1.24 AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -9,4 +9,4 @@ FROM alpine:3.22
 WORKDIR /app
 COPY --from=builder /app/nesting_optimizer .
 EXPOSE 8082
-CMD [ "./nesting_optimizer" ]
+ENTRYPOINT [ "./nesting_optimizer" ]

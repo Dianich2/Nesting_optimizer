@@ -12,6 +12,7 @@ type Config struct {
 	Log      LogConfig      `env-prefix:"LOG_"`
 	DB       DBConfig       `env-prefix:"DB_"`
 	Security SecurityConfig `env-prefix:"SECURITY_"`
+	JWT      JWTConfig      `env-prefix:"JWT_"`
 }
 
 type AppConfig struct {
@@ -37,6 +38,14 @@ type DBConfig struct {
 
 type SecurityConfig struct {
 	BcryptCost int `env:"BCRYPT_COST" env-default:"12"`
+}
+
+type JWTConfig struct {
+	Issuer        string `env:"ISSUER" env-default:"nesting-optimizer"`
+	AccessSecret  string `env:"ACCESS_SECRET" env-default:"dev-access-secret"`
+	AccessTTLMin  int    `env:"ACCESS_TTL_MIN" env-default:"15"`
+	RefreshSecret string `env:"REFRESH_SECRET" env-default:"dev-refresh-secret"`
+	RefreshTTLMin int    `env:"REFRESH_TTL_MIN" env-default:"10080"`
 }
 
 func Load() (Config, error) {

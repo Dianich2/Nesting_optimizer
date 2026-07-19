@@ -30,3 +30,38 @@ func ToCreateUserResponse(
 		UpdatedAt: resp.UpdatedAt,
 	}
 }
+
+func ToLoginInput(
+	req dto.LoginRequest,
+) userusecase.LoginInput {
+	return userusecase.LoginInput{
+		Identifier: req.Identifier,
+		Password:   req.Password,
+	}
+}
+
+func ToLoginResponse(
+	resp userusecase.LoginOutput,
+) dto.LoginResponse {
+	return dto.LoginResponse{
+		AccessToken:  resp.AccessToken,
+		RefreshToken: resp.RefreshToken,
+	}
+}
+
+func ToRefreshInput(
+	req dto.RefreshRequest,
+) userusecase.RefreshInput {
+	return userusecase.RefreshInput{
+		RefreshToken: req.RefreshToken,
+	}
+}
+
+func ToRefreshResponse(
+	resp userusecase.RefreshOutput,
+) dto.RefreshResponse {
+	return dto.RefreshResponse{
+		AccessToken:  resp.AccessToken,
+		RefreshToken: resp.RefreshToken,
+	}
+}

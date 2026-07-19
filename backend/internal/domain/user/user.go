@@ -14,16 +14,24 @@ type User struct {
 	DeletedAt    *time.Time `db:"deleted_at"`
 }
 
-func (u *User) IsDeleted() bool {
+func (u User) IsDeleted() bool {
 	return u.DeletedAt != nil
 }
 
 func (u *User) Delete(now time.Time) {
+	if u.IsDeleted() {
+		return
+	}
+
 	u.DeletedAt = &now
 	u.UpdatedAt = now
 }
 
 func (u *User) Restore(now time.Time) {
+	if !u.IsDeleted() {
+		return
+	}
+
 	u.DeletedAt = nil
 	u.UpdatedAt = now
 }

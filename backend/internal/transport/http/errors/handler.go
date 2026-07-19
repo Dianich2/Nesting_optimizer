@@ -6,17 +6,27 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+func writeInternalError(
+	c fiber.Ctx,
+) error {
+	return c.Status(fiber.StatusInternalServerError).JSON(NewErrorResponse(
+		string(apperror.AppCodeInternal),
+		"internal server error",
+		nil,
+	))
+}
+
 func Handle(
 	c fiber.Ctx,
 	err error,
 ) error {
 	appError, ok := apperror.As(err)
 	if !ok {
-		return c.Status(fiber.StatusInternalServerError).JSON(NewErrorResponse(
-			string(apperror.AppCodeInternal),
-			"internal server error",
-			nil,
-		))
+		return writeInternalError(c)
+	}
+
+	if appError.Code == apperror.AppCodeInternal {
+		return writeInternalError(c)
 	}
 
 	status := fiber.StatusInternalServerError
@@ -32,6 +42,10 @@ func Handle(
 		status = fiber.StatusNotFound
 	case apperror.AppCodeConflict:
 		status = fiber.StatusConflict
+	}
+
+	if status == fiber.StatusInternalServerError {
+		return writeInternalError(c)
 	}
 
 	return c.Status(status).JSON(NewErrorResponse(

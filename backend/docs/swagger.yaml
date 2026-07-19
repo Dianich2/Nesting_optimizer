@@ -50,6 +50,37 @@ definitions:
       updated_at:
         type: string
     type: object
+  dto.LoginRequest:
+    properties:
+      identifier:
+        type: string
+      password:
+        type: string
+    type: object
+  dto.LoginResponse:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+    type: object
+  dto.MeResponse:
+    properties:
+      user_id:
+        type: integer
+    type: object
+  dto.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  dto.RefreshTokenResponse:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+    type: object
   httperror.ErrorBody:
     properties:
       code:
@@ -72,6 +103,97 @@ info:
   title: Nesting Optimizer API
   version: 1.0.0
 paths:
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Login
+      parameters:
+      - description: Credentials
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      summary: Login
+  /api/v1/auth/me:
+    get:
+      description: Me
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MeResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Me
+  /api/v1/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Refresh
+      parameters:
+      - description: Refresh Token
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.RefreshTokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Refresh
   /api/v1/users:
     post:
       consumes:
@@ -95,14 +217,6 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/httperror.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/httperror.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/httperror.ErrorResponse'
         "409":
           description: Conflict
           schema:
@@ -112,4 +226,10 @@ paths:
           schema:
             $ref: '#/definitions/httperror.ErrorResponse'
       summary: Create User
+securityDefinitions:
+  BearerAuth:
+    description: 'Введите токен в формате: Bearer <access_token>'
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

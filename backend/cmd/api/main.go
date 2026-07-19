@@ -13,6 +13,10 @@ import (
 // @Title Nesting Optimizer API
 // @Description Backend API for nonlinear dense nesting of flat surfaces.
 // @ContactName Diana Podshivalenko
+// @SecurityDefinitions.apikey BearerAuth
+// @In header
+// @Name Authorization
+// @Description Введите токен в формате: Bearer <access_token>
 // @Server http://localhost:8082 Local server
 func main() {
 	application, err := app.New()

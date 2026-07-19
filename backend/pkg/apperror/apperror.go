@@ -19,13 +19,14 @@ const (
 	FieldCodeRequired      FieldCode = "required"
 	FieldCodeInvalid       FieldCode = "invalid"
 	FieldCodeTooLong       FieldCode = "too_long"
+	FieldCodeTooShort      FieldCode = "too_short"
 	FieldCodeAlreadyExists FieldCode = "already_exists"
 )
 
 type FieldError struct {
-	Field   string
-	Code    FieldCode
-	Message string
+	Field   string    `json:"field"`
+	Code    FieldCode `json:"code"`
+	Message string    `json:"message"`
 }
 
 func NewFieldError(
