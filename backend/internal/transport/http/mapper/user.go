@@ -65,3 +65,25 @@ func ToRefreshResponse(
 		RefreshToken: resp.RefreshToken,
 	}
 }
+
+func ToGetUserByIDInput(
+	userID int64,
+) userusecase.GetCurrentUserInput {
+	return userusecase.GetCurrentUserInput{
+		ID: userID,
+	}
+}
+
+func ToGetUserByIDResponse(
+	resp userusecase.GetCurrentUserOutput,
+) dto.GetCurrentUserResponse {
+	return dto.GetCurrentUserResponse{
+		ID:        resp.ID,
+		Login:     resp.Login,
+		Email:     resp.Email,
+		FirstName: resp.FirstName,
+		LastName:  resp.LastName,
+		CreatedAt: resp.CreatedAt,
+		UpdatedAt: resp.UpdatedAt,
+	}
+}

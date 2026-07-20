@@ -111,3 +111,30 @@ func (r *UserRepository) GetByIdentifier(
 	}
 	return user, nil
 }
+
+func (r *UserRepository) GetByID(
+	ctx context.Context,
+	id int64,
+) (domainuser.User, error) {
+	var user domainuser.User
+	if err := r.db.GetContext(
+		ctx,
+		&user,
+		getByIDQuery,
+		id,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domainuser.User{}, fmt.Errorf(
+				"get user by id: %w",
+				domainuser.ErrNotFound,
+			)
+		}
+
+		return domainuser.User{}, fmt.Errorf(
+			"get user by id: %w",
+			err,
+		)
+	}
+
+	return user, nil
+}

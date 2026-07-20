@@ -23,6 +23,7 @@ func NewRouter(deps *container.Container) *fiber.App {
 		deps.LoginUseCase,
 		deps.RefreshUseCase,
 		deps.LogoutUseCase,
+		deps.GetCurrentUserUseCase,
 	)
 
 	app.Get("/health", healthHandler.Check)
@@ -33,6 +34,6 @@ func NewRouter(deps *container.Container) *fiber.App {
 	api.Post("/auth/login", userHandler.Login)
 	api.Post("/auth/refresh", userHandler.Refresh)
 	api.Post("/auth/logout", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), userHandler.Logout)
-	api.Get("/auth/me", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), userHandler.Me)
+	api.Get("/users/me", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), userHandler.GetCurrentUser)
 	return app
 }

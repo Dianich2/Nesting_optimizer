@@ -29,6 +29,11 @@ type UserRepository interface {
 		ctx context.Context,
 		identifier string,
 	) (domainuser.User, error)
+
+	GetByID(
+		ctx context.Context,
+		id int64,
+	) (domainuser.User, error)
 }
 
 type PasswordHasher interface {

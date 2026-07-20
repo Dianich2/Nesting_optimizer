@@ -30,10 +30,6 @@ type LoginResponse struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-type MeResponse struct {
-	UserID int64 `json:"user_id"`
-}
-
 type RefreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
@@ -41,4 +37,14 @@ type RefreshRequest struct {
 type RefreshResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+}
+
+type GetCurrentUserResponse struct {
+	ID        int64     `json:"id"`
+	Login     string    `json:"login"`
+	Email     string    `json:"email"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }

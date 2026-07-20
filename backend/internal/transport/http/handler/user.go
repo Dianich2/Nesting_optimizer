@@ -14,10 +14,11 @@ import (
 )
 
 type UserHandler struct {
-	createUserUseCase *userusecase.CreateUserUseCase
-	loginUseCase      *userusecase.LoginUseCase
-	refreshUseCase    *userusecase.RefreshUseCase
-	logoutUseCase     *userusecase.LogoutUseCase
+	createUserUseCase     *userusecase.CreateUserUseCase
+	loginUseCase          *userusecase.LoginUseCase
+	refreshUseCase        *userusecase.RefreshUseCase
+	logoutUseCase         *userusecase.LogoutUseCase
+	getCurrentUserUseCase *userusecase.GetCurrentUserUseCase
 }
 
 func NewUserHandler(
@@ -25,12 +26,14 @@ func NewUserHandler(
 	loginUseCase *userusecase.LoginUseCase,
 	refreshUseCase *userusecase.RefreshUseCase,
 	logoutUseCase *userusecase.LogoutUseCase,
+	getUserByIDUseCase *userusecase.GetCurrentUserUseCase,
 ) *UserHandler {
 	return &UserHandler{
-		createUserUseCase: createUserUseCase,
-		loginUseCase:      loginUseCase,
-		logoutUseCase:     logoutUseCase,
-		refreshUseCase:    refreshUseCase,
+		createUserUseCase:     createUserUseCase,
+		loginUseCase:          loginUseCase,
+		logoutUseCase:         logoutUseCase,
+		refreshUseCase:        refreshUseCase,
+		getCurrentUserUseCase: getUserByIDUseCase,
 	}
 }
 
@@ -111,30 +114,6 @@ func (h *UserHandler) Login(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(loginResp)
 }
 
-// godoc: Me godoc
-// @Summary Me
-// @Description Me
-// @Produce json
-// @Success 200 {object} dto.MeResponse
-// @Failure 401 {object} httperror.ErrorResponse
-// @Failure 500 {object} httperror.ErrorResponse
-// @Resource Users
-// @Security BearerAuth
-// @Router /api/v1/auth/me [get]
-func (h *UserHandler) Me(c fiber.Ctx) error {
-	userID, ok := c.Locals(middleware.UserIDLocalKey).(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
-	}
-
-	return c.Status(fiber.StatusOK).JSON(dto.MeResponse{
-		UserID: userID,
-	})
-}
-
 // godoc: Refresh godoc
 // @Summary Refresh
 // @Description Refresh
@@ -207,4 +186,40 @@ func (h *UserHandler) Logout(c fiber.Ctx) error {
 
 	c.Status(fiber.StatusNoContent)
 	return nil
+}
+
+// godoc: GetCurrentUser godoc
+// @Summary GetCurrentUser
+// @Description GetCurrentUser
+// @Produce json
+// @Success 200 {object} dto.GetCurrentUserResponse
+// @Failure 401 {object} httperror.ErrorResponse
+// @Failure 404 {object} httperror.ErrorResponse
+// @Failure 500 {object} httperror.ErrorResponse
+// @Resource Users
+// @Security BearerAuth
+// @Router /api/v1/users/me [get]
+func (h *UserHandler) GetCurrentUser(c fiber.Ctx) error {
+	userID := c.Locals(middleware.UserIDLocalKey)
+	u, ok := userID.(int64)
+	if !ok {
+		return httperror.Handle(
+			c,
+			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
+		)
+	}
+
+	inputGetUserByIDUseCase := mapper.ToGetUserByIDInput(u)
+
+	outputGetUserByIDUseCase, err := h.getCurrentUserUseCase.Execute(
+		c.Context(),
+		inputGetUserByIDUseCase,
+	)
+	if err != nil {
+		return httperror.Handle(c, err)
+	}
+
+	getUserByIDResp := mapper.ToGetUserByIDResponse(outputGetUserByIDUseCase)
+
+	return c.Status(fiber.StatusOK).JSON(getUserByIDResp)
 }

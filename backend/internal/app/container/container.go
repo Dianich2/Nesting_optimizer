@@ -14,12 +14,13 @@ import (
 )
 
 type Container struct {
-	CreateUserUseCase *userusecase.CreateUserUseCase
-	LoginUseCase      *userusecase.LoginUseCase
-	RefreshUseCase    *userusecase.RefreshUseCase
-	LogoutUseCase     *userusecase.LogoutUseCase
-	JWTManager        *jwtpkg.Manager
-	SessionRepository *postgres.SessionRepository
+	CreateUserUseCase     *userusecase.CreateUserUseCase
+	LoginUseCase          *userusecase.LoginUseCase
+	RefreshUseCase        *userusecase.RefreshUseCase
+	LogoutUseCase         *userusecase.LogoutUseCase
+	GetCurrentUserUseCase *userusecase.GetCurrentUserUseCase
+	JWTManager            *jwtpkg.Manager
+	SessionRepository     *postgres.SessionRepository
 }
 
 func New(
@@ -66,12 +67,17 @@ func New(
 		sessionRepo,
 	)
 
+	getCurrentUserUseCase := userusecase.NewGetCurrentUserUseCase(
+		userRepo,
+	)
+
 	return &Container{
-		CreateUserUseCase: createUserUseCase,
-		LoginUseCase:      loginUseCase,
-		RefreshUseCase:    refreshUseCase,
-		LogoutUseCase:     logoutUseCase,
-		JWTManager:        jwtManager,
-		SessionRepository: sessionRepo,
+		CreateUserUseCase:     createUserUseCase,
+		LoginUseCase:          loginUseCase,
+		RefreshUseCase:        refreshUseCase,
+		LogoutUseCase:         logoutUseCase,
+		GetCurrentUserUseCase: getCurrentUserUseCase,
+		JWTManager:            jwtManager,
+		SessionRepository:     sessionRepo,
 	}
 }

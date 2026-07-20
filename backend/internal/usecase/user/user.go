@@ -19,3 +19,17 @@ type CreateUserOutput struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
+
+type GetCurrentUserInput struct {
+	ID int64
+}
+
+type GetCurrentUserOutput struct {
+	ID        int64
+	Login     string
+	Email     string
+	FirstName string
+	LastName  string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}

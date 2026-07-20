@@ -51,3 +51,18 @@ const getByIdentifierQuery = `
 		AND deleted_at IS NULL
 	LIMIT 1
 `
+
+const getByIDQuery = `
+	SELECT 
+		id, 
+		login, 
+		email,  
+		first_name, 
+		last_name, 
+		created_at, 
+		updated_at, 
+		deleted_at
+	FROM users
+	WHERE id = $1
+		AND deleted_at IS NULL
+`
