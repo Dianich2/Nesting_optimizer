@@ -1,6 +1,6 @@
 -- +goose Up
 create table sessions(
-    session_id uuid primary key, 
+    session_id uuid, 
     user_id bigint not null,
     refresh_token_hash text not null,
     created_at timestamptz not null default now(),

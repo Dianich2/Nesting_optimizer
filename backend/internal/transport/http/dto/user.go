@@ -48,3 +48,18 @@ type GetCurrentUserResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+type UpdateProfileRequest struct {
+	FirstName *string `json:"first_name"`
+	LastName  *string `json:"last_name"`
+}
+
+type UpdateProfileResponse struct {
+	ID        int64     `json:"id"`
+	Login     string    `json:"login"`
+	Email     string    `json:"email"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}

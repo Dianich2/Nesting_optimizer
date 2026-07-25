@@ -27,7 +27,7 @@ func (uc *CreateUserUseCase) Execute(
 	input CreateUserInput,
 ) (CreateUserOutput, error) {
 	input = normalizeCreateUserInput(input)
-	details := validateCreateUserInput(input)
+	details := input.Validate()
 	if len(details) > 0 {
 		return CreateUserOutput{}, apperror.Validation(
 			"validation failed",

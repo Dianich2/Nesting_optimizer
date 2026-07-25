@@ -13,10 +13,8 @@ var (
 	regexValidateName  = regexp.MustCompile(`^\p{L}+([-'’ ]\p{L}+)*$`)
 )
 
-func validateCreateUserInput(
-	uc CreateUserInput,
-) []apperror.FieldError {
-	errors := validateRequiredFields(uc)
+func (uc *CreateUserInput) Validate() []apperror.FieldError {
+	errors := uc.validateRequiredFields()
 
 	errors = append(errors, validateLoginLen(uc.Login)...)
 	errors = append(errors, validateEmailLen(uc.Email)...)
@@ -32,9 +30,7 @@ func validateCreateUserInput(
 	return errors
 }
 
-func validateRequiredFields(
-	uc CreateUserInput,
-) []apperror.FieldError {
+func (uc *CreateUserInput) validateRequiredFields() []apperror.FieldError {
 	var errors []apperror.FieldError
 
 	if uc.Login == "" {
@@ -254,4 +250,50 @@ func validateLoginInput(
 	}
 
 	return errors
+}
+
+func (uc *UpdateProfileInput) Validate() []apperror.FieldError {
+	errors := uc.validateRequiredFields()
+
+	if uc.FirstName != nil {
+		errors = append(errors, validateFirstNameLen(*uc.FirstName)...)
+		errors = append(errors, validateName("first_name", *uc.FirstName)...)
+	}
+
+	if uc.LastName != nil {
+		errors = append(errors, validateLastNameLen(*uc.LastName)...)
+		errors = append(errors, validateName("last_name", *uc.LastName)...)
+	}
+
+	return errors
+}
+
+func (uc *UpdateProfileInput) validateRequiredFields() []apperror.FieldError {
+	var details []apperror.FieldError
+
+	if uc.FirstName == nil && uc.LastName == nil {
+		return []apperror.FieldError{apperror.NewFieldError(
+			"profile",
+			apperror.FieldCodeRequired,
+			"at least one profile field must be provided",
+		)}
+	}
+
+	if uc.FirstName != nil && *uc.FirstName == "" {
+		details = append(details, apperror.NewFieldError(
+			"first_name",
+			apperror.FieldCodeRequired,
+			"first_name must not be empty",
+		))
+	}
+
+	if uc.LastName != nil && *uc.LastName == "" {
+		details = append(details, apperror.NewFieldError(
+			"last_name",
+			apperror.FieldCodeRequired,
+			"last_name must not be empty",
+		))
+	}
+
+	return details
 }

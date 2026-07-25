@@ -34,6 +34,13 @@ type UserRepository interface {
 		ctx context.Context,
 		id int64,
 	) (domainuser.User, error)
+
+	UpdateProfile(
+		ctx context.Context,
+		firstName *string,
+		lastName *string,
+		id int64,
+	) (domainuser.User, error)
 }
 
 type PasswordHasher interface {

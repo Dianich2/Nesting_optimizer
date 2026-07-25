@@ -4,12 +4,14 @@ definitions:
     - required
     - invalid
     - too_long
+    - too_short
     - already_exists
     type: string
     x-enum-varnames:
     - FieldCodeRequired
     - FieldCodeInvalid
     - FieldCodeTooLong
+    - FieldCodeTooShort
     - FieldCodeAlreadyExists
   apperror.FieldError:
     properties:
@@ -50,6 +52,23 @@ definitions:
       updated_at:
         type: string
     type: object
+  dto.GetCurrentUserResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: integer
+      last_name:
+        type: string
+      login:
+        type: string
+      updated_at:
+        type: string
+    type: object
   dto.LoginRequest:
     properties:
       identifier:
@@ -64,21 +83,40 @@ definitions:
       refresh_token:
         type: string
     type: object
-  dto.MeResponse:
-    properties:
-      user_id:
-        type: integer
-    type: object
-  dto.RefreshTokenRequest:
+  dto.RefreshRequest:
     properties:
       refresh_token:
         type: string
     type: object
-  dto.RefreshTokenResponse:
+  dto.RefreshResponse:
     properties:
       access_token:
         type: string
       refresh_token:
+        type: string
+    type: object
+  dto.UpdateProfileRequest:
+    properties:
+      first_name:
+        type: string
+      last_name:
+        type: string
+    type: object
+  dto.UpdateProfileResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: integer
+      last_name:
+        type: string
+      login:
+        type: string
+      updated_at:
         type: string
     type: object
   httperror.ErrorBody:
@@ -135,22 +173,14 @@ paths:
           schema:
             $ref: '#/definitions/httperror.ErrorResponse'
       summary: Login
-  /api/v1/auth/me:
-    get:
-      description: Me
-      produces:
-      - application/json
+  /api/v1/auth/logout:
+    post:
+      description: Logout
       responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.MeResponse'
+        "204":
+          description: No Content
         "401":
           description: Unauthorized
-          schema:
-            $ref: '#/definitions/httperror.ErrorResponse'
-        "403":
-          description: Forbidden
           schema:
             $ref: '#/definitions/httperror.ErrorResponse'
         "500":
@@ -159,7 +189,7 @@ paths:
             $ref: '#/definitions/httperror.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Me
+      summary: Logout
   /api/v1/auth/refresh:
     post:
       consumes:
@@ -171,14 +201,14 @@ paths:
         name: credentials
         required: true
         schema:
-          $ref: '#/definitions/dto.RefreshTokenRequest'
+          $ref: '#/definitions/dto.RefreshRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.RefreshTokenResponse'
+            $ref: '#/definitions/dto.RefreshResponse'
         "400":
           description: Bad Request
           schema:
@@ -191,8 +221,6 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/httperror.ErrorResponse'
-      security:
-      - BearerAuth: []
       summary: Refresh
   /api/v1/users:
     post:
@@ -226,6 +254,68 @@ paths:
           schema:
             $ref: '#/definitions/httperror.ErrorResponse'
       summary: Create User
+  /api/v1/users/me:
+    get:
+      description: GetCurrentUser
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.GetCurrentUserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: GetCurrentUser
+    patch:
+      consumes:
+      - application/json
+      description: UpdateProfile
+      parameters:
+      - description: Update Profile
+        in: body
+        name: updateProfile
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.UpdateProfileResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: UpdateProfile
 securityDefinitions:
   BearerAuth:
     description: 'Введите токен в формате: Bearer <access_token>'

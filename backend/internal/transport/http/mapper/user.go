@@ -66,7 +66,7 @@ func ToRefreshResponse(
 	}
 }
 
-func ToGetUserByIDInput(
+func ToGetCurrentUserInput(
 	userID int64,
 ) userusecase.GetCurrentUserInput {
 	return userusecase.GetCurrentUserInput{
@@ -74,10 +74,33 @@ func ToGetUserByIDInput(
 	}
 }
 
-func ToGetUserByIDResponse(
+func ToGetCurrentUserResponse(
 	resp userusecase.GetCurrentUserOutput,
 ) dto.GetCurrentUserResponse {
 	return dto.GetCurrentUserResponse{
+		ID:        resp.ID,
+		Login:     resp.Login,
+		Email:     resp.Email,
+		FirstName: resp.FirstName,
+		LastName:  resp.LastName,
+		CreatedAt: resp.CreatedAt,
+		UpdatedAt: resp.UpdatedAt,
+	}
+}
+
+func ToUpdateProfileInput(
+	req dto.UpdateProfileRequest,
+) userusecase.UpdateProfileInput {
+	return userusecase.UpdateProfileInput{
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+	}
+}
+
+func ToUpdateProfileResponse(
+	resp userusecase.UpdateProfileOutput,
+) dto.UpdateProfileResponse {
+	return dto.UpdateProfileResponse{
 		ID:        resp.ID,
 		Login:     resp.Login,
 		Email:     resp.Email,

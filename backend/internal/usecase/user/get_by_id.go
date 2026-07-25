@@ -41,5 +41,5 @@ func (uc *GetCurrentUserUseCase) Execute(
 		}
 	}
 
-	return toGetUserByIDOutput(user), nil
+	return toGetCurrentUserOutput(user), nil
 }

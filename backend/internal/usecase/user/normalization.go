@@ -32,3 +32,17 @@ func normalizeLoginInput(
 	input.Identifier = normalizeIdentifier(input.Identifier)
 	return input
 }
+
+func normalizeUpdateProfileInput(
+	input UpdateProfileInput,
+) UpdateProfileInput {
+	if input.FirstName != nil {
+		*input.FirstName = normalizeName(*input.FirstName)
+	}
+
+	if input.LastName != nil {
+		*input.LastName = normalizeName(*input.LastName)
+	}
+
+	return input
+}

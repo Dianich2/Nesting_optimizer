@@ -29,10 +29,24 @@ func toUser(
 	}
 }
 
-func toGetUserByIDOutput(
+func toGetCurrentUserOutput(
 	user domainuser.User,
 ) GetCurrentUserOutput {
 	return GetCurrentUserOutput{
+		ID:        user.ID,
+		Login:     user.Login,
+		Email:     user.Email,
+		FirstName: user.FirstName,
+		LastName:  user.LastName,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+	}
+}
+
+func toUpdateProfileOutput(
+	user domainuser.User,
+) UpdateProfileOutput {
+	return UpdateProfileOutput{
 		ID:        user.ID,
 		Login:     user.Login,
 		Email:     user.Email,

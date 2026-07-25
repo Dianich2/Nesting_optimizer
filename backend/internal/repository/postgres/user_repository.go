@@ -138,3 +138,34 @@ func (r *UserRepository) GetByID(
 
 	return user, nil
 }
+
+func (r *UserRepository) UpdateProfile(
+	ctx context.Context,
+	firstName *string,
+	lastName *string,
+	id int64,
+) (domainuser.User, error) {
+	var updatedUser domainuser.User
+	if err := r.db.GetContext(
+		ctx,
+		&updatedUser,
+		updateProfileQuery,
+		firstName,
+		lastName,
+		id,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domainuser.User{}, fmt.Errorf(
+				"update user profile: %w",
+				domainuser.ErrNotFound,
+			)
+		}
+
+		return domainuser.User{}, fmt.Errorf(
+			"update user profile: %w",
+			err,
+		)
+	}
+
+	return updatedUser, nil
+}

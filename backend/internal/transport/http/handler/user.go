@@ -19,6 +19,7 @@ type UserHandler struct {
 	refreshUseCase        *userusecase.RefreshUseCase
 	logoutUseCase         *userusecase.LogoutUseCase
 	getCurrentUserUseCase *userusecase.GetCurrentUserUseCase
+	updateProfileUseCase  *userusecase.UpdateProfileUseCase
 }
 
 func NewUserHandler(
@@ -26,14 +27,16 @@ func NewUserHandler(
 	loginUseCase *userusecase.LoginUseCase,
 	refreshUseCase *userusecase.RefreshUseCase,
 	logoutUseCase *userusecase.LogoutUseCase,
-	getUserByIDUseCase *userusecase.GetCurrentUserUseCase,
+	getCurrentUserUseCase *userusecase.GetCurrentUserUseCase,
+	updateProfileUseCase *userusecase.UpdateProfileUseCase,
 ) *UserHandler {
 	return &UserHandler{
 		createUserUseCase:     createUserUseCase,
 		loginUseCase:          loginUseCase,
 		logoutUseCase:         logoutUseCase,
 		refreshUseCase:        refreshUseCase,
-		getCurrentUserUseCase: getUserByIDUseCase,
+		getCurrentUserUseCase: getCurrentUserUseCase,
+		updateProfileUseCase:  updateProfileUseCase,
 	}
 }
 
@@ -193,6 +196,7 @@ func (h *UserHandler) Logout(c fiber.Ctx) error {
 // @Description GetCurrentUser
 // @Produce json
 // @Success 200 {object} dto.GetCurrentUserResponse
+// @Failure 400 {object} httperror.ErrorResponse
 // @Failure 401 {object} httperror.ErrorResponse
 // @Failure 404 {object} httperror.ErrorResponse
 // @Failure 500 {object} httperror.ErrorResponse
@@ -209,17 +213,65 @@ func (h *UserHandler) GetCurrentUser(c fiber.Ctx) error {
 		)
 	}
 
-	inputGetUserByIDUseCase := mapper.ToGetUserByIDInput(u)
+	inputGetCurrentUserUseCase := mapper.ToGetCurrentUserInput(u)
 
-	outputGetUserByIDUseCase, err := h.getCurrentUserUseCase.Execute(
+	outputGetCurrentUserUseCase, err := h.getCurrentUserUseCase.Execute(
 		c.Context(),
-		inputGetUserByIDUseCase,
+		inputGetCurrentUserUseCase,
 	)
 	if err != nil {
 		return httperror.Handle(c, err)
 	}
 
-	getUserByIDResp := mapper.ToGetUserByIDResponse(outputGetUserByIDUseCase)
+	getCurrentUserResp := mapper.ToGetCurrentUserResponse(outputGetCurrentUserUseCase)
 
-	return c.Status(fiber.StatusOK).JSON(getUserByIDResp)
+	return c.Status(fiber.StatusOK).JSON(getCurrentUserResp)
+}
+
+// godoc: UpdateProfile godoc
+// @Summary UpdateProfile
+// @Description UpdateProfile
+// @Accept json
+// @Produce json
+// @Param updateProfile body dto.UpdateProfileRequest true "Update Profile"
+// @Success 200 {object} dto.UpdateProfileResponse
+// @Failure 401 {object} httperror.ErrorResponse
+// @Failure 404 {object} httperror.ErrorResponse
+// @Failure 500 {object} httperror.ErrorResponse
+// @Resource Users
+// @Security BearerAuth
+// @Router /api/v1/users/me [patch]
+func (h *UserHandler) UpdateProfile(c fiber.Ctx) error {
+	userID := c.Locals(middleware.UserIDLocalKey)
+	u, ok := userID.(int64)
+	if !ok {
+		return httperror.Handle(
+			c,
+			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
+		)
+	}
+
+	var updateProfileReq dto.UpdateProfileRequest
+	err := c.Bind().Body(&updateProfileReq)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			apperror.Validation("invalid request body"),
+		)
+	}
+
+	inputUpdateProfileUseCase := mapper.ToUpdateProfileInput(updateProfileReq)
+
+	outputUpdateProfileUseCase, err := h.updateProfileUseCase.Execute(
+		c.Context(),
+		inputUpdateProfileUseCase,
+		u,
+	)
+	if err != nil {
+		return httperror.Handle(c, err)
+	}
+
+	updateProfileResp := mapper.ToUpdateProfileResponse(outputUpdateProfileUseCase)
+
+	return c.Status(fiber.StatusOK).JSON(updateProfileResp)
 }

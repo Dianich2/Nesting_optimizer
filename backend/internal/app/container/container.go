@@ -19,6 +19,7 @@ type Container struct {
 	RefreshUseCase        *userusecase.RefreshUseCase
 	LogoutUseCase         *userusecase.LogoutUseCase
 	GetCurrentUserUseCase *userusecase.GetCurrentUserUseCase
+	UpdateProfileUseCase  *userusecase.UpdateProfileUseCase
 	JWTManager            *jwtpkg.Manager
 	SessionRepository     *postgres.SessionRepository
 }
@@ -71,11 +72,16 @@ func New(
 		userRepo,
 	)
 
+	updateProfileUseCase := userusecase.NewUpdateProfileUseCase(
+		userRepo,
+	)
+
 	return &Container{
 		CreateUserUseCase:     createUserUseCase,
 		LoginUseCase:          loginUseCase,
 		RefreshUseCase:        refreshUseCase,
 		LogoutUseCase:         logoutUseCase,
+		UpdateProfileUseCase:  updateProfileUseCase,
 		GetCurrentUserUseCase: getCurrentUserUseCase,
 		JWTManager:            jwtManager,
 		SessionRepository:     sessionRepo,
