@@ -120,3 +120,11 @@ func ToChangePasswordInput(
 		RepeatNewPassword: req.RepeatNewPassword,
 	}
 }
+
+func ToDeleteCurrentUserInput(
+	req dto.DeleteCurrentUserRequest,
+) userusecase.DeleteCurrentUserInput {
+	return userusecase.DeleteCurrentUserInput{
+		Password: req.Password,
+	}
+}

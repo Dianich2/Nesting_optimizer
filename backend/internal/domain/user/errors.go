@@ -7,4 +7,5 @@ var (
 	ErrLoginAlreadyExists = errors.New("user login already exists")
 	ErrEmailAlreadyExists = errors.New("user email already exists")
 	ErrPasswordChanged    = errors.New("user password changed")
+	ErrUserChanged        = errors.New("user changed")
 )

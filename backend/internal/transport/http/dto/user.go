@@ -69,3 +69,7 @@ type ChangePasswordRequest struct {
 	NewPassword       string `json:"new_password"`
 	RepeatNewPassword string `json:"repeat_new_password"`
 }
+
+type DeleteCurrentUserRequest struct {
+	Password string `json:"password"`
+}

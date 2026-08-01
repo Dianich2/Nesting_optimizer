@@ -14,13 +14,14 @@ import (
 )
 
 type UserHandler struct {
-	createUserUseCase     *userusecase.CreateUserUseCase
-	loginUseCase          *userusecase.LoginUseCase
-	refreshUseCase        *userusecase.RefreshUseCase
-	logoutUseCase         *userusecase.LogoutUseCase
-	getCurrentUserUseCase *userusecase.GetCurrentUserUseCase
-	updateProfileUseCase  *userusecase.UpdateProfileUseCase
-	changePasswordUseCase *userusecase.ChangePasswordUseCase
+	createUserUseCase        *userusecase.CreateUserUseCase
+	loginUseCase             *userusecase.LoginUseCase
+	refreshUseCase           *userusecase.RefreshUseCase
+	logoutUseCase            *userusecase.LogoutUseCase
+	getCurrentUserUseCase    *userusecase.GetCurrentUserUseCase
+	updateProfileUseCase     *userusecase.UpdateProfileUseCase
+	changePasswordUseCase    *userusecase.ChangePasswordUseCase
+	deleteCurrentUserUseCase *userusecase.DeleteCurrentUserUseCase
 }
 
 func NewUserHandler(
@@ -31,15 +32,17 @@ func NewUserHandler(
 	getCurrentUserUseCase *userusecase.GetCurrentUserUseCase,
 	updateProfileUseCase *userusecase.UpdateProfileUseCase,
 	changePasswordUseCase *userusecase.ChangePasswordUseCase,
+	deleteCurrentUserUseCase *userusecase.DeleteCurrentUserUseCase,
 ) *UserHandler {
 	return &UserHandler{
-		createUserUseCase:     createUserUseCase,
-		loginUseCase:          loginUseCase,
-		logoutUseCase:         logoutUseCase,
-		refreshUseCase:        refreshUseCase,
-		getCurrentUserUseCase: getCurrentUserUseCase,
-		updateProfileUseCase:  updateProfileUseCase,
-		changePasswordUseCase: changePasswordUseCase,
+		createUserUseCase:        createUserUseCase,
+		loginUseCase:             loginUseCase,
+		logoutUseCase:            logoutUseCase,
+		refreshUseCase:           refreshUseCase,
+		getCurrentUserUseCase:    getCurrentUserUseCase,
+		updateProfileUseCase:     updateProfileUseCase,
+		changePasswordUseCase:    changePasswordUseCase,
+		deleteCurrentUserUseCase: deleteCurrentUserUseCase,
 	}
 }
 
@@ -317,6 +320,54 @@ func (h *UserHandler) ChangePassword(c fiber.Ctx) error {
 	err = h.changePasswordUseCase.Execute(
 		c.Context(),
 		inputChangePasswordUseCase,
+		u,
+	)
+	if err != nil {
+		return httperror.Handle(c, err)
+	}
+
+	c.Status(fiber.StatusNoContent)
+	return nil
+}
+
+// godoc: DeleteCurrentUser godoc
+// @Summary DeleteCurrentUser
+// @Description DeleteCurrentUser
+// @Accept json
+// @Param password body dto.DeleteCurrentUserRequest true "Delete Current User"
+// @Success 204 "No Content"
+// @Failure 400 {object} httperror.ErrorResponse
+// @Failure 401 {object} httperror.ErrorResponse
+// @Failure 404 {object} httperror.ErrorResponse
+// @Failure 409 {object} httperror.ErrorResponse
+// @Failure 500 {object} httperror.ErrorResponse
+// @Resource Users
+// @Security BearerAuth
+// @Router /api/v1/users/me/delete [post]
+func (h *UserHandler) DeleteCurrentUser(c fiber.Ctx) error {
+	userID := c.Locals(middleware.UserIDLocalKey)
+	u, ok := userID.(int64)
+	if !ok {
+		return httperror.Handle(
+			c,
+			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
+		)
+	}
+
+	var deleteCurrentUserReq dto.DeleteCurrentUserRequest
+	err := c.Bind().Body(&deleteCurrentUserReq)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			apperror.Validation("invalid request body"),
+		)
+	}
+
+	inputDeleteCurrentUserUseCase := mapper.ToDeleteCurrentUserInput(deleteCurrentUserReq)
+
+	err = h.deleteCurrentUserUseCase.Execute(
+		c.Context(),
+		inputDeleteCurrentUserUseCase,
 		u,
 	)
 	if err != nil {

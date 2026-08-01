@@ -186,6 +186,7 @@ func validatePassword(
 	if strings.TrimSpace(value) == "" {
 		return nil
 	}
+
 	if utf8.RuneCountInString(value) < 8 {
 		return []apperror.FieldError{
 			apperror.NewFieldError(
@@ -338,6 +339,20 @@ func (uc *ChangePasswordInput) validateRequiredFields() []apperror.FieldError {
 			"repeat_new_password",
 			apperror.FieldCodeRequired,
 			"repeat new password must not be empty"),
+		)
+	}
+
+	return errors
+}
+
+func (uc *DeleteCurrentUserInput) Validate() []apperror.FieldError {
+	var errors []apperror.FieldError
+
+	if strings.TrimSpace(uc.Password) == "" {
+		errors = append(errors, apperror.NewFieldError(
+			"password",
+			apperror.FieldCodeRequired,
+			"password must not be empty"),
 		)
 	}
 

@@ -54,3 +54,7 @@ type ChangePasswordInput struct {
 	NewPassword       string
 	RepeatNewPassword string
 }
+
+type DeleteCurrentUserInput struct {
+	Password string
+}

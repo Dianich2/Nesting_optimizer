@@ -14,15 +14,16 @@ import (
 )
 
 type Container struct {
-	CreateUserUseCase     *userusecase.CreateUserUseCase
-	LoginUseCase          *userusecase.LoginUseCase
-	RefreshUseCase        *userusecase.RefreshUseCase
-	LogoutUseCase         *userusecase.LogoutUseCase
-	GetCurrentUserUseCase *userusecase.GetCurrentUserUseCase
-	UpdateProfileUseCase  *userusecase.UpdateProfileUseCase
-	ChangePasswordUseCase *userusecase.ChangePasswordUseCase
-	JWTManager            *jwtpkg.Manager
-	SessionRepository     *postgres.SessionRepository
+	CreateUserUseCase        *userusecase.CreateUserUseCase
+	LoginUseCase             *userusecase.LoginUseCase
+	RefreshUseCase           *userusecase.RefreshUseCase
+	LogoutUseCase            *userusecase.LogoutUseCase
+	GetCurrentUserUseCase    *userusecase.GetCurrentUserUseCase
+	UpdateProfileUseCase     *userusecase.UpdateProfileUseCase
+	ChangePasswordUseCase    *userusecase.ChangePasswordUseCase
+	DeleteCurrentUserUseCase *userusecase.DeleteCurrentUserUseCase
+	JWTManager               *jwtpkg.Manager
+	SessionRepository        *postgres.SessionRepository
 }
 
 func New(
@@ -85,15 +86,22 @@ func New(
 		unitOfWork,
 	)
 
+	deleteCurrentUserUseCase := userusecase.NewDeleteCurrentUserUseCase(
+		userRepo,
+		passwordHasher,
+		unitOfWork,
+	)
+
 	return &Container{
-		CreateUserUseCase:     createUserUseCase,
-		LoginUseCase:          loginUseCase,
-		RefreshUseCase:        refreshUseCase,
-		LogoutUseCase:         logoutUseCase,
-		UpdateProfileUseCase:  updateProfileUseCase,
-		GetCurrentUserUseCase: getCurrentUserUseCase,
-		ChangePasswordUseCase: changePasswordUseCase,
-		JWTManager:            jwtManager,
-		SessionRepository:     sessionRepo,
+		CreateUserUseCase:        createUserUseCase,
+		LoginUseCase:             loginUseCase,
+		RefreshUseCase:           refreshUseCase,
+		LogoutUseCase:            logoutUseCase,
+		UpdateProfileUseCase:     updateProfileUseCase,
+		GetCurrentUserUseCase:    getCurrentUserUseCase,
+		ChangePasswordUseCase:    changePasswordUseCase,
+		JWTManager:               jwtManager,
+		SessionRepository:        sessionRepo,
+		DeleteCurrentUserUseCase: deleteCurrentUserUseCase,
 	}
 }

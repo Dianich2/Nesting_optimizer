@@ -26,6 +26,7 @@ func NewRouter(deps *container.Container) *fiber.App {
 		deps.GetCurrentUserUseCase,
 		deps.UpdateProfileUseCase,
 		deps.ChangePasswordUseCase,
+		deps.DeleteCurrentUserUseCase,
 	)
 
 	app.Get("/health", healthHandler.Check)
@@ -39,5 +40,6 @@ func NewRouter(deps *container.Container) *fiber.App {
 	api.Get("/users/me", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), userHandler.GetCurrentUser)
 	api.Patch("/users/me", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), userHandler.UpdateProfile)
 	api.Patch("/users/me/password", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), userHandler.ChangePassword)
+	api.Post("/users/me/delete", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), userHandler.DeleteCurrentUser)
 	return app
 }

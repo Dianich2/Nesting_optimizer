@@ -97,3 +97,13 @@ const updatePasswordQuery = `
 			AND id = $3
 			AND deleted_at IS NULL
 `
+
+const softDeleteUserQuery = `
+	UPDATE users
+	SET
+		deleted_at = NOW(),
+		updated_at = NOW()
+	WHERE id = $1
+		AND password_hash = $2
+		AND deleted_at IS NULL
+`

@@ -48,6 +48,12 @@ type UserRepository interface {
 		oldPasswordHash string,
 		newPasswordHash string,
 	) error
+
+	SoftDelete(
+		ctx context.Context,
+		userID int64,
+		expectedPasswordHash string,
+	) error
 }
 
 type PasswordHasher interface {

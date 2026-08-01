@@ -22,6 +22,15 @@ definitions:
       message:
         type: string
     type: object
+  dto.ChangePasswordRequest:
+    properties:
+      new_password:
+        type: string
+      old_password:
+        type: string
+      repeat_new_password:
+        type: string
+    type: object
   dto.CreateUserRequest:
     properties:
       email:
@@ -50,6 +59,11 @@ definitions:
       login:
         type: string
       updated_at:
+        type: string
+    type: object
+  dto.DeleteCurrentUserRequest:
+    properties:
+      password:
         type: string
     type: object
   dto.GetCurrentUserResponse:
@@ -264,10 +278,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/dto.GetCurrentUserResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/httperror.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
@@ -301,6 +311,10 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/dto.UpdateProfileResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
@@ -316,6 +330,82 @@ paths:
       security:
       - BearerAuth: []
       summary: UpdateProfile
+  /api/v1/users/me/delete:
+    post:
+      consumes:
+      - application/json
+      description: DeleteCurrentUser
+      parameters:
+      - description: Delete Current User
+        in: body
+        name: password
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DeleteCurrentUserRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: DeleteCurrentUser
+  /api/v1/users/me/password:
+    patch:
+      consumes:
+      - application/json
+      description: ChangePassword
+      parameters:
+      - description: Change Password
+        in: body
+        name: changePassword
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ChangePasswordRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: ChangePassword
 securityDefinitions:
   BearerAuth:
     description: 'Введите токен в формате: Bearer <access_token>'
