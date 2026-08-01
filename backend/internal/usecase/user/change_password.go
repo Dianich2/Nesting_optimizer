@@ -3,7 +3,6 @@ package user
 import (
 	"context"
 	"errors"
-	"fmt"
 	domainuser "server_nesting_optimizer/internal/domain/user"
 	"server_nesting_optimizer/pkg/apperror"
 )
@@ -44,7 +43,16 @@ func (uc *ChangePasswordUseCase) Execute(
 		userID,
 	)
 	if err != nil {
-		return fmt.Errorf("get user by id: %w", err)
+		if errors.Is(err, domainuser.ErrNotFound) {
+			return apperror.NotFound(
+				"user not found",
+			)
+		}
+
+		return apperror.Internal(
+			"failed to get user",
+			err,
+		)
 	}
 
 	if err := uc.hasher.Compare(
@@ -57,7 +65,14 @@ func (uc *ChangePasswordUseCase) Execute(
 	}
 
 	if input.OldPassword == input.NewPassword {
-		return nil
+		return apperror.Validation(
+			"new password must differ from current password",
+			apperror.NewFieldError(
+				"new_password",
+				apperror.FieldCodeInvalid,
+				"new password must differ from current password",
+			),
+		)
 	}
 
 	newPasswordHash, err := uc.hasher.Hash(

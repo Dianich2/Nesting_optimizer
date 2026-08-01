@@ -305,9 +305,9 @@ func (uc *ChangePasswordInput) Validate() []apperror.FieldError {
 
 	if (strings.TrimSpace(uc.RepeatNewPassword) != "" && strings.TrimSpace(uc.NewPassword) != "") && uc.NewPassword != uc.RepeatNewPassword {
 		errors = append(errors, apperror.NewFieldError(
-			"new_password",
+			"repeat_new_password",
 			apperror.FieldCodeInvalid,
-			"repeat new password and new password not equal"),
+			"passwords do not match"),
 		)
 	}
 

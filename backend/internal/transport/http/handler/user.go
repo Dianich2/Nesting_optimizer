@@ -199,7 +199,6 @@ func (h *UserHandler) Logout(c fiber.Ctx) error {
 // @Description GetCurrentUser
 // @Produce json
 // @Success 200 {object} dto.GetCurrentUserResponse
-// @Failure 400 {object} httperror.ErrorResponse
 // @Failure 401 {object} httperror.ErrorResponse
 // @Failure 404 {object} httperror.ErrorResponse
 // @Failure 500 {object} httperror.ErrorResponse
@@ -238,6 +237,7 @@ func (h *UserHandler) GetCurrentUser(c fiber.Ctx) error {
 // @Produce json
 // @Param updateProfile body dto.UpdateProfileRequest true "Update Profile"
 // @Success 200 {object} dto.UpdateProfileResponse
+// @Failure 400 {object} httperror.ErrorResponse
 // @Failure 401 {object} httperror.ErrorResponse
 // @Failure 404 {object} httperror.ErrorResponse
 // @Failure 500 {object} httperror.ErrorResponse
@@ -288,6 +288,7 @@ func (h *UserHandler) UpdateProfile(c fiber.Ctx) error {
 // @Failure 400 {object} httperror.ErrorResponse
 // @Failure 401 {object} httperror.ErrorResponse
 // @Failure 404 {object} httperror.ErrorResponse
+// @Failure 409 {object} httperror.ErrorResponse
 // @Failure 500 {object} httperror.ErrorResponse
 // @Resource Users
 // @Security BearerAuth
