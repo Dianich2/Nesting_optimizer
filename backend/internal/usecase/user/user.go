@@ -48,3 +48,9 @@ type UpdateProfileOutput struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
+
+type ChangePasswordInput struct {
+	OldPassword       string
+	NewPassword       string
+	RepeatNewPassword string
+}

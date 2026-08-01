@@ -41,6 +41,13 @@ type UserRepository interface {
 		lastName *string,
 		id int64,
 	) (domainuser.User, error)
+
+	ChangePassword(
+		ctx context.Context,
+		userID int64,
+		oldPasswordHash string,
+		newPasswordHash string,
+	) error
 }
 
 type PasswordHasher interface {
@@ -101,10 +108,27 @@ type SessionRepository interface {
 	DeleteExpired(
 		ctx context.Context,
 	) error
+
+	DeleteByUserID(
+		ctx context.Context,
+		userID int64,
+	) error
 }
 
 type SessionFactory interface {
 	New(
 		userID int64,
 	) domainsession.Session
+}
+
+type TransactionRepositories struct {
+	Users    UserRepository
+	Sessions SessionRepository
+}
+
+type UnitOfWork interface {
+	WithinTransaction(
+		ctx context.Context,
+		fn func(repositories TransactionRepositories) error,
+	) error
 }

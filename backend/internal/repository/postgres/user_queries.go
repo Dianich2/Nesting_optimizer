@@ -59,6 +59,7 @@ const getByIDQuery = `
 		email,  
 		first_name, 
 		last_name, 
+		password_hash,
 		created_at, 
 		updated_at, 
 		deleted_at
@@ -84,4 +85,15 @@ const updateProfileQuery = `
 		created_at, 
 		updated_at, 
 		deleted_at
+`
+
+const updatePasswordQuery = `
+	UPDATE users
+	SET
+		password_hash = $1,
+		updated_at = NOW()
+	WHERE 
+		password_hash = $2
+			AND id = $3
+			AND deleted_at IS NULL
 `

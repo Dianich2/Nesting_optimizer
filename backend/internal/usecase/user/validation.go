@@ -25,7 +25,7 @@ func (uc *CreateUserInput) Validate() []apperror.FieldError {
 	errors = append(errors, validateName("first_name", uc.FirstName)...)
 	errors = append(errors, validateName("last_name", uc.LastName)...)
 	errors = append(errors, validateLogin(uc.Login)...)
-	errors = append(errors, validatePassword(uc.Password)...)
+	errors = append(errors, validatePassword("password", uc.Password)...)
 
 	return errors
 }
@@ -180,25 +180,26 @@ func validateLogin(
 }
 
 func validatePassword(
-	password string,
+	field string,
+	value string,
 ) []apperror.FieldError {
-	if strings.TrimSpace(password) == "" {
+	if strings.TrimSpace(value) == "" {
 		return nil
 	}
-	if utf8.RuneCountInString(password) < 8 {
+	if utf8.RuneCountInString(value) < 8 {
 		return []apperror.FieldError{
 			apperror.NewFieldError(
-				"password",
+				field,
 				apperror.FieldCodeTooShort,
 				"password is too short",
 			),
 		}
 	}
 
-	if len(password) > 72 {
+	if len(value) > 72 {
 		return []apperror.FieldError{
 			apperror.NewFieldError(
-				"password",
+				field,
 				apperror.FieldCodeTooLong,
 				"password is too long",
 			),
@@ -296,4 +297,49 @@ func (uc *UpdateProfileInput) validateRequiredFields() []apperror.FieldError {
 	}
 
 	return details
+}
+
+func (uc *ChangePasswordInput) Validate() []apperror.FieldError {
+	errors := uc.validateRequiredFields()
+	errors = append(errors, validatePassword("new_password", uc.NewPassword)...)
+
+	if (strings.TrimSpace(uc.RepeatNewPassword) != "" && strings.TrimSpace(uc.NewPassword) != "") && uc.NewPassword != uc.RepeatNewPassword {
+		errors = append(errors, apperror.NewFieldError(
+			"new_password",
+			apperror.FieldCodeInvalid,
+			"repeat new password and new password not equal"),
+		)
+	}
+
+	return errors
+}
+
+func (uc *ChangePasswordInput) validateRequiredFields() []apperror.FieldError {
+	var errors []apperror.FieldError
+
+	if strings.TrimSpace(uc.OldPassword) == "" {
+		errors = append(errors, apperror.NewFieldError(
+			"old_password",
+			apperror.FieldCodeRequired,
+			"old password must not be empty"),
+		)
+	}
+
+	if strings.TrimSpace(uc.NewPassword) == "" {
+		errors = append(errors, apperror.NewFieldError(
+			"new_password",
+			apperror.FieldCodeRequired,
+			"new password must not be empty"),
+		)
+	}
+
+	if strings.TrimSpace(uc.RepeatNewPassword) == "" {
+		errors = append(errors, apperror.NewFieldError(
+			"repeat_new_password",
+			apperror.FieldCodeRequired,
+			"repeat new password must not be empty"),
+		)
+	}
+
+	return errors
 }

@@ -9,14 +9,13 @@ import (
 	domainsession "server_nesting_optimizer/internal/domain/session"
 
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
 )
 
 type SessionRepository struct {
-	db *sqlx.DB
+	db DBTX
 }
 
-func NewSessionRepository(db *sqlx.DB) *SessionRepository {
+func NewSessionRepository(db DBTX) *SessionRepository {
 	return &SessionRepository{
 		db: db,
 	}
@@ -158,6 +157,24 @@ func (r *SessionRepository) DeleteExpired(
 	); err != nil {
 		return fmt.Errorf(
 			"delete expired sessions: %w",
+			err,
+		)
+	}
+
+	return nil
+}
+
+func (r *SessionRepository) DeleteByUserID(
+	ctx context.Context,
+	userID int64,
+) error {
+	if _, err := r.db.ExecContext(
+		ctx,
+		deleteSessionByUserIDQuery,
+		userID,
+	); err != nil {
+		return fmt.Errorf(
+			"delete session by user id: %w",
 			err,
 		)
 	}

@@ -110,3 +110,13 @@ func ToUpdateProfileResponse(
 		UpdatedAt: resp.UpdatedAt,
 	}
 }
+
+func ToChangePasswordInput(
+	req dto.ChangePasswordRequest,
+) userusecase.ChangePasswordInput {
+	return userusecase.ChangePasswordInput{
+		OldPassword:       req.OldPassword,
+		NewPassword:       req.NewPassword,
+		RepeatNewPassword: req.RepeatNewPassword,
+	}
+}

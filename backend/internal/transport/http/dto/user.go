@@ -63,3 +63,9 @@ type UpdateProfileResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+type ChangePasswordRequest struct {
+	OldPassword       string `json:"old_password"`
+	NewPassword       string `json:"new_password"`
+	RepeatNewPassword string `json:"repeat_new_password"`
+}

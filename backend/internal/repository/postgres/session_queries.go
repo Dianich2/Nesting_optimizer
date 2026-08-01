@@ -69,3 +69,8 @@ const deleteExpiredSessionsQuery = `
 	DELETE FROM sessions
 	WHERE expires_at <= NOW()
 `
+
+const deleteSessionByUserIDQuery = `
+	DELETE FROM sessions
+	WHERE user_id = $1
+`

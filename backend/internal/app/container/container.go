@@ -20,6 +20,7 @@ type Container struct {
 	LogoutUseCase         *userusecase.LogoutUseCase
 	GetCurrentUserUseCase *userusecase.GetCurrentUserUseCase
 	UpdateProfileUseCase  *userusecase.UpdateProfileUseCase
+	ChangePasswordUseCase *userusecase.ChangePasswordUseCase
 	JWTManager            *jwtpkg.Manager
 	SessionRepository     *postgres.SessionRepository
 }
@@ -28,6 +29,8 @@ func New(
 	db *sqlx.DB,
 	cfg config.Config,
 ) *Container {
+	unitOfWork := postgres.NewUnitOfWork(db)
+
 	userRepo := postgres.NewUserRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
 
@@ -76,6 +79,12 @@ func New(
 		userRepo,
 	)
 
+	changePasswordUseCase := userusecase.NewChangePasswordUseCase(
+		userRepo,
+		passwordHasher,
+		unitOfWork,
+	)
+
 	return &Container{
 		CreateUserUseCase:     createUserUseCase,
 		LoginUseCase:          loginUseCase,
@@ -83,6 +92,7 @@ func New(
 		LogoutUseCase:         logoutUseCase,
 		UpdateProfileUseCase:  updateProfileUseCase,
 		GetCurrentUserUseCase: getCurrentUserUseCase,
+		ChangePasswordUseCase: changePasswordUseCase,
 		JWTManager:            jwtManager,
 		SessionRepository:     sessionRepo,
 	}

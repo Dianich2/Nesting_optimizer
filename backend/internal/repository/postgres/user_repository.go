@@ -7,15 +7,13 @@ import (
 	"fmt"
 
 	domainuser "server_nesting_optimizer/internal/domain/user"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type UserRepository struct {
-	db *sqlx.DB
+	db DBTX
 }
 
-func NewUserRepository(db *sqlx.DB) *UserRepository {
+func NewUserRepository(db DBTX) *UserRepository {
 	return &UserRepository{
 		db: db,
 	}
@@ -168,4 +166,43 @@ func (r *UserRepository) UpdateProfile(
 	}
 
 	return updatedUser, nil
+}
+
+func (r *UserRepository) ChangePassword(
+	ctx context.Context,
+	userID int64,
+	oldPasswordHash string,
+	newPasswordHash string,
+) error {
+	result, err := r.db.ExecContext(
+		ctx,
+		updatePasswordQuery,
+		newPasswordHash,
+		oldPasswordHash,
+		userID,
+	)
+
+	if err != nil {
+		return fmt.Errorf(
+			"change password: %w",
+			err,
+		)
+	}
+
+	count, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf(
+			"change password: %w",
+			err,
+		)
+	}
+
+	if count == 0 {
+		return fmt.Errorf(
+			"change user password: %w",
+			domainuser.ErrPasswordChanged,
+		)
+	}
+
+	return nil
 }
