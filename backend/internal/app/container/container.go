@@ -3,6 +3,7 @@ package container
 import (
 	"server_nesting_optimizer/internal/config"
 	"server_nesting_optimizer/internal/repository/postgres"
+	projectusecase "server_nesting_optimizer/internal/usecase/project"
 	userusecase "server_nesting_optimizer/internal/usecase/user"
 	"server_nesting_optimizer/pkg/password"
 	"time"
@@ -22,6 +23,7 @@ type Container struct {
 	UpdateProfileUseCase     *userusecase.UpdateProfileUseCase
 	ChangePasswordUseCase    *userusecase.ChangePasswordUseCase
 	DeleteCurrentUserUseCase *userusecase.DeleteCurrentUserUseCase
+	CreateProjectUseCase     *projectusecase.CreateProjectUseCase
 	JWTManager               *jwtpkg.Manager
 	SessionRepository        *postgres.SessionRepository
 }
@@ -34,6 +36,7 @@ func New(
 
 	userRepo := postgres.NewUserRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
+	projectRepo := postgres.NewProjectRepository(db)
 
 	passwordHasher := password.NewBcryptHasher(cfg.Security.BcryptCost)
 
@@ -92,6 +95,10 @@ func New(
 		unitOfWork,
 	)
 
+	createProjectUseCase := projectusecase.NewCreateProjectUseCase(
+		projectRepo,
+	)
+
 	return &Container{
 		CreateUserUseCase:        createUserUseCase,
 		LoginUseCase:             loginUseCase,
@@ -100,8 +107,9 @@ func New(
 		UpdateProfileUseCase:     updateProfileUseCase,
 		GetCurrentUserUseCase:    getCurrentUserUseCase,
 		ChangePasswordUseCase:    changePasswordUseCase,
+		DeleteCurrentUserUseCase: deleteCurrentUserUseCase,
+		CreateProjectUseCase:     createProjectUseCase,
 		JWTManager:               jwtManager,
 		SessionRepository:        sessionRepo,
-		DeleteCurrentUserUseCase: deleteCurrentUserUseCase,
 	}
 }
