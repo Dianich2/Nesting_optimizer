@@ -10,4 +10,10 @@ type ProjectRepository interface {
 		ctx context.Context,
 		project domainproject.Project,
 	) (domainproject.Project, error)
+
+	GetByID(
+		ctx context.Context,
+		projectID int64,
+		userID int64,
+	) (domainproject.Project, error)
 }

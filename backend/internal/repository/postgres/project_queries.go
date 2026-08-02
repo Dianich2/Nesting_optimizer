@@ -18,3 +18,18 @@ const createProjectQuery = `
 		created_at, 
 		updated_at
 `
+
+const getProjectByIDQuery = `
+	SELECT
+		id,
+		user_id,
+		name,
+		description,
+		created_at,
+		updated_at,
+		deleted_at
+	FROM projects
+	WHERE id = $1 
+		AND user_id = $2
+		AND deleted_at IS NULL
+`

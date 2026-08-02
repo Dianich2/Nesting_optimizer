@@ -28,3 +28,26 @@ func ToCreateProjectResponse(
 		UpdatedAt:   resp.UpdatedAt,
 	}
 }
+
+func ToGetProjectByIDInput(
+	projectID int64,
+	userID int64,
+) projectusecase.GetProjectByIDInput {
+	return projectusecase.GetProjectByIDInput{
+		UserID:    userID,
+		ProjectID: projectID,
+	}
+}
+
+func ToGetProjectByIDResponse(
+	resp projectusecase.GetProjectByIDOutput,
+) dto.GetProjectByIDResponse {
+	return dto.GetProjectByIDResponse{
+		ID:          resp.ID,
+		UserID:      resp.UserID,
+		Name:        resp.Name,
+		Description: resp.Description,
+		CreatedAt:   resp.CreatedAt,
+		UpdatedAt:   resp.UpdatedAt,
+	}
+}

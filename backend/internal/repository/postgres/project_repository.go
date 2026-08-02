@@ -50,3 +50,32 @@ func (r *ProjectRepository) Create(
 
 	return createdProject, nil
 }
+
+func (r *ProjectRepository) GetByID(
+	ctx context.Context,
+	projectID int64,
+	userID int64,
+) (domainproject.Project, error) {
+	var project domainproject.Project
+	if err := r.db.GetContext(
+		ctx,
+		&project,
+		getProjectByIDQuery,
+		projectID,
+		userID,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domainproject.Project{}, fmt.Errorf(
+				"get project by id: %w",
+				domainproject.ErrNotFound,
+			)
+		}
+
+		return domainproject.Project{}, fmt.Errorf(
+			"get project by id: %w",
+			err,
+		)
+	}
+
+	return project, nil
+}

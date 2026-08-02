@@ -31,6 +31,7 @@ func NewRouter(deps *container.Container) *fiber.App {
 
 	projectHandler := handler.NewProjectHandler(
 		deps.CreateProjectUseCase,
+		deps.GetProjectByIDUseCase,
 	)
 
 	app.Get("/health", healthHandler.Check)
@@ -47,5 +48,6 @@ func NewRouter(deps *container.Container) *fiber.App {
 	api.Post("/users/me/delete", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), userHandler.DeleteCurrentUser)
 
 	api.Post("/projects", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectHandler.Create)
+	api.Get("/projects/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectHandler.GetByID)
 	return app
 }

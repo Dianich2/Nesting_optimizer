@@ -24,3 +24,16 @@ func toProject(
 		Description: input.Description,
 	}
 }
+
+func toGetProjectByIDOutput(
+	project domainproject.Project,
+) GetProjectByIDOutput {
+	return GetProjectByIDOutput{
+		ID:          project.ID,
+		UserID:      project.UserID,
+		Name:        project.Name,
+		Description: project.Description,
+		CreatedAt:   project.CreatedAt,
+		UpdatedAt:   project.UpdatedAt,
+	}
+}

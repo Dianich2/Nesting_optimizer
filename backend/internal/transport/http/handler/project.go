@@ -8,19 +8,23 @@ import (
 	"server_nesting_optimizer/internal/transport/http/middleware"
 	projectusecase "server_nesting_optimizer/internal/usecase/project"
 	"server_nesting_optimizer/pkg/apperror"
+	"strconv"
 
 	"github.com/gofiber/fiber/v3"
 )
 
 type ProjectHandler struct {
-	createProjectUseCase *projectusecase.CreateProjectUseCase
+	createProjectUseCase  *projectusecase.CreateProjectUseCase
+	getProjectByIDUseCase *projectusecase.GetProjectByIDUseCase
 }
 
 func NewProjectHandler(
 	createProjectUseCase *projectusecase.CreateProjectUseCase,
+	getProjectByIDUseCase *projectusecase.GetProjectByIDUseCase,
 ) *ProjectHandler {
 	return &ProjectHandler{
-		createProjectUseCase: createProjectUseCase,
+		createProjectUseCase:  createProjectUseCase,
+		getProjectByIDUseCase: getProjectByIDUseCase,
 	}
 }
 
@@ -72,4 +76,60 @@ func (h *ProjectHandler) Create(c fiber.Ctx) error {
 	createProjectResp := mapper.ToCreateProjectResponse(outputCreateProjectUseCase)
 
 	return c.Status(fiber.StatusCreated).JSON(createProjectResp)
+}
+
+// godoc: GetProjectByID godoc
+// @Summary Get Project By ID
+// @Description Get Project By ID
+// @Produce json
+// @Param id path int true "Project ID"
+// @Success 200 {object} dto.GetProjectByIDResponse
+// @Failure 400 {object} httperror.ErrorResponse
+// @Failure 401 {object} httperror.ErrorResponse
+// @Failure 404 {object} httperror.ErrorResponse
+// @Failure 500 {object} httperror.ErrorResponse
+// @Resource Projects
+// @Security BearerAuth
+// @Router /api/v1/projects/{id} [get]
+func (h *ProjectHandler) GetByID(c fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			apperror.Validation(
+				"invalid id",
+				apperror.NewFieldError(
+					"id",
+					apperror.FieldCodeInvalid,
+					"id must be a valid positive integer",
+				),
+			),
+		)
+	}
+
+	userID := c.Locals(middleware.UserIDLocalKey)
+	u, ok := userID.(int64)
+	if !ok {
+		return httperror.Handle(
+			c,
+			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
+		)
+	}
+
+	inputGetProjectByIDUseCase := mapper.ToGetProjectByIDInput(id, u)
+
+	outputGetProjectByIDUseCase, err := h.getProjectByIDUseCase.Execute(
+		c.Context(),
+		inputGetProjectByIDUseCase,
+	)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			err,
+		)
+	}
+
+	getProjectByIDResp := mapper.ToGetProjectByIDResponse(outputGetProjectByIDUseCase)
+
+	return c.Status(fiber.StatusOK).JSON(getProjectByIDResp)
 }

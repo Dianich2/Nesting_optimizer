@@ -10,7 +10,7 @@ func (pc *CreateProjectInput) Validate() []apperror.FieldError {
 
 	errors = append(errors, validateNameLen(pc.Name)...)
 	errors = append(errors, validateDescriptionLen(pc.Description)...)
-	errors = append(errors, validateUserID(pc.UserID)...)
+	errors = append(errors, validateID(pc.UserID, "user_id")...)
 
 	return errors
 }
@@ -61,18 +61,28 @@ func validateDescriptionLen(
 	return nil
 }
 
-func validateUserID(
-	userID int64,
+func validateID(
+	id int64,
+	fieldName string,
 ) []apperror.FieldError {
-	if userID <= 0 {
+	if id <= 0 {
 		return []apperror.FieldError{
 			apperror.NewFieldError(
-				"user_id",
+				fieldName,
 				apperror.FieldCodeInvalid,
-				"user_id must be greater than 0",
+				"id must be greater than 0",
 			),
 		}
 	}
 
 	return nil
+}
+
+func (pc *GetProjectByIDInput) Validate() []apperror.FieldError {
+	var errors []apperror.FieldError
+
+	errors = append(errors, validateID(pc.UserID, "user_id")...)
+	errors = append(errors, validateID(pc.ProjectID, "id")...)
+
+	return errors
 }
