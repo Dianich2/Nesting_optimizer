@@ -120,6 +120,36 @@ definitions:
       user_id:
         type: integer
     type: object
+  dto.ListProjectsItemResponse:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  dto.ListProjectsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.ListProjectsItemResponse'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
   dto.LoginRequest:
     properties:
       identifier:
@@ -274,6 +304,41 @@ paths:
             $ref: '#/definitions/httperror.ErrorResponse'
       summary: Refresh
   /api/v1/projects:
+    get:
+      description: List Projects
+      parameters:
+      - default: 1
+        description: Page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page Size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListProjectsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List Projects
     post:
       consumes:
       - application/json

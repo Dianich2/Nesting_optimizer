@@ -18,4 +18,11 @@ type DBTX interface {
 		query string,
 		args ...any,
 	) (sql.Result, error)
+
+	SelectContext(
+		ctx context.Context,
+		dest any,
+		query string,
+		args ...any,
+	) error
 }

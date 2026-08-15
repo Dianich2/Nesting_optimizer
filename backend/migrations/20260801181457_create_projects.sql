@@ -11,7 +11,7 @@ create table projects(
     CONSTRAINT projects_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_projects_active_by_user_updated_at on projects (user_id, updated_at DESC) WHERE deleted_at IS NULL; 
+CREATE INDEX idx_projects_active_by_user_updated_at on projects (user_id, updated_at DESC, id DESC) WHERE deleted_at IS NULL; 
 
 -- +goose Down
 drop table if exists projects;

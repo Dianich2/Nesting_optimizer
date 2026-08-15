@@ -16,4 +16,11 @@ type ProjectRepository interface {
 		projectID int64,
 		userID int64,
 	) (domainproject.Project, error)
+
+	ListByUserID(
+		ctx context.Context,
+		userID int64,
+		limit int,
+		offset int,
+	) (ProjectListResult, error)
 }

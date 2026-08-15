@@ -79,3 +79,66 @@ func (r *ProjectRepository) GetByID(
 
 	return project, nil
 }
+
+type ProjectListRow struct {
+	ID          sql.NullInt64  `db:"id"`
+	UserID      sql.NullInt64  `db:"user_id"`
+	Name        sql.NullString `db:"name"`
+	Description sql.NullString `db:"description"`
+	CreatedAt   sql.NullTime   `db:"created_at"`
+	UpdatedAt   sql.NullTime   `db:"updated_at"`
+	Total       int64          `db:"total"`
+}
+
+func (r *ProjectRepository) ListByUserID(
+	ctx context.Context,
+	userID int64,
+	limit int,
+	offset int,
+) (projectusecase.ProjectListResult, error) {
+	rows := make([]ProjectListRow, 0)
+
+	if err := r.db.SelectContext(
+		ctx,
+		&rows,
+		listProjectsQuery,
+		userID,
+		limit,
+		offset,
+	); err != nil {
+		return projectusecase.ProjectListResult{}, fmt.Errorf(
+			"list projects by user id: %w",
+			err,
+		)
+	}
+
+	listOfProjects := projectusecase.ProjectListResult{
+		Projects: make([]domainproject.Project, 0),
+		Total:    0,
+	}
+
+	for _, row := range rows {
+		listOfProjects.Total = row.Total
+
+		if !row.ID.Valid {
+			continue
+		}
+
+		project := domainproject.Project{
+			ID:          row.ID.Int64,
+			UserID:      row.UserID.Int64,
+			Name:        row.Name.String,
+			Description: row.Description.String,
+			CreatedAt:   row.CreatedAt.Time,
+			UpdatedAt:   row.UpdatedAt.Time,
+			DeletedAt:   nil,
+		}
+
+		listOfProjects.Projects = append(
+			listOfProjects.Projects,
+			project,
+		)
+	}
+
+	return listOfProjects, nil
+}

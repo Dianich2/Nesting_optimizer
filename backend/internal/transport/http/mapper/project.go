@@ -51,3 +51,46 @@ func ToGetProjectByIDResponse(
 		UpdatedAt:   resp.UpdatedAt,
 	}
 }
+
+func ToListProjectsInput(
+	userID int64,
+	page int,
+	pageSize int,
+) projectusecase.ListProjectsInput {
+	return projectusecase.ListProjectsInput{
+		UserID:   userID,
+		Page:     page,
+		PageSize: pageSize,
+	}
+}
+
+func ToListProjectsResponse(
+	resp projectusecase.ListProjectsOutput,
+) dto.ListProjectsResponse {
+	listProjectsResponse := dto.ListProjectsResponse{
+		Items: make([]dto.ListProjectsItemResponse, 0),
+	}
+
+	for _, item := range resp.Items {
+		curItem := dto.ListProjectsItemResponse{
+			ID:          item.ID,
+			UserID:      item.UserID,
+			Name:        item.Name,
+			Description: item.Description,
+			CreatedAt:   item.CreatedAt,
+			UpdatedAt:   item.UpdatedAt,
+		}
+
+		listProjectsResponse.Items = append(
+			listProjectsResponse.Items,
+			curItem,
+		)
+	}
+
+	listProjectsResponse.Page = resp.Page
+	listProjectsResponse.PageSize = resp.PageSize
+	listProjectsResponse.Total = resp.Total
+	listProjectsResponse.TotalPages = resp.TotalPages
+
+	return listProjectsResponse
+}

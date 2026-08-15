@@ -86,3 +86,31 @@ func (pc *GetProjectByIDInput) Validate() []apperror.FieldError {
 
 	return errors
 }
+
+func (pc *ListProjectsInput) Validate() []apperror.FieldError {
+	var errors []apperror.FieldError
+
+	errors = append(errors, validateID(pc.UserID, "user_id")...)
+
+	if pc.Page < 1 {
+		errors = append(errors,
+			apperror.NewFieldError(
+				"page",
+				apperror.FieldCodeInvalid,
+				"page must be greater than 0",
+			),
+		)
+	}
+
+	if pc.PageSize < 1 || pc.PageSize > 100 {
+		errors = append(errors,
+			apperror.NewFieldError(
+				"page_size",
+				apperror.FieldCodeInvalid,
+				"page_size must be between 1 and 100",
+			),
+		)
+	}
+
+	return errors
+}

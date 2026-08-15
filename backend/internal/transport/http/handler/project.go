@@ -16,15 +16,18 @@ import (
 type ProjectHandler struct {
 	createProjectUseCase  *projectusecase.CreateProjectUseCase
 	getProjectByIDUseCase *projectusecase.GetProjectByIDUseCase
+	listProjectsUseCase   *projectusecase.ListProjectsUseCase
 }
 
 func NewProjectHandler(
 	createProjectUseCase *projectusecase.CreateProjectUseCase,
 	getProjectByIDUseCase *projectusecase.GetProjectByIDUseCase,
+	listProjectsUseCase *projectusecase.ListProjectsUseCase,
 ) *ProjectHandler {
 	return &ProjectHandler{
 		createProjectUseCase:  createProjectUseCase,
 		getProjectByIDUseCase: getProjectByIDUseCase,
+		listProjectsUseCase:   listProjectsUseCase,
 	}
 }
 
@@ -132,4 +135,85 @@ func (h *ProjectHandler) GetByID(c fiber.Ctx) error {
 	getProjectByIDResp := mapper.ToGetProjectByIDResponse(outputGetProjectByIDUseCase)
 
 	return c.Status(fiber.StatusOK).JSON(getProjectByIDResp)
+}
+
+// godoc: ListProjects godoc
+// @Summary List Projects
+// @Description List Projects
+// @Produce json
+// @Param page query int false "Page" default(1)
+// @Param page_size query int false "Page Size" default(20)
+// @Success 200 {object} dto.ListProjectsResponse
+// @Failure 400 {object} httperror.ErrorResponse
+// @Failure 401 {object} httperror.ErrorResponse
+// @Failure 500 {object} httperror.ErrorResponse
+// @Resource Projects
+// @Security BearerAuth
+// @Router /api/v1/projects [get]
+func (h *ProjectHandler) ListProjects(c fiber.Ctx) error {
+	pageSizeQuery, pageQuery := c.Query("page_size"), c.Query("page")
+
+	if pageSizeQuery == "" {
+		pageSizeQuery = "20"
+	}
+
+	if pageQuery == "" {
+		pageQuery = "1"
+	}
+
+	pageSize, err := strconv.Atoi(pageSizeQuery)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			apperror.Validation(
+				"invalid page size",
+				apperror.NewFieldError(
+					"page_size",
+					apperror.FieldCodeInvalid,
+					"page size must be a valid positive integer",
+				),
+			),
+		)
+	}
+
+	page, err := strconv.Atoi(pageQuery)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			apperror.Validation(
+				"invalid page",
+				apperror.NewFieldError(
+					"page",
+					apperror.FieldCodeInvalid,
+					"page must be a valid positive integer",
+				),
+			),
+		)
+	}
+
+	userID := c.Locals(middleware.UserIDLocalKey)
+	u, ok := userID.(int64)
+	if !ok {
+		return httperror.Handle(
+			c,
+			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
+		)
+	}
+
+	inputListProjectsUseCase := mapper.ToListProjectsInput(u, page, pageSize)
+
+	outputListProjectsUseCase, err := h.listProjectsUseCase.Execute(
+		c.Context(),
+		inputListProjectsUseCase,
+	)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			err,
+		)
+	}
+
+	listProjectsResp := mapper.ToListProjectsResponse(outputListProjectsUseCase)
+
+	return c.Status(fiber.StatusOK).JSON(listProjectsResp)
 }

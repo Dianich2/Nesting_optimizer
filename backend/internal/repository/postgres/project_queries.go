@@ -33,3 +33,49 @@ const getProjectByIDQuery = `
 		AND user_id = $2
 		AND deleted_at IS NULL
 `
+
+const listProjectsQuery = `
+	WITH filtered AS(
+		SELECT
+			id,
+			user_id,
+			name,
+			description,
+			created_at,
+			updated_at,
+			COUNT(*) OVER() as total
+		FROM projects
+		WHERE user_id = $1
+			AND deleted_at IS NULL
+	),
+	paged AS(
+		SELECT 
+			id,
+			user_id,
+			name,
+			description,
+			created_at,
+			updated_at,
+			total
+		FROM filtered
+		ORDER BY updated_at DESC, id DESC
+		LIMIT $2
+		OFFSET $3
+	),
+	meta AS (
+		SELECT COALESCE(MAX(total), 0) AS total
+		FROM filtered
+	)
+	SELECT
+		p.id,
+		p.user_id,
+		p.name,
+		p.description,
+		p.created_at,
+		p.updated_at,
+		COALESCE(p.total, m.total) AS total
+	FROM meta m LEFT JOIN paged p ON TRUE
+	ORDER BY 
+		p.updated_at DESC NULLS LAST,
+		p.id DESC NULLS LAST
+`
