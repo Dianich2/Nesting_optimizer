@@ -175,3 +175,39 @@ func (r *ProjectRepository) Update(
 
 	return project, nil
 }
+
+func (r *ProjectRepository) SoftDelete(
+	ctx context.Context,
+	projectID int64,
+	userID int64,
+) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		softDeleteProjectQuery,
+		projectID,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"soft delete project: %w",
+			err,
+		)
+	}
+
+	count, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf(
+			"soft delete project: %w",
+			err,
+		)
+	}
+
+	if count == 0 {
+		return fmt.Errorf(
+			"soft delete project: %w",
+			domainproject.ErrNotFound,
+		)
+	}
+
+	return nil
+}

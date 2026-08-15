@@ -34,6 +34,7 @@ func NewRouter(deps *container.Container) *fiber.App {
 		deps.GetProjectByIDUseCase,
 		deps.ListProjectsUseCase,
 		deps.UpdateProjectUseCase,
+		deps.DeleteProjectUseCase,
 	)
 
 	app.Get("/health", healthHandler.Check)
@@ -53,6 +54,7 @@ func NewRouter(deps *container.Container) *fiber.App {
 	api.Get("/projects/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectHandler.GetByID)
 	api.Get("/projects", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectHandler.ListProjects)
 	api.Patch("/projects/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectHandler.Update)
+	api.Delete("/projects/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectHandler.DeleteProject)
 
 	return app
 }

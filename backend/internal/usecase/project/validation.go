@@ -147,3 +147,12 @@ func (pc *UpdateProjectInput) Validate() []apperror.FieldError {
 
 	return errors
 }
+
+func (pc *DeleteProjectInput) Validate() []apperror.FieldError {
+	var errors []apperror.FieldError
+
+	errors = append(errors, validateID(pc.UserID, "user_id")...)
+	errors = append(errors, validateID(pc.ProjectID, "id")...)
+
+	return errors
+}

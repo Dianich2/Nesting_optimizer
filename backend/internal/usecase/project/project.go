@@ -77,3 +77,8 @@ type UpdateProjectOutput struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
+
+type DeleteProjectInput struct {
+	ProjectID int64
+	UserID    int64
+}

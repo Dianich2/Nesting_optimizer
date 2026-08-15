@@ -18,6 +18,7 @@ type ProjectHandler struct {
 	getProjectByIDUseCase *projectusecase.GetProjectByIDUseCase
 	listProjectsUseCase   *projectusecase.ListProjectsUseCase
 	updateProjectUseCase  *projectusecase.UpdateProjectUseCase
+	deleteProjectUseCase  *projectusecase.DeleteProjectUseCase
 }
 
 func NewProjectHandler(
@@ -25,12 +26,14 @@ func NewProjectHandler(
 	getProjectByIDUseCase *projectusecase.GetProjectByIDUseCase,
 	listProjectsUseCase *projectusecase.ListProjectsUseCase,
 	updateProjectUseCase *projectusecase.UpdateProjectUseCase,
+	deleteProjectUseCase *projectusecase.DeleteProjectUseCase,
 ) *ProjectHandler {
 	return &ProjectHandler{
 		createProjectUseCase:  createProjectUseCase,
 		getProjectByIDUseCase: getProjectByIDUseCase,
 		listProjectsUseCase:   listProjectsUseCase,
 		updateProjectUseCase:  updateProjectUseCase,
+		deleteProjectUseCase:  deleteProjectUseCase,
 	}
 }
 
@@ -286,4 +289,58 @@ func (h *ProjectHandler) Update(c fiber.Ctx) error {
 	updateProjectResp := mapper.ToUpdateProjectResponse(outputUpdateProjectUseCase)
 
 	return c.Status(fiber.StatusOK).JSON(updateProjectResp)
+}
+
+// godoc: DeleteProject godoc
+// @Summary Delete Project
+// @Description Delete Project
+// @Param id path int true "Project ID"
+// @Success 204 "No Content"
+// @Failure 400 {object} httperror.ErrorResponse
+// @Failure 401 {object} httperror.ErrorResponse
+// @Failure 404 {object} httperror.ErrorResponse
+// @Failure 500 {object} httperror.ErrorResponse
+// @Resource Projects
+// @Security BearerAuth
+// @Router /api/v1/projects/{id} [delete]
+func (h *ProjectHandler) DeleteProject(c fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			apperror.Validation(
+				"invalid id",
+				apperror.NewFieldError(
+					"id",
+					apperror.FieldCodeInvalid,
+					"id must be a valid positive integer",
+				),
+			),
+		)
+	}
+
+	userID := c.Locals(middleware.UserIDLocalKey)
+	u, ok := userID.(int64)
+	if !ok {
+		return httperror.Handle(
+			c,
+			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
+		)
+	}
+
+	inputDeleteProjectUseCase := mapper.ToDeleteProjectInput(id, u)
+
+	err = h.deleteProjectUseCase.Execute(
+		c.Context(),
+		inputDeleteProjectUseCase,
+	)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			err,
+		)
+	}
+
+	c.Status(fiber.StatusNoContent)
+	return nil
 }

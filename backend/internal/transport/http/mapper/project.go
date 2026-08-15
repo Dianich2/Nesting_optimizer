@@ -120,3 +120,13 @@ func ToUpdateProjectResponse(
 		UpdatedAt:   resp.UpdatedAt,
 	}
 }
+
+func ToDeleteProjectInput(
+	projectID int64,
+	userID int64,
+) projectusecase.DeleteProjectInput {
+	return projectusecase.DeleteProjectInput{
+		ProjectID: projectID,
+		UserID:    userID,
+	}
+}
