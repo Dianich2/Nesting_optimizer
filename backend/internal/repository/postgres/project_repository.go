@@ -142,3 +142,36 @@ func (r *ProjectRepository) ListByUserID(
 
 	return listOfProjects, nil
 }
+
+func (r *ProjectRepository) Update(
+	ctx context.Context,
+	projectID int64,
+	userID int64,
+	name *string,
+	description *string,
+) (domainproject.Project, error) {
+	var project domainproject.Project
+	if err := r.db.GetContext(
+		ctx,
+		&project,
+		updateProjectQuery,
+		name,
+		description,
+		projectID,
+		userID,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domainproject.Project{}, fmt.Errorf(
+				"update project: %w",
+				domainproject.ErrNotFound,
+			)
+		}
+
+		return domainproject.Project{}, fmt.Errorf(
+			"update project: %w",
+			err,
+		)
+	}
+
+	return project, nil
+}

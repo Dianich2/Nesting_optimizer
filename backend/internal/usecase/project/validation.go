@@ -114,3 +114,36 @@ func (pc *ListProjectsInput) Validate() []apperror.FieldError {
 
 	return errors
 }
+
+func (pc *UpdateProjectInput) Validate() []apperror.FieldError {
+	var errors []apperror.FieldError
+
+	if pc.Name == nil && pc.Description == nil {
+		errors = append(errors, apperror.NewFieldError(
+			"project",
+			apperror.FieldCodeRequired,
+			"at least one project field must be provided"),
+		)
+	}
+
+	if pc.Name != nil {
+		if *pc.Name == "" {
+			errors = append(errors, apperror.NewFieldError(
+				"name",
+				apperror.FieldCodeRequired,
+				"name must not be empty"),
+			)
+		}
+
+		errors = append(errors, validateNameLen(*pc.Name)...)
+	}
+
+	if pc.Description != nil {
+		errors = append(errors, validateDescriptionLen(*pc.Description)...)
+	}
+
+	errors = append(errors, validateID(pc.UserID, "user_id")...)
+	errors = append(errors, validateID(pc.ProjectID, "id")...)
+
+	return errors
+}

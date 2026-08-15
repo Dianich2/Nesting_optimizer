@@ -94,3 +94,29 @@ func ToListProjectsResponse(
 
 	return listProjectsResponse
 }
+
+func ToUpdateProjectInput(
+	req dto.UpdateProjectRequest,
+	projectID int64,
+	userID int64,
+) projectusecase.UpdateProjectInput {
+	return projectusecase.UpdateProjectInput{
+		UserID:      userID,
+		ProjectID:   projectID,
+		Name:        req.Name,
+		Description: req.Description,
+	}
+}
+
+func ToUpdateProjectResponse(
+	resp projectusecase.UpdateProjectOutput,
+) dto.UpdateProjectResponse {
+	return dto.UpdateProjectResponse{
+		ID:          resp.ID,
+		UserID:      resp.UserID,
+		Name:        resp.Name,
+		Description: resp.Description,
+		CreatedAt:   resp.CreatedAt,
+		UpdatedAt:   resp.UpdatedAt,
+	}
+}

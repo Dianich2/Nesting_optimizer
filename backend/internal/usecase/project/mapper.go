@@ -37,3 +37,16 @@ func toGetProjectByIDOutput(
 		UpdatedAt:   project.UpdatedAt,
 	}
 }
+
+func toUpdateProjectOutput(
+	project domainproject.Project,
+) UpdateProjectOutput {
+	return UpdateProjectOutput{
+		ID:          project.ID,
+		UserID:      project.UserID,
+		Name:        project.Name,
+		Description: project.Description,
+		CreatedAt:   project.CreatedAt,
+		UpdatedAt:   project.UpdatedAt,
+	}
+}

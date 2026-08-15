@@ -23,4 +23,12 @@ type ProjectRepository interface {
 		limit int,
 		offset int,
 	) (ProjectListResult, error)
+
+	Update(
+		ctx context.Context,
+		projectID int64,
+		userID int64,
+		name *string,
+		description *string,
+	) (domainproject.Project, error)
 }

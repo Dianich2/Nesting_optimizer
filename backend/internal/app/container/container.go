@@ -26,6 +26,7 @@ type Container struct {
 	CreateProjectUseCase     *projectusecase.CreateProjectUseCase
 	GetProjectByIDUseCase    *projectusecase.GetProjectByIDUseCase
 	ListProjectsUseCase      *projectusecase.ListProjectsUseCase
+	UpdateProjectUseCase     *projectusecase.UpdateProjectUseCase
 	JWTManager               *jwtpkg.Manager
 	SessionRepository        *postgres.SessionRepository
 }
@@ -109,6 +110,10 @@ func New(
 		projectRepo,
 	)
 
+	updateProjectUseCase := projectusecase.NewUpdateProjectUseCase(
+		projectRepo,
+	)
+
 	return &Container{
 		CreateUserUseCase:        createUserUseCase,
 		LoginUseCase:             loginUseCase,
@@ -120,8 +125,9 @@ func New(
 		DeleteCurrentUserUseCase: deleteCurrentUserUseCase,
 		CreateProjectUseCase:     createProjectUseCase,
 		GetProjectByIDUseCase:    getProjectByIDUseCase,
+		ListProjectsUseCase:      listProjectsUseCase,
+		UpdateProjectUseCase:     updateProjectUseCase,
 		JWTManager:               jwtManager,
 		SessionRepository:        sessionRepo,
-		ListProjectsUseCase:      listProjectsUseCase,
 	}
 }

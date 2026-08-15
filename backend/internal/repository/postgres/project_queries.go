@@ -79,3 +79,21 @@ const listProjectsQuery = `
 		p.updated_at DESC NULLS LAST,
 		p.id DESC NULLS LAST
 `
+
+const updateProjectQuery = `
+	UPDATE projects
+	SET
+		name = COALESCE($1, name),
+		description = COALESCE($2, description),
+		updated_at = NOW()
+	WHERE id = $3
+		AND user_id = $4
+		AND deleted_at IS NULL
+	RETURNING 
+		id, 
+		user_id,
+		name,
+		description,
+		created_at, 
+		updated_at
+`

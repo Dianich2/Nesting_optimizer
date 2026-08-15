@@ -10,3 +10,17 @@ func normalizeCreateProjectInput(
 
 	return input
 }
+
+func normalizeUpdateProjectInput(
+	input UpdateProjectInput,
+) UpdateProjectInput {
+	if input.Name != nil {
+		*input.Name = strings.TrimSpace(*input.Name)
+	}
+
+	if input.Description != nil {
+		*input.Description = strings.TrimSpace(*input.Description)
+	}
+
+	return input
+}
