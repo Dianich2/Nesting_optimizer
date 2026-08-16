@@ -53,6 +53,28 @@ definitions:
       user_id:
         type: integer
     type: object
+  dto.CreateSurfaceRequest:
+    properties:
+      geometry:
+        $ref: '#/definitions/dto.PolygonGeometry'
+      name:
+        type: string
+    type: object
+  dto.CreateSurfaceResponse:
+    properties:
+      created_at:
+        type: string
+      geometry:
+        $ref: '#/definitions/dto.PolygonGeometry'
+      id:
+        type: integer
+      name:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+    type: object
   dto.CreateUserRequest:
     properties:
       email:
@@ -87,6 +109,20 @@ definitions:
     properties:
       password:
         type: string
+    type: object
+  dto.GeometryPoint:
+    properties:
+      x:
+        type: number
+      "y":
+        type: number
+    type: object
+  dto.GeometryRing:
+    properties:
+      points:
+        items:
+          $ref: '#/definitions/dto.GeometryPoint'
+        type: array
     type: object
   dto.GetCurrentUserResponse:
     properties:
@@ -163,6 +199,15 @@ definitions:
         type: string
       refresh_token:
         type: string
+    type: object
+  dto.PolygonGeometry:
+    properties:
+      exterior:
+        $ref: '#/definitions/dto.GeometryRing'
+      holes:
+        items:
+          $ref: '#/definitions/dto.GeometryRing'
+        type: array
     type: object
   dto.RefreshRequest:
     properties:
@@ -501,6 +546,40 @@ paths:
       security:
       - BearerAuth: []
       summary: Update Project
+  /api/v1/surfaces:
+    post:
+      consumes:
+      - application/json
+      description: Create Surface
+      parameters:
+      - description: Surface
+        in: body
+        name: surface
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateSurfaceRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.CreateSurfaceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create Surface
   /api/v1/users:
     post:
       consumes:

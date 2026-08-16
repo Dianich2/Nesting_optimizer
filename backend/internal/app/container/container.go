@@ -2,8 +2,10 @@ package container
 
 import (
 	"server_nesting_optimizer/internal/config"
+	"server_nesting_optimizer/internal/geometry/simplefeatures"
 	"server_nesting_optimizer/internal/repository/postgres"
 	projectusecase "server_nesting_optimizer/internal/usecase/project"
+	surfaceusecase "server_nesting_optimizer/internal/usecase/surface"
 	userusecase "server_nesting_optimizer/internal/usecase/user"
 	"server_nesting_optimizer/pkg/password"
 	"time"
@@ -28,6 +30,7 @@ type Container struct {
 	ListProjectsUseCase      *projectusecase.ListProjectsUseCase
 	UpdateProjectUseCase     *projectusecase.UpdateProjectUseCase
 	DeleteProjectUseCase     *projectusecase.DeleteProjectUseCase
+	CreateSurfaceUseCase     *surfaceusecase.CreateSurfaceUseCase
 	JWTManager               *jwtpkg.Manager
 	SessionRepository        *postgres.SessionRepository
 }
@@ -37,10 +40,16 @@ func New(
 	cfg config.Config,
 ) *Container {
 	unitOfWork := postgres.NewUnitOfWork(db)
+	sfCodec := simplefeatures.NewCodec()
+	sfEngine := simplefeatures.NewEngine()
 
 	userRepo := postgres.NewUserRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
 	projectRepo := postgres.NewProjectRepository(db)
+	surfaceRepo := postgres.NewSurfaceRepository(
+		db,
+		sfCodec,
+	)
 
 	passwordHasher := password.NewBcryptHasher(cfg.Security.BcryptCost)
 
@@ -119,6 +128,11 @@ func New(
 		projectRepo,
 	)
 
+	createSurfaceUseCase := surfaceusecase.NewCreateSurfaceUseCase(
+		surfaceRepo,
+		sfEngine,
+	)
+
 	return &Container{
 		CreateUserUseCase:        createUserUseCase,
 		LoginUseCase:             loginUseCase,
@@ -133,6 +147,7 @@ func New(
 		ListProjectsUseCase:      listProjectsUseCase,
 		UpdateProjectUseCase:     updateProjectUseCase,
 		DeleteProjectUseCase:     deleteProjectUseCase,
+		CreateSurfaceUseCase:     createSurfaceUseCase,
 		JWTManager:               jwtManager,
 		SessionRepository:        sessionRepo,
 	}

@@ -416,6 +416,60 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/surfaces": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create Surface",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Create Surface",
+                "parameters": [
+                    {
+                        "description": "Surface",
+                        "name": "surface",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateSurfaceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateSurfaceResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httperror.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httperror.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httperror.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/users": {
             "post": {
                 "description": "Create User",
@@ -764,6 +818,40 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.CreateSurfaceRequest": {
+            "type": "object",
+            "properties": {
+                "geometry": {
+                    "$ref": "#/definitions/dto.PolygonGeometry"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.CreateSurfaceResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "geometry": {
+                    "$ref": "#/definitions/dto.PolygonGeometry"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "dto.CreateUserRequest": {
             "type": "object",
             "properties": {
@@ -815,6 +903,28 @@ const docTemplate = `{
             "properties": {
                 "password": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.GeometryPoint": {
+            "type": "object",
+            "properties": {
+                "x": {
+                    "type": "number"
+                },
+                "y": {
+                    "type": "number"
+                }
+            }
+        },
+        "dto.GeometryRing": {
+            "type": "object",
+            "properties": {
+                "points": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.GeometryPoint"
+                    }
                 }
             }
         },
@@ -932,6 +1042,20 @@ const docTemplate = `{
                 },
                 "refresh_token": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.PolygonGeometry": {
+            "type": "object",
+            "properties": {
+                "exterior": {
+                    "$ref": "#/definitions/dto.GeometryRing"
+                },
+                "holes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.GeometryRing"
+                    }
                 }
             }
         },
