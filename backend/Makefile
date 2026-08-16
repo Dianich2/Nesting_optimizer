@@ -7,7 +7,7 @@ MIGRATE_DSN := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_N
 
 .PHONY: up down restart logs ps run build clean \
 	    migrate-up migrate-down migrate-create migrate-status migrate-reset \
-		swag dev lint fmt
+		swag dev lint fmt test
 
 up:
 	docker compose up -d
@@ -58,5 +58,6 @@ lint:
 fmt:
 	golangci-lint fmt ./...
 
-
+test:
+	go test -v ./...
 
