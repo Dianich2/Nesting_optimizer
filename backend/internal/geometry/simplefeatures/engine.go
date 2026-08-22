@@ -193,5 +193,15 @@ func (e *Engine) Scale(
 
 	newPolygon.Holes = holes
 
+	if err := e.ValidatePolygon(newPolygon); err != nil {
+		return domaingeometry.Polygon{}, fmt.Errorf(
+			"scale polygon result: %w",
+			errors.Join(
+				geometry.ErrInvalidScale,
+				err,
+			),
+		)
+	}
+
 	return newPolygon, nil
 }

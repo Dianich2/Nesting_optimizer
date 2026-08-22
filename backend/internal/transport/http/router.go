@@ -45,6 +45,10 @@ func NewRouter(deps *container.Container) *fiber.App {
 		deps.DeleteSurfaceUseCase,
 	)
 
+	projectSurfaceHandler := handler.NewProjectSurfaceHandler(
+		deps.CreateProjectSurfaceUseCase,
+	)
+
 	app.Get("/health", healthHandler.Check)
 	app.Get("/swagger/*", swaggo.HandlerDefault)
 
@@ -69,6 +73,8 @@ func NewRouter(deps *container.Container) *fiber.App {
 	api.Get("/surfaces", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), surfaceHandler.ListSurfaces)
 	api.Patch("/surfaces/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), surfaceHandler.Update)
 	api.Delete("/surfaces/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), surfaceHandler.Delete)
+
+	api.Post("/projects/:project_id/surfaces", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectSurfaceHandler.Create)
 
 	return app
 }

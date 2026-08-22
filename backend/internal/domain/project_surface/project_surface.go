@@ -1,4 +1,4 @@
-package surface
+package projectsurface
 
 import (
 	"server_nesting_optimizer/internal/domain/geometry"

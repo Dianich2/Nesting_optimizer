@@ -700,6 +700,21 @@ func TestScale(t *testing.T) {
 			wantErr: nil,
 		},
 		{
+			name: "factor causes coordinate overflow",
+			polygon: domaingeometry.Polygon{
+				Exterior: domaingeometry.Ring{
+					Points: []domaingeometry.Point{
+						{X: 0, Y: 0},
+						{X: 100, Y: 0},
+						{X: 100, Y: 50},
+						{X: 0, Y: 50},
+					},
+				},
+			},
+			factor:  math.MaxFloat64,
+			wantErr: geometry.ErrInvalidScale,
+		},
+		{
 			name: "non normalized polygon factor 2",
 			polygon: domaingeometry.Polygon{
 				Exterior: domaingeometry.Ring{

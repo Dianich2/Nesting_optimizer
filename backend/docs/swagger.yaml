@@ -53,6 +53,30 @@ definitions:
       user_id:
         type: integer
     type: object
+  dto.CreateProjectSurfaceRequest:
+    properties:
+      scale:
+        type: number
+      source_surface_id:
+        type: integer
+    type: object
+  dto.CreateProjectSurfaceResponse:
+    properties:
+      created_at:
+        type: string
+      geometry:
+        $ref: '#/definitions/dto.PolygonGeometry'
+      id:
+        type: integer
+      name:
+        type: string
+      project_id:
+        type: integer
+      source_surface_id:
+        type: integer
+      updated_at:
+        type: string
+    type: object
   dto.CreateSurfaceRequest:
     properties:
       geometry:
@@ -605,6 +629,49 @@ paths:
       security:
       - BearerAuth: []
       summary: Update Project
+  /api/v1/projects/{project_id}/surfaces:
+    post:
+      consumes:
+      - application/json
+      description: Create ProjectSurface
+      parameters:
+      - description: Project ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      - description: ProjectSurface
+        in: body
+        name: projectSurface
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateProjectSurfaceRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.CreateProjectSurfaceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create ProjectSurface
   /api/v1/surfaces:
     get:
       description: List Surfaces
