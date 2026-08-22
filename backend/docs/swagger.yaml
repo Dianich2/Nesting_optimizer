@@ -675,6 +675,36 @@ paths:
       - BearerAuth: []
       summary: Create Surface
   /api/v1/surfaces/{id}:
+    delete:
+      description: Delete Surface
+      parameters:
+      - description: Surface ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete Surface
     get:
       description: Get Surface by ID
       parameters:

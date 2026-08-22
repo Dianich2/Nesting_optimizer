@@ -18,6 +18,7 @@ type SurfaceHandler struct {
 	getSurfaceByIDUseCase *surfaceusecase.GetSurfaceByIDUseCase
 	listSurfacesUseCase   *surfaceusecase.ListSurfacesUseCase
 	updateSurfaceUseCase  *surfaceusecase.UpdateSurfaceUseCase
+	deleteSurfaceUseCase  *surfaceusecase.DeleteSurfaceUseCase
 }
 
 func NewSurfaceHandler(
@@ -25,12 +26,14 @@ func NewSurfaceHandler(
 	getSurfaceByIDUseCase *surfaceusecase.GetSurfaceByIDUseCase,
 	listSurfacesUseCase *surfaceusecase.ListSurfacesUseCase,
 	updateSurfaceUseCase *surfaceusecase.UpdateSurfaceUseCase,
+	deleteSurfaceUseCase *surfaceusecase.DeleteSurfaceUseCase,
 ) *SurfaceHandler {
 	return &SurfaceHandler{
 		createSurfaceUseCase:  createSurfaceUseCase,
 		getSurfaceByIDUseCase: getSurfaceByIDUseCase,
 		listSurfacesUseCase:   listSurfacesUseCase,
 		updateSurfaceUseCase:  updateSurfaceUseCase,
+		deleteSurfaceUseCase:  deleteSurfaceUseCase,
 	}
 }
 
@@ -286,4 +289,58 @@ func (h *SurfaceHandler) Update(c fiber.Ctx) error {
 	updateSurfaceResp := mapper.ToUpdateSurfaceResponse(outputUpdateSurfaceUseCase)
 
 	return c.Status(fiber.StatusOK).JSON(updateSurfaceResp)
+}
+
+// godoc: DeleteSurface godoc
+// @Summary Delete Surface
+// @Description Delete Surface
+// @Param id path int true "Surface ID"
+// @Success 204 "No Content"
+// @Failure 400 {object} httperror.ErrorResponse
+// @Failure 401 {object} httperror.ErrorResponse
+// @Failure 404 {object} httperror.ErrorResponse
+// @Failure 500 {object} httperror.ErrorResponse
+// @Resource Surfaces
+// @Security BearerAuth
+// @Router /api/v1/surfaces/{id} [delete]
+func (h *SurfaceHandler) Delete(c fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			apperror.Validation(
+				"invalid id",
+				apperror.NewFieldError(
+					"id",
+					apperror.FieldCodeInvalid,
+					"id must be a valid positive integer",
+				),
+			),
+		)
+	}
+
+	userID := c.Locals(middleware.UserIDLocalKey)
+	u, ok := userID.(int64)
+	if !ok {
+		return httperror.Handle(
+			c,
+			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
+		)
+	}
+
+	inputDeleteSurfaceUseCase := mapper.ToDeleteSurfaceInput(id, u)
+
+	err = h.deleteSurfaceUseCase.Execute(
+		c.Context(),
+		inputDeleteSurfaceUseCase,
+	)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			err,
+		)
+	}
+
+	c.Status(fiber.StatusNoContent)
+	return nil
 }

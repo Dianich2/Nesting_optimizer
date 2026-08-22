@@ -74,3 +74,8 @@ type UpdateSurfaceOutput struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
+
+type DeleteSurfaceInput struct {
+	SurfaceID int64
+	UserID    int64
+}

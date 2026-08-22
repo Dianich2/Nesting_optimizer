@@ -246,3 +246,39 @@ func (r *SurfaceRepository) Update(
 
 	return surface, nil
 }
+
+func (r *SurfaceRepository) SoftDelete(
+	ctx context.Context,
+	surfaceID int64,
+	userID int64,
+) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		softDeleteSurfaceQuery,
+		surfaceID,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"soft delete surface: %w",
+			err,
+		)
+	}
+
+	count, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf(
+			"soft delete surface: %w",
+			err,
+		)
+	}
+
+	if count == 0 {
+		return fmt.Errorf(
+			"soft delete surface: %w",
+			domainsurface.ErrNotFound,
+		)
+	}
+
+	return nil
+}

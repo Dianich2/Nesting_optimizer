@@ -132,3 +132,12 @@ func (input *UpdateSurfaceInput) Validate() []apperror.FieldError {
 
 	return errors
 }
+
+func (input *DeleteSurfaceInput) Validate() []apperror.FieldError {
+	errors := []apperror.FieldError{}
+
+	errors = append(errors, validateID(input.SurfaceID, "id")...)
+	errors = append(errors, validateID(input.UserID, "user_id")...)
+
+	return errors
+}

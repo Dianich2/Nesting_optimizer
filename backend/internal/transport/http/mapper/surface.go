@@ -216,3 +216,13 @@ func ToUpdateSurfaceResponse(
 		UpdatedAt: resp.UpdatedAt,
 	}
 }
+
+func ToDeleteSurfaceInput(
+	surfaceID int64,
+	userID int64,
+) surfaceusecase.DeleteSurfaceInput {
+	return surfaceusecase.DeleteSurfaceInput{
+		SurfaceID: surfaceID,
+		UserID:    userID,
+	}
+}
