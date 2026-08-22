@@ -63,3 +63,40 @@ func validateID(
 
 	return nil
 }
+
+func (input *GetSurfaceByIDInput) Validate() []apperror.FieldError {
+	errors := []apperror.FieldError{}
+
+	errors = append(errors, validateID(input.SurfaceID, "id")...)
+	errors = append(errors, validateID(input.UserID, "user_id")...)
+
+	return errors
+}
+
+func (input *ListSurfacesInput) Validate() []apperror.FieldError {
+	errors := []apperror.FieldError{}
+
+	errors = append(errors, validateID(input.UserID, "user_id")...)
+
+	if input.Page < 1 {
+		errors = append(errors,
+			apperror.NewFieldError(
+				"page",
+				apperror.FieldCodeInvalid,
+				"page must be greater than 0",
+			),
+		)
+	}
+
+	if input.PageSize < 1 || input.PageSize > 100 {
+		errors = append(errors,
+			apperror.NewFieldError(
+				"page_size",
+				apperror.FieldCodeInvalid,
+				"page_size must be between 1 and 100",
+			),
+		)
+	}
+
+	return errors
+}

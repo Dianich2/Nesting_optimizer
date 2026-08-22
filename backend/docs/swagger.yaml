@@ -156,6 +156,19 @@ definitions:
       user_id:
         type: integer
     type: object
+  dto.GetSurfaceResponse:
+    properties:
+      created_at:
+        type: string
+      geometry:
+        $ref: '#/definitions/dto.PolygonGeometry'
+      id:
+        type: integer
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
   dto.ListProjectsItemResponse:
     properties:
       created_at:
@@ -176,6 +189,34 @@ definitions:
       items:
         items:
           $ref: '#/definitions/dto.ListProjectsItemResponse'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  dto.ListSurfacesItemResponse:
+    properties:
+      created_at:
+        type: string
+      geometry:
+        $ref: '#/definitions/dto.PolygonGeometry'
+      id:
+        type: integer
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  dto.ListSurfacesResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.ListSurfacesItemResponse'
         type: array
       page:
         type: integer
@@ -547,6 +588,41 @@ paths:
       - BearerAuth: []
       summary: Update Project
   /api/v1/surfaces:
+    get:
+      description: List Surfaces
+      parameters:
+      - default: 1
+        description: Page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page Size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListSurfacesResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List Surfaces
     post:
       consumes:
       - application/json
@@ -580,6 +656,41 @@ paths:
       security:
       - BearerAuth: []
       summary: Create Surface
+  /api/v1/surfaces/{id}:
+    get:
+      description: Get Surface by ID
+      parameters:
+      - description: Surface ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.GetSurfaceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get Surface by ID
   /api/v1/users:
     post:
       consumes:

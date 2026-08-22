@@ -82,3 +82,111 @@ func (r *SurfaceRepository) Create(
 
 	return surface, nil
 }
+
+func (r *SurfaceRepository) GetByID(
+	ctx context.Context,
+	surfaceID int64,
+	userID int64,
+) (domainsurface.Surface, error) {
+	var surface SurfaceRow
+	if err := r.db.GetContext(
+		ctx,
+		&surface,
+		getSurfaceByIDQuery,
+		surfaceID,
+		userID,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domainsurface.Surface{}, fmt.Errorf(
+				"get surface: %w",
+				domainsurface.ErrNotFound,
+			)
+		}
+
+		return domainsurface.Surface{}, fmt.Errorf(
+			"get surface: %w",
+			err,
+		)
+	}
+
+	surfaceD, err := r.surfaceRowToDomain(surface)
+	if err != nil {
+		return domainsurface.Surface{}, fmt.Errorf(
+			"get surface: map row: %w",
+			err,
+		)
+	}
+
+	return surfaceD, nil
+}
+
+type SurfaceListRow struct {
+	ID        sql.NullInt64  `db:"id"`
+	UserID    sql.NullInt64  `db:"user_id"`
+	Name      sql.NullString `db:"name"`
+	Geometry  []byte         `db:"geometry"`
+	CreatedAt sql.NullTime   `db:"created_at"`
+	UpdatedAt sql.NullTime   `db:"updated_at"`
+	Total     int64          `db:"total"`
+}
+
+func (r *SurfaceRepository) ListByUserID(
+	ctx context.Context,
+	userID int64,
+	limit int,
+	offset int,
+) (surfaceusecase.SurfaceListResult, error) {
+	rows := make([]SurfaceListRow, 0)
+
+	if err := r.db.SelectContext(
+		ctx,
+		&rows,
+		listSurfacesQuery,
+		userID,
+		limit,
+		offset,
+	); err != nil {
+		return surfaceusecase.SurfaceListResult{}, fmt.Errorf(
+			"list surfaces by user id: %w",
+			err,
+		)
+	}
+
+	listOfSurfaces := surfaceusecase.SurfaceListResult{
+		Surfaces: make([]domainsurface.Surface, 0),
+		Total:    0,
+	}
+
+	for _, row := range rows {
+		listOfSurfaces.Total = row.Total
+
+		if !row.ID.Valid {
+			continue
+		}
+
+		polygon, err := r.geometryCodec.DecodeWKB(row.Geometry)
+		if err != nil {
+			return surfaceusecase.SurfaceListResult{}, fmt.Errorf(
+				"decode surface geometry: %w",
+				err,
+			)
+		}
+
+		surface := domainsurface.Surface{
+			ID:        row.ID.Int64,
+			UserID:    row.UserID.Int64,
+			Name:      row.Name.String,
+			Geometry:  polygon,
+			CreatedAt: row.CreatedAt.Time,
+			UpdatedAt: row.UpdatedAt.Time,
+			DeletedAt: nil,
+		}
+
+		listOfSurfaces.Surfaces = append(
+			listOfSurfaces.Surfaces,
+			surface,
+		)
+	}
+
+	return listOfSurfaces, nil
+}

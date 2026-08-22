@@ -24,3 +24,15 @@ func toSurface(
 		Geometry: input.Geometry,
 	}
 }
+
+func toGetSurfaceByIDOutput(
+	surface domainsurface.Surface,
+) GetSurfaceByIDOutput {
+	return GetSurfaceByIDOutput{
+		ID:        surface.ID,
+		Name:      surface.Name,
+		Geometry:  surface.Geometry,
+		CreatedAt: surface.CreatedAt,
+		UpdatedAt: surface.UpdatedAt,
+	}
+}
