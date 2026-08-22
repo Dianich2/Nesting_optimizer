@@ -2,6 +2,7 @@ package surface
 
 import (
 	"context"
+	domaingeometry "server_nesting_optimizer/internal/domain/geometry"
 	domainsurface "server_nesting_optimizer/internal/domain/surface"
 )
 
@@ -23,4 +24,12 @@ type SurfaceRepository interface {
 		limit int,
 		offset int,
 	) (SurfaceListResult, error)
+
+	Update(
+		ctx context.Context,
+		surfaceID int64,
+		userID int64,
+		name *string,
+		geometry *domaingeometry.Polygon,
+	) (domainsurface.Surface, error)
 }

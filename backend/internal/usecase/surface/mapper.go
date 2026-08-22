@@ -7,7 +7,6 @@ func toCreateSurfaceOutput(
 ) CreateSurfaceOutput {
 	return CreateSurfaceOutput{
 		ID:        surface.ID,
-		UserID:    surface.UserID,
 		Name:      surface.Name,
 		Geometry:  surface.Geometry,
 		CreatedAt: surface.CreatedAt,
@@ -29,6 +28,18 @@ func toGetSurfaceByIDOutput(
 	surface domainsurface.Surface,
 ) GetSurfaceByIDOutput {
 	return GetSurfaceByIDOutput{
+		ID:        surface.ID,
+		Name:      surface.Name,
+		Geometry:  surface.Geometry,
+		CreatedAt: surface.CreatedAt,
+		UpdatedAt: surface.UpdatedAt,
+	}
+}
+
+func toUpdateSurfaceOutput(
+	surface domainsurface.Surface,
+) UpdateSurfaceOutput {
+	return UpdateSurfaceOutput{
 		ID:        surface.ID,
 		Name:      surface.Name,
 		Geometry:  surface.Geometry,

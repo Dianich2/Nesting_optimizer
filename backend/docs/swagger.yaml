@@ -72,8 +72,6 @@ definitions:
         type: string
       updated_at:
         type: string
-      user_id:
-        type: integer
     type: object
   dto.CreateUserRequest:
     properties:
@@ -307,6 +305,26 @@ definitions:
         type: string
       user_id:
         type: integer
+    type: object
+  dto.UpdateSurfaceRequest:
+    properties:
+      geometry:
+        $ref: '#/definitions/dto.PolygonGeometry'
+      name:
+        type: string
+    type: object
+  dto.UpdateSurfaceResponse:
+    properties:
+      created_at:
+        type: string
+      geometry:
+        $ref: '#/definitions/dto.PolygonGeometry'
+      id:
+        type: integer
+      name:
+        type: string
+      updated_at:
+        type: string
     type: object
   httperror.ErrorBody:
     properties:
@@ -691,6 +709,48 @@ paths:
       security:
       - BearerAuth: []
       summary: Get Surface by ID
+    patch:
+      consumes:
+      - application/json
+      description: Update Surface
+      parameters:
+      - description: Surface ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Surface
+        in: body
+        name: surface
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateSurfaceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.UpdateSurfaceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update Surface
   /api/v1/users:
     post:
       consumes:

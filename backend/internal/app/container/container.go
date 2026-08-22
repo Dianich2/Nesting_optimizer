@@ -33,6 +33,7 @@ type Container struct {
 	CreateSurfaceUseCase     *surfaceusecase.CreateSurfaceUseCase
 	GetSurfaceByIDUseCase    *surfaceusecase.GetSurfaceByIDUseCase
 	ListSurfacesUseCase      *surfaceusecase.ListSurfacesUseCase
+	UpdateSurfaceUseCase     *surfaceusecase.UpdateSurfaceUseCase
 	JWTManager               *jwtpkg.Manager
 	SessionRepository        *postgres.SessionRepository
 }
@@ -143,6 +144,11 @@ func New(
 		surfaceRepo,
 	)
 
+	updateSurfaceUseCase := surfaceusecase.NewUpdateSurfaceUseCase(
+		surfaceRepo,
+		sfEngine,
+	)
+
 	return &Container{
 		CreateUserUseCase:        createUserUseCase,
 		LoginUseCase:             loginUseCase,
@@ -160,6 +166,7 @@ func New(
 		CreateSurfaceUseCase:     createSurfaceUseCase,
 		GetSurfaceByIDUseCase:    getSurfaceByIDUseCase,
 		ListSurfacesUseCase:      listSurfacesUseCase,
+		UpdateSurfaceUseCase:     updateSurfaceUseCase,
 		JWTManager:               jwtManager,
 		SessionRepository:        sessionRepo,
 	}

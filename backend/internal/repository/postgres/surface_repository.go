@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	domaingeometry "server_nesting_optimizer/internal/domain/geometry"
 	domainsurface "server_nesting_optimizer/internal/domain/surface"
 	"server_nesting_optimizer/internal/geometry"
 	surfaceusecase "server_nesting_optimizer/internal/usecase/surface"
@@ -189,4 +190,59 @@ func (r *SurfaceRepository) ListByUserID(
 	}
 
 	return listOfSurfaces, nil
+}
+
+func (r *SurfaceRepository) Update(
+	ctx context.Context,
+	surfaceID int64,
+	userID int64,
+	name *string,
+	geometry *domaingeometry.Polygon,
+) (domainsurface.Surface, error) {
+	var encodedGeometry []byte
+
+	if geometry != nil {
+		encoded, err := r.geometryCodec.EncodeWKB(*geometry)
+		if err != nil {
+			return domainsurface.Surface{}, fmt.Errorf(
+				"update surface: encode geometry: %w",
+				err,
+			)
+		}
+
+		encodedGeometry = encoded
+	}
+
+	var surfaceRow SurfaceRow
+	if err := r.db.GetContext(
+		ctx,
+		&surfaceRow,
+		updateSurfaceQuery,
+		surfaceID,
+		userID,
+		name,
+		encodedGeometry,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domainsurface.Surface{}, fmt.Errorf(
+				"update surface: %w",
+				domainsurface.ErrNotFound,
+			)
+		}
+
+		return domainsurface.Surface{}, fmt.Errorf(
+			"update surface: %w",
+			err,
+		)
+	}
+
+	surface, err := r.surfaceRowToDomain(surfaceRow)
+	if err != nil {
+		return domainsurface.Surface{}, fmt.Errorf(
+			"update surface: map row: %w",
+			err,
+		)
+	}
+
+	return surface, nil
 }

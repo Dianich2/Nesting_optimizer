@@ -14,7 +14,6 @@ type CreateSurfaceInput struct {
 
 type CreateSurfaceOutput struct {
 	ID        int64
-	UserID    int64
 	Name      string
 	Geometry  domaingeometry.Polygon
 	CreatedAt time.Time
@@ -42,7 +41,6 @@ type ListSurfacesInput struct {
 
 type ListSurfacesItem struct {
 	ID        int64
-	UserID    int64
 	Name      string
 	Geometry  domaingeometry.Polygon
 	CreatedAt time.Time
@@ -60,4 +58,19 @@ type ListSurfacesOutput struct {
 type SurfaceListResult struct {
 	Surfaces []domainsurface.Surface
 	Total    int64
+}
+
+type UpdateSurfaceInput struct {
+	SurfaceID int64
+	UserID    int64
+	Name      *string
+	Geometry  *domaingeometry.Polygon
+}
+
+type UpdateSurfaceOutput struct {
+	ID        int64
+	Name      string
+	Geometry  domaingeometry.Polygon
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }

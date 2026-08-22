@@ -83,3 +83,22 @@ const listSurfacesQuery = `
 		p.updated_at DESC NULLS LAST,
 		p.id DESC NULLS LAST
 `
+
+const updateSurfaceQuery = `
+	UPDATE surfaces
+	SET
+		name = COALESCE($3, name),
+		geometry = COALESCE(ST_GeomFromWKB($4), geometry),
+		updated_at = NOW()
+	WHERE id = $1
+	  AND user_id = $2
+	  AND deleted_at IS NULL
+	RETURNING
+		id,
+		user_id,
+		name,
+		ST_AsBinary(geometry) AS geometry,
+		created_at,
+		updated_at,
+		deleted_at
+`

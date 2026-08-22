@@ -9,3 +9,13 @@ func normalizeCreateSurfaceInput(
 
 	return input
 }
+
+func normalizeUpdateSurfaceInput(
+	input UpdateSurfaceInput,
+) UpdateSurfaceInput {
+	if input.Name != nil {
+		*input.Name = strings.TrimSpace(*input.Name)
+	}
+
+	return input
+}

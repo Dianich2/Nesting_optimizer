@@ -114,7 +114,6 @@ func ToCreateSurfaceResponse(
 ) dto.CreateSurfaceResponse {
 	return dto.CreateSurfaceResponse{
 		ID:        resp.ID,
-		UserID:    resp.UserID,
 		Name:      resp.Name,
 		Geometry:  toGeometryPolygon(resp.Geometry),
 		CreatedAt: resp.CreatedAt,
@@ -184,5 +183,36 @@ func ToListSurfacesResponse(
 		PageSize:   resp.PageSize,
 		Total:      resp.Total,
 		TotalPages: resp.TotalPages,
+	}
+}
+
+func ToUpdateSurfaceInput(
+	req dto.UpdateSurfaceRequest,
+	userID int64,
+	surfaceID int64,
+) surfaceusecase.UpdateSurfaceInput {
+	surface := surfaceusecase.UpdateSurfaceInput{
+		SurfaceID: surfaceID,
+		UserID:    userID,
+		Name:      req.Name,
+	}
+
+	if req.Geometry != nil {
+		geometry := toDomainPolygon(*req.Geometry)
+		surface.Geometry = &geometry
+	}
+
+	return surface
+}
+
+func ToUpdateSurfaceResponse(
+	resp surfaceusecase.UpdateSurfaceOutput,
+) dto.UpdateSurfaceResponse {
+	return dto.UpdateSurfaceResponse{
+		ID:        resp.ID,
+		Name:      resp.Name,
+		Geometry:  toGeometryPolygon(resp.Geometry),
+		CreatedAt: resp.CreatedAt,
+		UpdatedAt: resp.UpdatedAt,
 	}
 }

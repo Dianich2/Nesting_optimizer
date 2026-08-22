@@ -51,7 +51,6 @@ func (uc *ListSurfacesUseCase) Execute(
 	for _, surface := range repoListOfSurfaces.Surfaces {
 		curSurface := ListSurfacesItem{
 			ID:        surface.ID,
-			UserID:    surface.UserID,
 			Name:      surface.Name,
 			Geometry:  surface.Geometry,
 			CreatedAt: surface.CreatedAt,

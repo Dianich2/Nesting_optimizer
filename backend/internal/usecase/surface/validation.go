@@ -100,3 +100,35 @@ func (input *ListSurfacesInput) Validate() []apperror.FieldError {
 
 	return errors
 }
+
+func (input *UpdateSurfaceInput) Validate() []apperror.FieldError {
+	errors := []apperror.FieldError{}
+
+	errors = append(errors, validateID(input.SurfaceID, "id")...)
+	errors = append(errors, validateID(input.UserID, "user_id")...)
+
+	if input.Name == nil && input.Geometry == nil {
+		errors = append(errors, apperror.NewFieldError(
+			"surface",
+			apperror.FieldCodeRequired,
+			"at least one surface field must be provided"),
+		)
+	}
+
+	if input.Name != nil {
+		if *input.Name == "" {
+			errors = append(
+				errors,
+				apperror.NewFieldError(
+					"name",
+					apperror.FieldCodeRequired,
+					"name must not be empty",
+				),
+			)
+		}
+
+		errors = append(errors, validateNameLen(*input.Name)...)
+	}
+
+	return errors
+}
