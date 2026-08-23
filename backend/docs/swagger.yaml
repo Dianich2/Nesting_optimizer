@@ -208,6 +208,38 @@ definitions:
       updated_at:
         type: string
     type: object
+  dto.ListProjectSurfacesItemResponse:
+    properties:
+      created_at:
+        type: string
+      geometry:
+        $ref: '#/definitions/dto.PolygonGeometry'
+      id:
+        type: integer
+      name:
+        type: string
+      project_id:
+        type: integer
+      source_surface_id:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  dto.ListProjectSurfacesResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.ListProjectSurfacesItemResponse'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
   dto.ListProjectsItemResponse:
     properties:
       created_at:
@@ -647,6 +679,50 @@ paths:
       - BearerAuth: []
       summary: Update Project
   /api/v1/projects/{project_id}/surfaces:
+    get:
+      description: List Project Surfaces
+      parameters:
+      - default: 1
+        description: Page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page Size
+        in: query
+        name: page_size
+        type: integer
+      - description: Project ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListProjectSurfacesResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List Project Surfaces
     post:
       consumes:
       - application/json

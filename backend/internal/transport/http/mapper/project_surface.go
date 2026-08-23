@@ -57,3 +57,49 @@ func ToGetProjectSurfaceByIDResponse(
 		UpdatedAt:       resp.UpdatedAt,
 	}
 }
+
+func ToListProjectSurfacesInput(
+	userID int64,
+	projectID int64,
+	page int,
+	pageSize int,
+) projectsurfaceusecase.ListProjectSurfacesInput {
+	return projectsurfaceusecase.ListProjectSurfacesInput{
+		UserID:    userID,
+		ProjectID: projectID,
+		Page:      page,
+		PageSize:  pageSize,
+	}
+}
+
+func ToListProjectSurfacesResponse(
+	resp projectsurfaceusecase.ListProjectSurfacesOutput,
+) dto.ListProjectSurfacesResponse {
+	listProjectSurfacesResponse := dto.ListProjectSurfacesResponse{
+		Items: make([]dto.ListProjectSurfacesItemResponse, 0),
+	}
+
+	for _, item := range resp.Items {
+		curItem := dto.ListProjectSurfacesItemResponse{
+			ID:              item.ID,
+			ProjectID:       item.ProjectID,
+			SourceSurfaceID: item.SourceSurfaceID,
+			Name:            item.Name,
+			Geometry:        toGeometryPolygon(item.Geometry),
+			CreatedAt:       item.CreatedAt,
+			UpdatedAt:       item.UpdatedAt,
+		}
+
+		listProjectSurfacesResponse.Items = append(
+			listProjectSurfacesResponse.Items,
+			curItem,
+		)
+	}
+
+	listProjectSurfacesResponse.Page = resp.Page
+	listProjectSurfacesResponse.PageSize = resp.PageSize
+	listProjectSurfacesResponse.Total = resp.Total
+	listProjectSurfacesResponse.TotalPages = resp.TotalPages
+
+	return listProjectSurfacesResponse
+}

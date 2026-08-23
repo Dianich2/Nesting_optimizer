@@ -117,3 +117,92 @@ func (r *ProjectSurfaceRepository) GetByID(
 
 	return projectSurface, nil
 }
+
+type ProjectSurfaceListRow struct {
+	ID              sql.NullInt64  `db:"id"`
+	ProjectID       sql.NullInt64  `db:"project_id"`
+	SourceSurfaceID sql.NullInt64  `db:"source_surface_id"`
+	Name            sql.NullString `db:"name"`
+	Geometry        []byte         `db:"geometry"`
+	CreatedAt       sql.NullTime   `db:"created_at"`
+	UpdatedAt       sql.NullTime   `db:"updated_at"`
+	Total           int64          `db:"total"`
+	ProjectExists   bool           `db:"project_exists"`
+}
+
+func (r *ProjectSurfaceRepository) ListByProjectID(
+	ctx context.Context,
+	userID int64,
+	projectID int64,
+	limit int,
+	offset int,
+) (projectsurfaceusecase.ProjectSurfaceListResult, error) {
+	rows := make([]ProjectSurfaceListRow, 0)
+
+	if err := r.db.SelectContext(
+		ctx,
+		&rows,
+		listProjectSurfacesQuery,
+		projectID,
+		userID,
+		limit,
+		offset,
+	); err != nil {
+		return projectsurfaceusecase.ProjectSurfaceListResult{}, fmt.Errorf(
+			"list project surfaces by project id: %w",
+			err,
+		)
+	}
+
+	listOfSurfaces := projectsurfaceusecase.ProjectSurfaceListResult{
+		ProjectSurfaces: make([]domainprojectsurface.ProjectSurface, 0),
+		Total:           0,
+	}
+	for _, row := range rows {
+		if !row.ProjectExists {
+			return projectsurfaceusecase.ProjectSurfaceListResult{},
+				fmt.Errorf(
+					"list project surfaces by project ID: %w",
+					domainprojectsurface.ErrNotFound,
+				)
+		}
+
+		listOfSurfaces.Total = row.Total
+
+		if !row.ID.Valid {
+			continue
+		}
+
+		polygon, err := r.geometryCodec.DecodeWKB(row.Geometry)
+		if err != nil {
+			return projectsurfaceusecase.ProjectSurfaceListResult{}, fmt.Errorf(
+				"decode project surface geometry: %w",
+				err,
+			)
+		}
+
+		var sourceSurfaceID *int64
+		if row.SourceSurfaceID.Valid {
+			id := row.SourceSurfaceID.Int64
+			sourceSurfaceID = &id
+		}
+
+		projectSurface := domainprojectsurface.ProjectSurface{
+			ID:              row.ID.Int64,
+			ProjectID:       row.ProjectID.Int64,
+			SourceSurfaceID: sourceSurfaceID,
+			Name:            row.Name.String,
+			Geometry:        polygon,
+			CreatedAt:       row.CreatedAt.Time,
+			UpdatedAt:       row.UpdatedAt.Time,
+			DeletedAt:       nil,
+		}
+
+		listOfSurfaces.ProjectSurfaces = append(
+			listOfSurfaces.ProjectSurfaces,
+			projectSurface,
+		)
+	}
+
+	return listOfSurfaces, nil
+}

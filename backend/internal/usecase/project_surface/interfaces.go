@@ -18,4 +18,12 @@ type ProjectSurfaceRepository interface {
 		projectID int64,
 		projectSurfaceID int64,
 	) (domainprojectsurface.ProjectSurface, error)
+
+	ListByProjectID(
+		ctx context.Context,
+		userID int64,
+		projectID int64,
+		limit int,
+		offset int,
+	) (ProjectSurfaceListResult, error)
 }
