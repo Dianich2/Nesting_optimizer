@@ -51,6 +51,30 @@ definitions:
       updated_at:
         type: string
     type: object
+  dto.CreateProjectPatternRequest:
+    properties:
+      scale:
+        type: number
+      source_pattern_id:
+        type: integer
+    type: object
+  dto.CreateProjectPatternResponse:
+    properties:
+      created_at:
+        type: string
+      geometry:
+        $ref: '#/definitions/dto.PolygonGeometry'
+      id:
+        type: integer
+      name:
+        type: string
+      project_id:
+        type: integer
+      source_pattern_id:
+        type: integer
+      updated_at:
+        type: string
+    type: object
   dto.CreateProjectRequest:
     properties:
       description:
@@ -211,6 +235,23 @@ definitions:
       user_id:
         type: integer
     type: object
+  dto.GetProjectPatternByIDResponse:
+    properties:
+      created_at:
+        type: string
+      geometry:
+        $ref: '#/definitions/dto.PolygonGeometry'
+      id:
+        type: integer
+      name:
+        type: string
+      project_id:
+        type: integer
+      source_pattern_id:
+        type: integer
+      updated_at:
+        type: string
+    type: object
   dto.GetProjectSurfaceByIDResponse:
     properties:
       created_at:
@@ -259,6 +300,38 @@ definitions:
       items:
         items:
           $ref: '#/definitions/dto.ListPatternsItemResponse'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  dto.ListProjectPatternsItemResponse:
+    properties:
+      created_at:
+        type: string
+      geometry:
+        $ref: '#/definitions/dto.PolygonGeometry'
+      id:
+        type: integer
+      name:
+        type: string
+      project_id:
+        type: integer
+      source_pattern_id:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  dto.ListProjectPatternsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.ListProjectPatternsItemResponse'
         type: array
       page:
         type: integer
@@ -435,6 +508,30 @@ definitions:
         type: string
       login:
         type: string
+      updated_at:
+        type: string
+    type: object
+  dto.UpdateProjectPatternRequest:
+    properties:
+      name:
+        type: string
+      scale:
+        type: number
+    type: object
+  dto.UpdateProjectPatternResponse:
+    properties:
+      created_at:
+        type: string
+      geometry:
+        $ref: '#/definitions/dto.PolygonGeometry'
+      id:
+        type: integer
+      name:
+        type: string
+      project_id:
+        type: integer
+      source_pattern_id:
+        type: integer
       updated_at:
         type: string
     type: object
@@ -959,6 +1056,215 @@ paths:
       security:
       - BearerAuth: []
       summary: Update Project
+  /api/v1/projects/{project_id}/patterns:
+    get:
+      description: List Project Patterns
+      parameters:
+      - default: 1
+        description: Page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page Size
+        in: query
+        name: page_size
+        type: integer
+      - description: Project ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListProjectPatternsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List Project Patterns
+    post:
+      consumes:
+      - application/json
+      description: Create ProjectPattern
+      parameters:
+      - description: Project ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      - description: ProjectPattern
+        in: body
+        name: projectPattern
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateProjectPatternRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.CreateProjectPatternResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create ProjectPattern
+  /api/v1/projects/{project_id}/patterns/{id}:
+    delete:
+      description: Delete Project Pattern
+      parameters:
+      - description: Project ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      - description: Project Pattern ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete Project Pattern
+    get:
+      description: Get ProjectPattern by ID
+      parameters:
+      - description: Project ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      - description: ProjectPattern ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.GetProjectPatternByIDResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get ProjectPattern by ID
+    patch:
+      consumes:
+      - application/json
+      description: Update Project Pattern
+      parameters:
+      - description: Project Pattern ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Project ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      - description: Project Pattern
+        in: body
+        name: projectPattern
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateProjectPatternRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.UpdateProjectPatternResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update Project Pattern
   /api/v1/projects/{project_id}/surfaces:
     get:
       description: List Project Surfaces
