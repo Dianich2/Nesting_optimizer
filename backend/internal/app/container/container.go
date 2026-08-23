@@ -4,6 +4,7 @@ import (
 	"server_nesting_optimizer/internal/config"
 	"server_nesting_optimizer/internal/geometry/simplefeatures"
 	"server_nesting_optimizer/internal/repository/postgres"
+	patternusecase "server_nesting_optimizer/internal/usecase/pattern"
 	projectusecase "server_nesting_optimizer/internal/usecase/project"
 	projectsurfaceusecase "server_nesting_optimizer/internal/usecase/project_surface"
 	surfaceusecase "server_nesting_optimizer/internal/usecase/surface"
@@ -41,6 +42,11 @@ type Container struct {
 	ListProjectSurfacesUseCase   *projectsurfaceusecase.ListProjectSurfacesUseCase
 	UpdateProjectSurfaceUseCase  *projectsurfaceusecase.UpdateProjectSurfaceUseCase
 	DeleteProjectSurfaceUseCase  *projectsurfaceusecase.DeleteProjectSurfaceUseCase
+	CreatePatternUseCase         *patternusecase.CreatePatternUseCase
+	GetPatternByIDUseCase        *patternusecase.GetPatternByIDUseCase
+	ListPatternsUseCase          *patternusecase.ListPatternsUseCase
+	UpdatePatternUseCase         *patternusecase.UpdatePatternUseCase
+	DeletePatternUseCase         *patternusecase.DeletePatternUseCase
 	JWTManager                   *jwtpkg.Manager
 	SessionRepository            *postgres.SessionRepository
 }
@@ -61,6 +67,10 @@ func New(
 		sfCodec,
 	)
 	projectSurfaceRepo := postgres.NewProjectSurfaceRepository(
+		db,
+		sfCodec,
+	)
+	patternRepo := postgres.NewPatternRepository(
 		db,
 		sfCodec,
 	)
@@ -188,6 +198,28 @@ func New(
 		projectSurfaceRepo,
 	)
 
+	createPatternUseCase := patternusecase.NewCreatePatternUseCase(
+		patternRepo,
+		sfEngine,
+	)
+
+	getPatternByIDUseCase := patternusecase.NewGetPatternByIDUseCase(
+		patternRepo,
+	)
+
+	listPatternsUseCase := patternusecase.NewListPatternsUseCase(
+		patternRepo,
+	)
+
+	updatePatternUseCase := patternusecase.NewUpdatePatternUseCase(
+		patternRepo,
+		sfEngine,
+	)
+
+	deletePatternUseCase := patternusecase.NewDeletePatternUseCase(
+		patternRepo,
+	)
+
 	return &Container{
 		CreateUserUseCase:            createUserUseCase,
 		LoginUseCase:                 loginUseCase,
@@ -212,6 +244,11 @@ func New(
 		ListProjectSurfacesUseCase:   listProjectSurfacesUseCase,
 		UpdateProjectSurfaceUseCase:  updateProjectSurfaceUseCase,
 		DeleteProjectSurfaceUseCase:  deleteProjectSurfaceUseCase,
+		CreatePatternUseCase:         createPatternUseCase,
+		GetPatternByIDUseCase:        getPatternByIDUseCase,
+		ListPatternsUseCase:          listPatternsUseCase,
+		UpdatePatternUseCase:         updatePatternUseCase,
+		DeletePatternUseCase:         deletePatternUseCase,
 		JWTManager:                   jwtManager,
 		SessionRepository:            sessionRepo,
 	}

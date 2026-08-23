@@ -10,7 +10,7 @@ CREATE TABLE project_surfaces(
     deleted_at TIMESTAMPTZ,
 
     CONSTRAINT project_surfaces_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-    CONSTRAINT project_surfaces_source_surface_id_fkey FOREIGN KEY(source_surface_id) REFERENCES surfaces(id) ON DELETE SET NULL
+    CONSTRAINT project_surfaces_source_surface_id_fkey FOREIGN KEY (source_surface_id) REFERENCES surfaces(id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_project_surfaces_active_project_id ON project_surfaces(project_id) WHERE deleted_at IS NULL;

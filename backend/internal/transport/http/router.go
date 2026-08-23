@@ -53,6 +53,14 @@ func NewRouter(deps *container.Container) *fiber.App {
 		deps.DeleteProjectSurfaceUseCase,
 	)
 
+	patternHandler := handler.NewPatternHandler(
+		deps.CreatePatternUseCase,
+		deps.GetPatternByIDUseCase,
+		deps.ListPatternsUseCase,
+		deps.UpdatePatternUseCase,
+		deps.DeletePatternUseCase,
+	)
+
 	app.Get("/health", healthHandler.Check)
 	app.Get("/swagger/*", swaggo.HandlerDefault)
 
@@ -83,6 +91,12 @@ func NewRouter(deps *container.Container) *fiber.App {
 	api.Get("/projects/:project_id/surfaces", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectSurfaceHandler.ListProjectSurfaces)
 	api.Patch("/projects/:project_id/surfaces/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectSurfaceHandler.Update)
 	api.Delete("/projects/:project_id/surfaces/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectSurfaceHandler.Delete)
+
+	api.Post("/patterns", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), patternHandler.Create)
+	api.Get("/patterns/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), patternHandler.GetByID)
+	api.Get("/patterns", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), patternHandler.ListPatterns)
+	api.Patch("/patterns/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), patternHandler.Update)
+	api.Delete("/patterns/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), patternHandler.Delete)
 
 	return app
 }
