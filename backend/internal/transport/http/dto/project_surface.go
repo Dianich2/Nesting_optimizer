@@ -43,3 +43,18 @@ type ListProjectSurfacesResponse struct {
 	Total      int64                             `json:"total"`
 	TotalPages int64                             `json:"total_pages"`
 }
+
+type UpdateProjectSurfaceRequest struct {
+	Name  *string  `json:"name"`
+	Scale *float64 `json:"scale"`
+}
+
+type UpdateProjectSurfaceResponse struct {
+	ID              int64           `json:"id"`
+	ProjectID       int64           `json:"project_id"`
+	SourceSurfaceID *int64          `json:"source_surface_id"`
+	Name            string          `json:"name"`
+	Geometry        PolygonGeometry `json:"geometry"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+}

@@ -111,3 +111,26 @@ const listProjectSurfacesQuery = `
 		p.updated_at DESC NULLS LAST,
 		p.id DESC NULLS LAST
 `
+
+const updateProjectSurfaceQuery = `
+	UPDATE project_surfaces ps
+	SET
+		name = COALESCE($4, ps.name),
+		geometry = COALESCE(ST_GeomFromWKB($5), ps.geometry),
+		updated_at = NOW()
+	FROM projects p
+	WHERE ps.id = $1
+		AND ps.project_id = $2
+		AND p.id = ps.project_id
+		AND p.user_id = $3
+		AND ps.deleted_at IS NULL
+		AND p.deleted_at IS NULL
+	RETURNING
+		id,
+		project_id,
+		source_surface_id,
+		name,
+		ST_AsBinary(geometry) AS geometry,
+		created_at,
+		updated_at
+`

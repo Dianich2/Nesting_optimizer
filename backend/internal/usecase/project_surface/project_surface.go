@@ -68,3 +68,21 @@ type ProjectSurfaceListResult struct {
 	ProjectSurfaces []domainprojectsurface.ProjectSurface
 	Total           int64
 }
+
+type UpdateProjectSurfaceInput struct {
+	UserID           int64
+	ProjectSurfaceID int64
+	ProjectID        int64
+	Name             *string
+	Scale            *float64
+}
+
+type UpdateProjectSurfaceOutput struct {
+	ID              int64
+	ProjectID       int64
+	SourceSurfaceID *int64
+	Name            string
+	Geometry        geometry.Polygon
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}

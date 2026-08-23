@@ -103,3 +103,32 @@ func ToListProjectSurfacesResponse(
 
 	return listProjectSurfacesResponse
 }
+
+func ToUpdateProjectSurfaceInput(
+	req dto.UpdateProjectSurfaceRequest,
+	userID int64,
+	projectID int64,
+	projectSurfaceID int64,
+) projectsurfaceusecase.UpdateProjectSurfaceInput {
+	return projectsurfaceusecase.UpdateProjectSurfaceInput{
+		UserID:           userID,
+		ProjectID:        projectID,
+		ProjectSurfaceID: projectSurfaceID,
+		Name:             req.Name,
+		Scale:            req.Scale,
+	}
+}
+
+func ToUpdateProjectSurfaceResponse(
+	resp projectsurfaceusecase.UpdateProjectSurfaceOutput,
+) dto.UpdateProjectSurfaceResponse {
+	return dto.UpdateProjectSurfaceResponse{
+		ID:              resp.ID,
+		ProjectID:       resp.ProjectID,
+		SourceSurfaceID: resp.SourceSurfaceID,
+		Name:            resp.Name,
+		Geometry:        toGeometryPolygon(resp.Geometry),
+		CreatedAt:       resp.CreatedAt,
+		UpdatedAt:       resp.UpdatedAt,
+	}
+}
