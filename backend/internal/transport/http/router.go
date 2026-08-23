@@ -50,6 +50,7 @@ func NewRouter(deps *container.Container) *fiber.App {
 		deps.GetProjectSurfaceByIDUseCase,
 		deps.ListProjectSurfacesUseCase,
 		deps.UpdateProjectSurfaceUseCase,
+		deps.DeleteProjectSurfaceUseCase,
 	)
 
 	app.Get("/health", healthHandler.Check)
@@ -81,6 +82,7 @@ func NewRouter(deps *container.Container) *fiber.App {
 	api.Get("/projects/:project_id/surfaces/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectSurfaceHandler.GetByID)
 	api.Get("/projects/:project_id/surfaces", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectSurfaceHandler.ListProjectSurfaces)
 	api.Patch("/projects/:project_id/surfaces/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectSurfaceHandler.Update)
+	api.Delete("/projects/:project_id/surfaces/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectSurfaceHandler.Delete)
 
 	return app
 }

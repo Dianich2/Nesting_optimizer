@@ -86,3 +86,9 @@ type UpdateProjectSurfaceOutput struct {
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }
+
+type DeleteProjectSurfaceInput struct {
+	UserID           int64
+	ProjectSurfaceID int64
+	ProjectID        int64
+}

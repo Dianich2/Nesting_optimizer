@@ -134,3 +134,17 @@ const updateProjectSurfaceQuery = `
 		created_at,
 		updated_at
 `
+
+const softDeleteProjectSurfaceQuery = `
+	UPDATE project_surfaces ps
+	SET 
+		deleted_at = NOW(),
+		updated_at = NOW()
+	FROM projects p
+	WHERE ps.id = $1
+		AND ps.project_id = $2
+		AND p.id = ps.project_id
+		AND p.user_id = $3
+		AND ps.deleted_at IS NULL
+		AND p.deleted_at IS NULL
+`

@@ -132,3 +132,15 @@ func ToUpdateProjectSurfaceResponse(
 		UpdatedAt:       resp.UpdatedAt,
 	}
 }
+
+func ToDeleteProjectSurfaceInput(
+	userID int64,
+	projectID int64,
+	projectSurfaceID int64,
+) projectsurfaceusecase.DeleteProjectSurfaceInput {
+	return projectsurfaceusecase.DeleteProjectSurfaceInput{
+		UserID:           userID,
+		ProjectID:        projectID,
+		ProjectSurfaceID: projectSurfaceID,
+	}
+}

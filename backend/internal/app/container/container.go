@@ -40,6 +40,7 @@ type Container struct {
 	GetProjectSurfaceByIDUseCase *projectsurfaceusecase.GetProjectSurfaceByIDUseCase
 	ListProjectSurfacesUseCase   *projectsurfaceusecase.ListProjectSurfacesUseCase
 	UpdateProjectSurfaceUseCase  *projectsurfaceusecase.UpdateProjectSurfaceUseCase
+	DeleteProjectSurfaceUseCase  *projectsurfaceusecase.DeleteProjectSurfaceUseCase
 	JWTManager                   *jwtpkg.Manager
 	SessionRepository            *postgres.SessionRepository
 }
@@ -183,6 +184,10 @@ func New(
 		sfEngine,
 	)
 
+	deleteProjectSurfaceUseCase := projectsurfaceusecase.NewDeleteProjectSurfaceUseCase(
+		projectSurfaceRepo,
+	)
+
 	return &Container{
 		CreateUserUseCase:            createUserUseCase,
 		LoginUseCase:                 loginUseCase,
@@ -206,6 +211,7 @@ func New(
 		GetProjectSurfaceByIDUseCase: getProjectSurfaceByIDUseCase,
 		ListProjectSurfacesUseCase:   listProjectSurfacesUseCase,
 		UpdateProjectSurfaceUseCase:  updateProjectSurfaceUseCase,
+		DeleteProjectSurfaceUseCase:  deleteProjectSurfaceUseCase,
 		JWTManager:                   jwtManager,
 		SessionRepository:            sessionRepo,
 	}
