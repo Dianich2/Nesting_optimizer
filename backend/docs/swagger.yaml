@@ -178,6 +178,23 @@ definitions:
       user_id:
         type: integer
     type: object
+  dto.GetProjectSurfaceByIDResponse:
+    properties:
+      created_at:
+        type: string
+      geometry:
+        $ref: '#/definitions/dto.PolygonGeometry'
+      id:
+        type: integer
+      name:
+        type: string
+      project_id:
+        type: integer
+      source_surface_id:
+        type: integer
+      updated_at:
+        type: string
+    type: object
   dto.GetSurfaceResponse:
     properties:
       created_at:
@@ -672,6 +689,46 @@ paths:
       security:
       - BearerAuth: []
       summary: Create ProjectSurface
+  /api/v1/projects/{project_id}/surfaces/{id}:
+    get:
+      description: Get ProjectSurface by ID
+      parameters:
+      - description: Project ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      - description: ProjectSurface ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.GetProjectSurfaceByIDResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get ProjectSurface by ID
   /api/v1/surfaces:
     get:
       description: List Surfaces

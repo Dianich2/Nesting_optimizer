@@ -29,3 +29,22 @@ const createProjectSurfaceQuery = `
 		created_at,
 		updated_at
 `
+
+const getProjectSurfaceByIDQuery = `
+	SELECT
+		ps.id,
+		ps.project_id,
+		ps.source_surface_id,
+		ps.name,
+		ST_AsBinary(ps.geometry) AS geometry,
+		ps.created_at,
+		ps.updated_at
+	FROM project_surfaces ps
+	INNER JOIN projects p
+		ON p.id = ps.project_id
+	WHERE ps.id = $1
+		AND ps.project_id = $2
+		AND p.user_id = $3
+		AND ps.deleted_at IS NULL
+		AND p.deleted_at IS NULL
+`

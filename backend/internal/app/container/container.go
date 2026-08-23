@@ -18,27 +18,28 @@ import (
 )
 
 type Container struct {
-	CreateUserUseCase           *userusecase.CreateUserUseCase
-	LoginUseCase                *userusecase.LoginUseCase
-	RefreshUseCase              *userusecase.RefreshUseCase
-	LogoutUseCase               *userusecase.LogoutUseCase
-	GetCurrentUserUseCase       *userusecase.GetCurrentUserUseCase
-	UpdateProfileUseCase        *userusecase.UpdateProfileUseCase
-	ChangePasswordUseCase       *userusecase.ChangePasswordUseCase
-	DeleteCurrentUserUseCase    *userusecase.DeleteCurrentUserUseCase
-	CreateProjectUseCase        *projectusecase.CreateProjectUseCase
-	GetProjectByIDUseCase       *projectusecase.GetProjectByIDUseCase
-	ListProjectsUseCase         *projectusecase.ListProjectsUseCase
-	UpdateProjectUseCase        *projectusecase.UpdateProjectUseCase
-	DeleteProjectUseCase        *projectusecase.DeleteProjectUseCase
-	CreateSurfaceUseCase        *surfaceusecase.CreateSurfaceUseCase
-	GetSurfaceByIDUseCase       *surfaceusecase.GetSurfaceByIDUseCase
-	ListSurfacesUseCase         *surfaceusecase.ListSurfacesUseCase
-	UpdateSurfaceUseCase        *surfaceusecase.UpdateSurfaceUseCase
-	DeleteSurfaceUseCase        *surfaceusecase.DeleteSurfaceUseCase
-	CreateProjectSurfaceUseCase *projectsurfaceusecase.CreateProjectSurfaceUseCase
-	JWTManager                  *jwtpkg.Manager
-	SessionRepository           *postgres.SessionRepository
+	CreateUserUseCase            *userusecase.CreateUserUseCase
+	LoginUseCase                 *userusecase.LoginUseCase
+	RefreshUseCase               *userusecase.RefreshUseCase
+	LogoutUseCase                *userusecase.LogoutUseCase
+	GetCurrentUserUseCase        *userusecase.GetCurrentUserUseCase
+	UpdateProfileUseCase         *userusecase.UpdateProfileUseCase
+	ChangePasswordUseCase        *userusecase.ChangePasswordUseCase
+	DeleteCurrentUserUseCase     *userusecase.DeleteCurrentUserUseCase
+	CreateProjectUseCase         *projectusecase.CreateProjectUseCase
+	GetProjectByIDUseCase        *projectusecase.GetProjectByIDUseCase
+	ListProjectsUseCase          *projectusecase.ListProjectsUseCase
+	UpdateProjectUseCase         *projectusecase.UpdateProjectUseCase
+	DeleteProjectUseCase         *projectusecase.DeleteProjectUseCase
+	CreateSurfaceUseCase         *surfaceusecase.CreateSurfaceUseCase
+	GetSurfaceByIDUseCase        *surfaceusecase.GetSurfaceByIDUseCase
+	ListSurfacesUseCase          *surfaceusecase.ListSurfacesUseCase
+	UpdateSurfaceUseCase         *surfaceusecase.UpdateSurfaceUseCase
+	DeleteSurfaceUseCase         *surfaceusecase.DeleteSurfaceUseCase
+	CreateProjectSurfaceUseCase  *projectsurfaceusecase.CreateProjectSurfaceUseCase
+	GetProjectSurfaceByIDUseCase *projectsurfaceusecase.GetProjectSurfaceByIDUseCase
+	JWTManager                   *jwtpkg.Manager
+	SessionRepository            *postgres.SessionRepository
 }
 
 func New(
@@ -167,27 +168,32 @@ func New(
 		sfEngine,
 	)
 
+	getProjectSurfaceByIDUseCase := projectsurfaceusecase.NewGetProjectSurfaceByIDUseCase(
+		projectSurfaceRepo,
+	)
+
 	return &Container{
-		CreateUserUseCase:           createUserUseCase,
-		LoginUseCase:                loginUseCase,
-		RefreshUseCase:              refreshUseCase,
-		LogoutUseCase:               logoutUseCase,
-		UpdateProfileUseCase:        updateProfileUseCase,
-		GetCurrentUserUseCase:       getCurrentUserUseCase,
-		ChangePasswordUseCase:       changePasswordUseCase,
-		DeleteCurrentUserUseCase:    deleteCurrentUserUseCase,
-		CreateProjectUseCase:        createProjectUseCase,
-		GetProjectByIDUseCase:       getProjectByIDUseCase,
-		ListProjectsUseCase:         listProjectsUseCase,
-		UpdateProjectUseCase:        updateProjectUseCase,
-		DeleteProjectUseCase:        deleteProjectUseCase,
-		CreateSurfaceUseCase:        createSurfaceUseCase,
-		GetSurfaceByIDUseCase:       getSurfaceByIDUseCase,
-		ListSurfacesUseCase:         listSurfacesUseCase,
-		UpdateSurfaceUseCase:        updateSurfaceUseCase,
-		DeleteSurfaceUseCase:        deleteSurfaceUseCase,
-		CreateProjectSurfaceUseCase: createProjectSurfaceUseCase,
-		JWTManager:                  jwtManager,
-		SessionRepository:           sessionRepo,
+		CreateUserUseCase:            createUserUseCase,
+		LoginUseCase:                 loginUseCase,
+		RefreshUseCase:               refreshUseCase,
+		LogoutUseCase:                logoutUseCase,
+		UpdateProfileUseCase:         updateProfileUseCase,
+		GetCurrentUserUseCase:        getCurrentUserUseCase,
+		ChangePasswordUseCase:        changePasswordUseCase,
+		DeleteCurrentUserUseCase:     deleteCurrentUserUseCase,
+		CreateProjectUseCase:         createProjectUseCase,
+		GetProjectByIDUseCase:        getProjectByIDUseCase,
+		ListProjectsUseCase:          listProjectsUseCase,
+		UpdateProjectUseCase:         updateProjectUseCase,
+		DeleteProjectUseCase:         deleteProjectUseCase,
+		CreateSurfaceUseCase:         createSurfaceUseCase,
+		GetSurfaceByIDUseCase:        getSurfaceByIDUseCase,
+		ListSurfacesUseCase:          listSurfacesUseCase,
+		UpdateSurfaceUseCase:         updateSurfaceUseCase,
+		DeleteSurfaceUseCase:         deleteSurfaceUseCase,
+		CreateProjectSurfaceUseCase:  createProjectSurfaceUseCase,
+		GetProjectSurfaceByIDUseCase: getProjectSurfaceByIDUseCase,
+		JWTManager:                   jwtManager,
+		SessionRepository:            sessionRepo,
 	}
 }

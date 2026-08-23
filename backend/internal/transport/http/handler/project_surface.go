@@ -14,14 +14,17 @@ import (
 )
 
 type ProjectSurfaceHandler struct {
-	createProjectSurfaceUseCase *projectsurfaceusecase.CreateProjectSurfaceUseCase
+	createProjectSurfaceUseCase  *projectsurfaceusecase.CreateProjectSurfaceUseCase
+	getProjectSurfaceByIDUseCase *projectsurfaceusecase.GetProjectSurfaceByIDUseCase
 }
 
 func NewProjectSurfaceHandler(
 	createProjectSurfaceUseCase *projectsurfaceusecase.CreateProjectSurfaceUseCase,
+	getProjectSurfaceByIDUseCase *projectsurfaceusecase.GetProjectSurfaceByIDUseCase,
 ) *ProjectSurfaceHandler {
 	return &ProjectSurfaceHandler{
-		createProjectSurfaceUseCase: createProjectSurfaceUseCase,
+		createProjectSurfaceUseCase:  createProjectSurfaceUseCase,
+		getProjectSurfaceByIDUseCase: getProjectSurfaceByIDUseCase,
 	}
 }
 
@@ -90,4 +93,76 @@ func (h *ProjectSurfaceHandler) Create(c fiber.Ctx) error {
 	createProjectSurfaceResp := mapper.ToCreateProjectSurfaceResponse(outputCreateProjectSurfaceUseCase)
 
 	return c.Status(fiber.StatusCreated).JSON(createProjectSurfaceResp)
+}
+
+// godoc: GetProjectSurfaceByID godoc
+// @Summary Get ProjectSurface by ID
+// @Description Get ProjectSurface by ID
+// @Produce json
+// @Param project_id path int true "Project ID"
+// @Param id path int true "ProjectSurface ID"
+// @Success 200 {object} dto.GetProjectSurfaceByIDResponse
+// @Failure 400 {object} httperror.ErrorResponse
+// @Failure 401 {object} httperror.ErrorResponse
+// @Failure 404 {object} httperror.ErrorResponse
+// @Failure 500 {object} httperror.ErrorResponse
+// @Resource ProjectSurfaces
+// @Security BearerAuth
+// @Router /api/v1/projects/{project_id}/surfaces/{id} [get]
+func (h *ProjectSurfaceHandler) GetByID(c fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			apperror.Validation(
+				"invalid id",
+				apperror.NewFieldError(
+					"id",
+					apperror.FieldCodeInvalid,
+					"id must be a valid positive integer",
+				),
+			),
+		)
+	}
+
+	projectID, err := strconv.ParseInt(c.Params("project_id"), 10, 64)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			apperror.Validation(
+				"invalid id",
+				apperror.NewFieldError(
+					"project_id",
+					apperror.FieldCodeInvalid,
+					"project_id must be a valid positive integer",
+				),
+			),
+		)
+	}
+
+	userID := c.Locals(middleware.UserIDLocalKey)
+	u, ok := userID.(int64)
+	if !ok {
+		return httperror.Handle(
+			c,
+			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
+		)
+	}
+
+	inputGetProjectSurfaceByIDUseCase := mapper.ToGetProjectSurfaceByIDInput(id, u, projectID)
+
+	outputGetProjectSurfaceByIDUseCase, err := h.getProjectSurfaceByIDUseCase.Execute(
+		c.Context(),
+		inputGetProjectSurfaceByIDUseCase,
+	)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			err,
+		)
+	}
+
+	getProjectSurfaceByIDResp := mapper.ToGetProjectSurfaceByIDResponse(outputGetProjectSurfaceByIDUseCase)
+
+	return c.Status(fiber.StatusOK).JSON(getProjectSurfaceByIDResp)
 }

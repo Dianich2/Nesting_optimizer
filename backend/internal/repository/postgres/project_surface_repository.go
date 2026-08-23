@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	domainprojectsurface "server_nesting_optimizer/internal/domain/project_surface"
 	"server_nesting_optimizer/internal/geometry"
@@ -71,6 +72,45 @@ func (r *ProjectSurfaceRepository) Create(
 	if err != nil {
 		return domainprojectsurface.ProjectSurface{}, fmt.Errorf(
 			"create project surface: map row: %w",
+			err,
+		)
+	}
+
+	return projectSurface, nil
+}
+
+func (r *ProjectSurfaceRepository) GetByID(
+	ctx context.Context,
+	userID int64,
+	projectID int64,
+	projectSurfaceID int64,
+) (domainprojectsurface.ProjectSurface, error) {
+	var projectSurfaceRow ProjectSurfaceRow
+	if err := r.db.GetContext(
+		ctx,
+		&projectSurfaceRow,
+		getProjectSurfaceByIDQuery,
+		projectSurfaceID,
+		projectID,
+		userID,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domainprojectsurface.ProjectSurface{}, fmt.Errorf(
+				"get project surface by ID: %w",
+				domainprojectsurface.ErrNotFound,
+			)
+		}
+
+		return domainprojectsurface.ProjectSurface{}, fmt.Errorf(
+			"get project surface by ID: %w",
+			err,
+		)
+	}
+
+	projectSurface, err := r.projectSurfaceRowToDomain(projectSurfaceRow)
+	if err != nil {
+		return domainprojectsurface.ProjectSurface{}, fmt.Errorf(
+			"get project surface by ID: map row: %w",
 			err,
 		)
 	}

@@ -15,3 +15,17 @@ func toCreateProjectSurfaceOutput(
 		UpdatedAt:       projectSurface.UpdatedAt,
 	}
 }
+
+func toGetProjectSurfaceByIDOutput(
+	projectSurface domainprojectsurface.ProjectSurface,
+) GetProjectSurfaceByIDOutput {
+	return GetProjectSurfaceByIDOutput{
+		ID:              projectSurface.ID,
+		ProjectID:       projectSurface.ProjectID,
+		SourceSurfaceID: projectSurface.SourceSurfaceID,
+		Name:            projectSurface.Name,
+		Geometry:        projectSurface.Geometry,
+		CreatedAt:       projectSurface.CreatedAt,
+		UpdatedAt:       projectSurface.UpdatedAt,
+	}
+}

@@ -11,4 +11,11 @@ type ProjectSurfaceRepository interface {
 		projectSurface domainprojectsurface.ProjectSurface,
 		userID int64,
 	) (domainprojectsurface.ProjectSurface, error)
+
+	GetByID(
+		ctx context.Context,
+		userID int64,
+		projectID int64,
+		projectSurfaceID int64,
+	) (domainprojectsurface.ProjectSurface, error)
 }
