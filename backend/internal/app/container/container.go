@@ -5,6 +5,7 @@ import (
 	"server_nesting_optimizer/internal/geometry/simplefeatures"
 	"server_nesting_optimizer/internal/repository/postgres"
 	patternusecase "server_nesting_optimizer/internal/usecase/pattern"
+	placementusecase "server_nesting_optimizer/internal/usecase/placement"
 	projectusecase "server_nesting_optimizer/internal/usecase/project"
 	projectpatternusecase "server_nesting_optimizer/internal/usecase/project_pattern"
 	projectsurfaceusecase "server_nesting_optimizer/internal/usecase/project_surface"
@@ -53,6 +54,7 @@ type Container struct {
 	ListProjectPatternsUseCase   *projectpatternusecase.ListProjectPatternsUseCase
 	UpdateProjectPatternUseCase  *projectpatternusecase.UpdateProjectPatternUseCase
 	DeleteProjectPatternUseCase  *projectpatternusecase.DeleteProjectPatternUseCase
+	CreatePlacementUseCase       *placementusecase.CreatePlacementUseCase
 	JWTManager                   *jwtpkg.Manager
 	SessionRepository            *postgres.SessionRepository
 }
@@ -81,6 +83,10 @@ func New(
 		sfCodec,
 	)
 	projectPatternRepo := postgres.NewProjectPatternRepository(
+		db,
+		sfCodec,
+	)
+	placementRepo := postgres.NewPlacementRepository(
 		db,
 		sfCodec,
 	)
@@ -254,6 +260,13 @@ func New(
 		projectPatternRepo,
 	)
 
+	createPlacementUseCase := placementusecase.NewCreatePlacementUseCase(
+		placementRepo,
+		projectSurfaceRepo,
+		projectPatternRepo,
+		sfEngine,
+	)
+
 	return &Container{
 		CreateUserUseCase:            createUserUseCase,
 		LoginUseCase:                 loginUseCase,
@@ -288,6 +301,7 @@ func New(
 		ListProjectPatternsUseCase:   listProjectPatternsUseCase,
 		UpdateProjectPatternUseCase:  updateProjectPatternUseCase,
 		DeleteProjectPatternUseCase:  deleteProjectPatternUseCase,
+		CreatePlacementUseCase:       createPlacementUseCase,
 		JWTManager:                   jwtManager,
 		SessionRepository:            sessionRepo,
 	}

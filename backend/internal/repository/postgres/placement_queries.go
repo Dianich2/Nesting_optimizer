@@ -1,0 +1,62 @@
+package postgres
+
+const createPlacementQuery = `
+	INSERT INTO placements (
+	    project_surface_id,
+	    project_pattern_id,
+	    x,
+	    y,
+	    rotation
+	)
+	SELECT
+	    ps.id,
+	    pp.id,
+	    $4,
+	    $5,
+	    $6
+	FROM project_surfaces ps
+	JOIN project_patterns pp
+	    ON pp.id = $3
+	    AND pp.project_id = $1
+	    AND pp.deleted_at IS NULL
+	JOIN projects p
+	    ON p.id = $1
+	    AND p.user_id = $7
+	    AND p.deleted_at IS NULL
+	WHERE ps.id = $2
+	    AND ps.project_id = $1
+	    AND ps.deleted_at IS NULL
+	RETURNING
+		id,
+		project_surface_id,
+		project_pattern_id,
+		x,
+		y,
+		rotation,
+		created_at,
+		updated_at
+`
+
+const listPlacementsForCollisionCheckQuery = `
+	SELECT
+		pl.id,
+		ST_AsBinary(pp.geometry) AS pattern_geometry,
+		pl.x,
+		pl.y,
+		pl.rotation
+	FROM placements pl
+	INNER JOIN project_surfaces ps
+		ON ps.id = pl.project_surface_id
+	INNER JOIN project_patterns pp
+		ON pp.id = pl.project_pattern_id
+	INNER JOIN projects p
+		ON p.id = ps.project_id
+	WHERE pl.project_surface_id = $1
+		AND ps.project_id = $2
+		AND pp.project_id = $2
+		AND p.user_id = $3
+		AND pl.deleted_at IS NULL
+		AND ps.deleted_at IS NULL
+		AND pp.deleted_at IS NULL
+		AND p.deleted_at IS NULL
+`
