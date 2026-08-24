@@ -6,6 +6,8 @@ import (
 	"math"
 	domaingeometry "server_nesting_optimizer/internal/domain/geometry"
 	"server_nesting_optimizer/internal/geometry"
+
+	"github.com/peterstace/simplefeatures/geom"
 )
 
 type Engine struct{}
@@ -204,4 +206,152 @@ func (e *Engine) Scale(
 	}
 
 	return newPolygon, nil
+}
+
+func normalizeRotation(rotation float64) float64 {
+	normalizedRotation := math.Mod(rotation, 360)
+	if normalizedRotation < 0 {
+		normalizedRotation += 360
+	}
+
+	return normalizedRotation
+}
+
+func (e *Engine) Transform(
+	polygon domaingeometry.Polygon,
+	x float64,
+	y float64,
+	rotation float64,
+) (domaingeometry.Polygon, error) {
+	if err := e.ValidatePolygon(polygon); err != nil {
+		return domaingeometry.Polygon{}, fmt.Errorf(
+			"transform polygon: %w",
+			err,
+		)
+	}
+
+	if math.IsNaN(rotation) || math.IsInf(rotation, 0) ||
+		math.IsNaN(x) || math.IsInf(x, 0) ||
+		math.IsNaN(y) || math.IsInf(y, 0) {
+		return domaingeometry.Polygon{}, fmt.Errorf(
+			"transform polygon: %w",
+			geometry.ErrInvalidTransform,
+		)
+	}
+
+	rotation = normalizeRotation(rotation)
+
+	sfPolygon := toSimpleFeaturesPolygon(polygon)
+
+	bboxCenter := sfPolygon.Envelope().Center()
+	bboxCenterCoordinates, _ := bboxCenter.Coordinates()
+
+	alpha := rotation * math.Pi / 180
+	sinAlpha := math.Sin(alpha)
+	cosAlpha := math.Cos(alpha)
+
+	sfTransformedPolygon := sfPolygon.TransformXY(func(xy geom.XY) geom.XY {
+		dx := xy.X - bboxCenterCoordinates.X
+		dy := xy.Y - bboxCenterCoordinates.Y
+
+		rx := dx*cosAlpha - dy*sinAlpha
+		ry := dx*sinAlpha + dy*cosAlpha
+
+		return geom.XY{
+			X: rx + x,
+			Y: ry + y,
+		}
+	})
+
+	transformedPolygon := fromSimpleFeaturesPolygon(sfTransformedPolygon)
+
+	if err := e.ValidatePolygon(transformedPolygon); err != nil {
+		return domaingeometry.Polygon{}, fmt.Errorf(
+			"transform polygon: %w",
+			errors.Join(
+				geometry.ErrInvalidTransform,
+				err,
+			),
+		)
+	}
+
+	return transformedPolygon, nil
+}
+
+func (e *Engine) CoveredBy(
+	inner domaingeometry.Polygon,
+	outer domaingeometry.Polygon,
+) (bool, error) {
+	if err := e.ValidatePolygon(inner); err != nil {
+		return false, fmt.Errorf(
+			"covered by inner polygon: %w",
+			err,
+		)
+	}
+
+	if err := e.ValidatePolygon(outer); err != nil {
+		return false, fmt.Errorf(
+			"covered by outer polygon: %w",
+			err,
+		)
+	}
+
+	sfInner := toSimpleFeaturesPolygon(inner)
+	sfOuter := toSimpleFeaturesPolygon(outer)
+
+	isCoveredBy, err := geom.CoveredBy(
+		sfInner.AsGeometry(),
+		sfOuter.AsGeometry(),
+	)
+	if err != nil {
+		return false, fmt.Errorf(
+			"covered by: %w",
+			err,
+		)
+	}
+
+	return isCoveredBy, nil
+}
+
+func (e *Engine) InteriorsIntersect(
+	first domaingeometry.Polygon,
+	second domaingeometry.Polygon,
+) (bool, error) {
+	if err := e.ValidatePolygon(first); err != nil {
+		return false, fmt.Errorf(
+			"interiors intersect first polygon: %w",
+			err,
+		)
+	}
+
+	if err := e.ValidatePolygon(second); err != nil {
+		return false, fmt.Errorf(
+			"interiors intersect second polygon: %w",
+			err,
+		)
+	}
+
+	sfFirst := toSimpleFeaturesPolygon(first)
+	sfSecond := toSimpleFeaturesPolygon(second)
+
+	relation, err := geom.Relate(
+		sfFirst.AsGeometry(),
+		sfSecond.AsGeometry(),
+	)
+	if err != nil {
+		return false, fmt.Errorf(
+			"interiors intersect: %w",
+			err,
+		)
+	}
+
+	doInteriorsIntersect, err := geom.RelateMatches(relation, "2********")
+	if err != nil {
+		return false, fmt.Errorf(
+			"interiors intersect: %w",
+			err,
+		)
+	}
+
+	return doInteriorsIntersect, nil
 }

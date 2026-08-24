@@ -21,4 +21,21 @@ type Engine interface {
 	Normalize(
 		polygon domaingeometry.Polygon,
 	) (domaingeometry.Polygon, error)
+
+	Transform(
+		polygon domaingeometry.Polygon,
+		x float64,
+		y float64,
+		rotation float64,
+	) (domaingeometry.Polygon, error)
+
+	CoveredBy(
+		inner domaingeometry.Polygon,
+		outer domaingeometry.Polygon,
+	) (bool, error)
+
+	InteriorsIntersect(
+		first domaingeometry.Polygon,
+		second domaingeometry.Polygon,
+	) (bool, error)
 }
