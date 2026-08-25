@@ -36,3 +36,31 @@ func ToCreatePlacementResponse(
 		UpdatedAt:        resp.UpdatedAt,
 	}
 }
+
+func ToGetPlacementByIDInput(
+	userID int64,
+	projectID int64,
+	placementID int64,
+) placementusecase.GetPlacementByIDInput {
+	return placementusecase.GetPlacementByIDInput{
+		UserID:      userID,
+		ProjectID:   projectID,
+		PlacementID: placementID,
+	}
+}
+
+func ToGetPlacementByIDResponse(
+	resp placementusecase.GetPlacementByIDOutput,
+) dto.GetPlacementByIDResponse {
+	return dto.GetPlacementByIDResponse{
+		ID:               resp.ID,
+		ProjectPatternID: resp.ProjectPatternID,
+		ProjectSurfaceID: resp.ProjectSurfaceID,
+		X:                resp.X,
+		Y:                resp.Y,
+		Rotation:         resp.Rotation,
+		Geometry:         toGeometryPolygon(resp.Geometry),
+		CreatedAt:        resp.CreatedAt,
+		UpdatedAt:        resp.UpdatedAt,
+	}
+}

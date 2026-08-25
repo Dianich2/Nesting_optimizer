@@ -1,6 +1,9 @@
 package placement
 
-import domainplacement "server_nesting_optimizer/internal/domain/placement"
+import (
+	"server_nesting_optimizer/internal/domain/geometry"
+	domainplacement "server_nesting_optimizer/internal/domain/placement"
+)
 
 func toCreatePlacementOutput(
 	placement domainplacement.Placement,
@@ -14,5 +17,22 @@ func toCreatePlacementOutput(
 		Rotation:         placement.Rotation,
 		CreatedAt:        placement.CreatedAt,
 		UpdatedAt:        placement.UpdatedAt,
+	}
+}
+
+func toGetPlacementByIDOutput(
+	placement PlacementWithPatternGeometry,
+	transformedGeometry geometry.Polygon,
+) GetPlacementByIDOutput {
+	return GetPlacementByIDOutput{
+		ID:               placement.Placement.ID,
+		ProjectSurfaceID: placement.Placement.ProjectSurfaceID,
+		ProjectPatternID: placement.Placement.ProjectPatternID,
+		X:                placement.Placement.X,
+		Y:                placement.Placement.Y,
+		Rotation:         placement.Placement.Rotation,
+		Geometry:         transformedGeometry,
+		CreatedAt:        placement.Placement.CreatedAt,
+		UpdatedAt:        placement.Placement.UpdatedAt,
 	}
 }
