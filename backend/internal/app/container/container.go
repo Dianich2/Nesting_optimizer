@@ -56,6 +56,7 @@ type Container struct {
 	DeleteProjectPatternUseCase  *projectpatternusecase.DeleteProjectPatternUseCase
 	CreatePlacementUseCase       *placementusecase.CreatePlacementUseCase
 	GetPlacementByIDUseCase      *placementusecase.GetPlacementByIDUseCase
+	ListPlacementsUseCase        *placementusecase.ListPlacementsUseCase
 	JWTManager                   *jwtpkg.Manager
 	SessionRepository            *postgres.SessionRepository
 }
@@ -273,6 +274,12 @@ func New(
 		sfEngine,
 	)
 
+	listPlacementsUseCase := placementusecase.NewListPlacementsUseCase(
+		placementRepo,
+		projectSurfaceRepo,
+		sfEngine,
+	)
+
 	return &Container{
 		CreateUserUseCase:            createUserUseCase,
 		LoginUseCase:                 loginUseCase,
@@ -309,6 +316,7 @@ func New(
 		DeleteProjectPatternUseCase:  deleteProjectPatternUseCase,
 		CreatePlacementUseCase:       createPlacementUseCase,
 		GetPlacementByIDUseCase:      getPlacementByIDUseCase,
+		ListPlacementsUseCase:        listPlacementsUseCase,
 		JWTManager:                   jwtManager,
 		SessionRepository:            sessionRepo,
 	}

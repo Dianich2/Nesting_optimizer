@@ -28,6 +28,13 @@ type PlacementRepository interface {
 		projectID int64,
 		placementID int64,
 	) (PlacementWithPatternGeometry, error)
+
+	ListPlacements(
+		ctx context.Context,
+		userID int64,
+		projectID int64,
+		projectSurfaceID int64,
+	) ([]PlacementWithPatternGeometry, error)
 }
 
 type ProjectSurfaceRepository interface {

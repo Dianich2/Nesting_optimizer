@@ -64,3 +64,39 @@ func ToGetPlacementByIDResponse(
 		UpdatedAt:        resp.UpdatedAt,
 	}
 }
+
+func ToListPlacementsInput(
+	userID int64,
+	projectID int64,
+	projectSurfaceID int64,
+) placementusecase.ListPlacementsInput {
+	return placementusecase.ListPlacementsInput{
+		UserID:           userID,
+		ProjectID:        projectID,
+		ProjectSurfaceID: projectSurfaceID,
+	}
+}
+
+func ToListPlacementsResponse(
+	resp placementusecase.ListPlacementsOutput,
+) dto.ListPlacementsResponse {
+	placements := dto.ListPlacementsResponse{
+		Items: make([]dto.ListPlacementsItemResponse, 0, len(resp.Items)),
+	}
+
+	for _, item := range resp.Items {
+		placements.Items = append(placements.Items, dto.ListPlacementsItemResponse{
+			ID:               item.ID,
+			ProjectPatternID: item.ProjectPatternID,
+			ProjectSurfaceID: item.ProjectSurfaceID,
+			X:                item.X,
+			Y:                item.Y,
+			Rotation:         item.Rotation,
+			Geometry:         toGeometryPolygon(item.Geometry),
+			CreatedAt:        item.CreatedAt,
+			UpdatedAt:        item.UpdatedAt,
+		})
+	}
+
+	return placements
+}

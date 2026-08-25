@@ -78,3 +78,13 @@ func (input *GetPlacementByIDInput) Validate() []apperror.FieldError {
 
 	return errors
 }
+
+func (input *ListPlacementsInput) Validate() []apperror.FieldError {
+	var errors []apperror.FieldError
+
+	errors = append(errors, validateID(input.UserID, "user_id")...)
+	errors = append(errors, validateID(input.ProjectID, "project_id")...)
+	errors = append(errors, validateID(input.ProjectSurfaceID, "project_surface_id")...)
+
+	return errors
+}

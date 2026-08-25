@@ -16,15 +16,18 @@ import (
 type PlacementHandler struct {
 	createPlacementUseCase  *placementusecase.CreatePlacementUseCase
 	getPlacementByIDUseCase *placementusecase.GetPlacementByIDUseCase
+	listPlacementsUseCase   *placementusecase.ListPlacementsUseCase
 }
 
 func NewPlacementHandler(
 	createPlacementUseCase *placementusecase.CreatePlacementUseCase,
 	getPlacementByIDUseCase *placementusecase.GetPlacementByIDUseCase,
+	listPlacementsUseCase *placementusecase.ListPlacementsUseCase,
 ) *PlacementHandler {
 	return &PlacementHandler{
 		createPlacementUseCase:  createPlacementUseCase,
 		getPlacementByIDUseCase: getPlacementByIDUseCase,
+		listPlacementsUseCase:   listPlacementsUseCase,
 	}
 }
 
@@ -191,4 +194,80 @@ func (h *PlacementHandler) GetByID(c fiber.Ctx) error {
 	getPlacementByIDResp := mapper.ToGetPlacementByIDResponse(outputGetPlacementByIDUseCase)
 
 	return c.Status(fiber.StatusOK).JSON(getPlacementByIDResp)
+}
+
+// godoc: ListPlacements godoc
+// @Summary List Placements
+// @Description List Placements
+// @Produce json
+// @Param project_id path int true "Project ID"
+// @Param project_surface_id path int true "Project Surface ID"
+// @Success 200 {object} dto.ListPlacementsResponse
+// @Failure 400 {object} httperror.ErrorResponse
+// @Failure 401 {object} httperror.ErrorResponse
+// @Failure 404 {object} httperror.ErrorResponse
+// @Failure 500 {object} httperror.ErrorResponse
+// @Resource Placements
+// @Security BearerAuth
+// @Router /api/v1/projects/{project_id}/surfaces/{project_surface_id}/placements [get]
+func (h *PlacementHandler) ListPlacements(c fiber.Ctx) error {
+	projectID, err := strconv.ParseInt(c.Params("project_id"), 10, 64)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			apperror.Validation(
+				"invalid id",
+				apperror.NewFieldError(
+					"project_id",
+					apperror.FieldCodeInvalid,
+					"project id must be a valid positive integer",
+				),
+			),
+		)
+	}
+
+	projectSurfaceID, err := strconv.ParseInt(c.Params("project_surface_id"), 10, 64)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			apperror.Validation(
+				"invalid id",
+				apperror.NewFieldError(
+					"project_surface_id",
+					apperror.FieldCodeInvalid,
+					"project surface id must be a valid positive integer",
+				),
+			),
+		)
+	}
+
+	userID := c.Locals(middleware.UserIDLocalKey)
+	u, ok := userID.(int64)
+	if !ok {
+		return httperror.Handle(
+			c,
+			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
+		)
+	}
+
+	inputListPlacementsUseCase := mapper.ToListPlacementsInput(
+		u,
+		projectID,
+		projectSurfaceID,
+	)
+
+	outputListPlacementsUseCase, err := h.listPlacementsUseCase.Execute(
+		c.Context(),
+		inputListPlacementsUseCase,
+	)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			err,
+		)
+	}
+
+	listPlacementsResp := mapper.ToListPlacementsResponse(outputListPlacementsUseCase)
+
+	return c.Status(fiber.StatusOK).JSON(listPlacementsResp)
 }

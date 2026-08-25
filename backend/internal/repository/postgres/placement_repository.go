@@ -173,3 +173,53 @@ func (r *PlacementRepository) GetByIDWithPatternGeometry(
 		PatternGeometry: polygon,
 	}, nil
 }
+
+func (r *PlacementRepository) ListPlacements(
+	ctx context.Context,
+	userID int64,
+	projectID int64,
+	projectSurfaceID int64,
+) ([]placementusecase.PlacementWithPatternGeometry, error) {
+	var placementsWithPattern []PlacementWithPatternGeometryDB
+	if err := r.db.SelectContext(
+		ctx,
+		&placementsWithPattern,
+		listPlacementsQuery,
+		projectSurfaceID,
+		projectID,
+		userID,
+	); err != nil {
+		return nil, fmt.Errorf(
+			"list placements: %w",
+			err,
+		)
+	}
+
+	placements := make([]placementusecase.PlacementWithPatternGeometry, 0, len(placementsWithPattern))
+
+	for _, item := range placementsWithPattern {
+		polygon, err := r.geometryCodec.DecodeWKB(item.PatternGeometry)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"decode placement pattern geometry: %w",
+				err,
+			)
+		}
+
+		placements = append(placements, placementusecase.PlacementWithPatternGeometry{
+			Placement: domainplacement.Placement{
+				ID:               item.ID,
+				ProjectSurfaceID: item.ProjectSurfaceID,
+				ProjectPatternID: item.ProjectPatternID,
+				X:                item.X,
+				Y:                item.Y,
+				Rotation:         item.Rotation,
+				CreatedAt:        item.CreatedAt,
+				UpdatedAt:        item.UpdatedAt,
+			},
+			PatternGeometry: polygon,
+		})
+	}
+
+	return placements, nil
+}
