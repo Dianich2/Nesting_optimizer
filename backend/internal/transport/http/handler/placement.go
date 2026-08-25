@@ -18,6 +18,7 @@ type PlacementHandler struct {
 	getPlacementByIDUseCase *placementusecase.GetPlacementByIDUseCase
 	listPlacementsUseCase   *placementusecase.ListPlacementsUseCase
 	updatePlacementUseCase  *placementusecase.UpdatePlacementUseCase
+	deletePlacementUseCase  *placementusecase.DeletePlacementUseCase
 }
 
 func NewPlacementHandler(
@@ -25,12 +26,14 @@ func NewPlacementHandler(
 	getPlacementByIDUseCase *placementusecase.GetPlacementByIDUseCase,
 	listPlacementsUseCase *placementusecase.ListPlacementsUseCase,
 	updatePlacementUseCase *placementusecase.UpdatePlacementUseCase,
+	deletePlacementUseCase *placementusecase.DeletePlacementUseCase,
 ) *PlacementHandler {
 	return &PlacementHandler{
 		createPlacementUseCase:  createPlacementUseCase,
 		getPlacementByIDUseCase: getPlacementByIDUseCase,
 		listPlacementsUseCase:   listPlacementsUseCase,
 		updatePlacementUseCase:  updatePlacementUseCase,
+		deletePlacementUseCase:  deletePlacementUseCase,
 	}
 }
 
@@ -362,4 +365,74 @@ func (h *PlacementHandler) Update(c fiber.Ctx) error {
 	updatePlacementResp := mapper.ToUpdatePlacementResponse(outputUpdatePlacementUseCase)
 
 	return c.Status(fiber.StatusOK).JSON(updatePlacementResp)
+}
+
+// godoc: DeletePlacement godoc
+// @Summary Delete Placement
+// @Description Delete Placement
+// @Param project_id path int true "Project ID"
+// @Param placement_id path int true "Placement ID"
+// @Success 204 "No Content"
+// @Failure 400 {object} httperror.ErrorResponse
+// @Failure 401 {object} httperror.ErrorResponse
+// @Failure 404 {object} httperror.ErrorResponse
+// @Failure 500 {object} httperror.ErrorResponse
+// @Resource Placements
+// @Security BearerAuth
+// @Router /api/v1/projects/{project_id}/placements/{placement_id} [delete]
+func (h *PlacementHandler) Delete(c fiber.Ctx) error {
+	placementID, err := strconv.ParseInt(c.Params("placement_id"), 10, 64)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			apperror.Validation(
+				"invalid id",
+				apperror.NewFieldError(
+					"placement_id",
+					apperror.FieldCodeInvalid,
+					"placement id must be a valid positive integer",
+				),
+			),
+		)
+	}
+
+	projectID, err := strconv.ParseInt(c.Params("project_id"), 10, 64)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			apperror.Validation(
+				"invalid project id",
+				apperror.NewFieldError(
+					"project_id",
+					apperror.FieldCodeInvalid,
+					"project_id must be a valid positive integer",
+				),
+			),
+		)
+	}
+
+	userID := c.Locals(middleware.UserIDLocalKey)
+	u, ok := userID.(int64)
+	if !ok {
+		return httperror.Handle(
+			c,
+			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
+		)
+	}
+
+	inputDeletePlacementUseCase := mapper.ToDeletePlacementInput(u, projectID, placementID)
+
+	err = h.deletePlacementUseCase.Execute(
+		c.Context(),
+		inputDeletePlacementUseCase,
+	)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			err,
+		)
+	}
+
+	c.Status(fiber.StatusNoContent)
+	return nil
 }

@@ -66,6 +66,8 @@ definitions:
     properties:
       created_at:
         type: string
+      geometry:
+        $ref: '#/definitions/dto.PolygonGeometry'
       id:
         type: integer
       project_pattern_id:
@@ -1375,6 +1377,41 @@ paths:
       - BearerAuth: []
       summary: Update Project Pattern
   /api/v1/projects/{project_id}/placements/{placement_id}:
+    delete:
+      description: Delete Placement
+      parameters:
+      - description: Project ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      - description: Placement ID
+        in: path
+        name: placement_id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete Placement
     get:
       description: Get Placement
       parameters:

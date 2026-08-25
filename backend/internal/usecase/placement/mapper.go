@@ -7,6 +7,7 @@ import (
 
 func toCreatePlacementOutput(
 	placement domainplacement.Placement,
+	transformedGeometry geometry.Polygon,
 ) CreatePlacementOutput {
 	return CreatePlacementOutput{
 		ID:               placement.ID,
@@ -15,6 +16,7 @@ func toCreatePlacementOutput(
 		X:                placement.X,
 		Y:                placement.Y,
 		Rotation:         placement.Rotation,
+		Geometry:         transformedGeometry,
 		CreatedAt:        placement.CreatedAt,
 		UpdatedAt:        placement.UpdatedAt,
 	}

@@ -123,3 +123,13 @@ func (input *UpdatePlacementInput) Validate() []apperror.FieldError {
 
 	return errors
 }
+
+func (input *DeletePlacementInput) Validate() []apperror.FieldError {
+	var errors []apperror.FieldError
+
+	errors = append(errors, validateID(input.UserID, "user_id")...)
+	errors = append(errors, validateID(input.ProjectID, "project_id")...)
+	errors = append(errors, validateID(input.PlacementID, "placement_id")...)
+
+	return errors
+}

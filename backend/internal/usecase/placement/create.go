@@ -196,5 +196,5 @@ func (uc *CreatePlacementUseCase) Execute(
 		)
 	}
 
-	return toCreatePlacementOutput(createdPlacement), nil
+	return toCreatePlacementOutput(createdPlacement, transformedGeometry), nil
 }

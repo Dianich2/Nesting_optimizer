@@ -23,6 +23,7 @@ type CreatePlacementOutput struct {
 	X                float64
 	Y                float64
 	Rotation         float64
+	Geometry         domaingeometry.Polygon
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }
@@ -100,4 +101,10 @@ type UpdatePlacementOutput struct {
 	Geometry         domaingeometry.Polygon
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
+}
+
+type DeletePlacementInput struct {
+	PlacementID int64
+	ProjectID   int64
+	UserID      int64
 }

@@ -32,6 +32,7 @@ func ToCreatePlacementResponse(
 		X:                resp.X,
 		Y:                resp.Y,
 		Rotation:         resp.Rotation,
+		Geometry:         toGeometryPolygon(resp.Geometry),
 		CreatedAt:        resp.CreatedAt,
 		UpdatedAt:        resp.UpdatedAt,
 	}
@@ -130,5 +131,17 @@ func ToUpdatePlacementResponse(
 		Geometry:         toGeometryPolygon(resp.Geometry),
 		CreatedAt:        resp.CreatedAt,
 		UpdatedAt:        resp.UpdatedAt,
+	}
+}
+
+func ToDeletePlacementInput(
+	userID int64,
+	projectID int64,
+	placementID int64,
+) placementusecase.DeletePlacementInput {
+	return placementusecase.DeletePlacementInput{
+		UserID:      userID,
+		ProjectID:   projectID,
+		PlacementID: placementID,
 	}
 }

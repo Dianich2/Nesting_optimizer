@@ -50,6 +50,13 @@ type PlacementRepository interface {
 		projectID int64,
 		userID int64,
 	) (domainplacement.Placement, error)
+
+	SoftDelete(
+		ctx context.Context,
+		placementID int64,
+		projectID int64,
+		userID int64,
+	) error
 }
 
 type ProjectSurfaceRepository interface {

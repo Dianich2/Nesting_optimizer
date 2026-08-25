@@ -151,17 +151,21 @@ const softDeleteProjectPatternQuery = `
 
 const hasActivePlacementsByProjectPatternIDQuery = `
 	SELECT EXISTS (
-	    SELECT 1
-	    FROM placements pl
-	    INNER JOIN project_patterns pp
-	        ON pp.id = pl.project_pattern_id
-	    INNER JOIN projects p
-	        ON p.id = pp.project_id
-	    WHERE pp.id = $1
-	        AND pp.project_id = $2
-	        AND p.user_id = $3
-	        AND pl.deleted_at IS NULL
-	        AND pp.deleted_at IS NULL
-	        AND p.deleted_at IS NULL
-	);
+		SELECT 1
+		FROM placements pl
+		INNER JOIN project_patterns pp
+			ON pp.id = pl.project_pattern_id
+		INNER JOIN project_surfaces ps
+			ON ps.id = pl.project_surface_id
+			AND ps.project_id = pp.project_id
+		INNER JOIN projects p
+			ON p.id = pp.project_id
+		WHERE pp.id = $1
+			AND pp.project_id = $2
+			AND p.user_id = $3
+			AND pl.deleted_at IS NULL
+			AND pp.deleted_at IS NULL
+			AND ps.deleted_at IS NULL
+			AND p.deleted_at IS NULL
+	)
 `

@@ -308,3 +308,41 @@ func (r *PlacementRepository) ListForCollisionCheckExcluding(
 
 	return placements, nil
 }
+
+func (r *PlacementRepository) SoftDelete(
+	ctx context.Context,
+	placementID int64,
+	projectID int64,
+	userID int64,
+) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		softDeletePlacementQuery,
+		placementID,
+		projectID,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"soft delete placement: %w",
+			err,
+		)
+	}
+
+	count, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf(
+			"soft delete placement: %w",
+			err,
+		)
+	}
+
+	if count == 0 {
+		return fmt.Errorf(
+			"soft delete placement: %w",
+			domainplacement.ErrNotFound,
+		)
+	}
+
+	return nil
+}

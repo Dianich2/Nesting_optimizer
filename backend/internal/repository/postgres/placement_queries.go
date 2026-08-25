@@ -178,3 +178,24 @@ const listPlacementsForCollisionCheckExcludingQuery = `
 		AND pp.deleted_at IS NULL
 		AND p.deleted_at IS NULL
 `
+
+const softDeletePlacementQuery = `
+	UPDATE placements pl
+	SET
+		deleted_at = NOW(),
+		updated_at = NOW()
+	FROM project_surfaces ps,
+	     project_patterns pp,
+	     projects p
+	WHERE pl.id = $1
+		AND pl.project_surface_id = ps.id
+		AND pl.project_pattern_id = pp.id
+		AND ps.project_id = $2
+		AND pp.project_id = $2
+		AND p.id = $2
+		AND p.user_id = $3
+		AND pl.deleted_at IS NULL
+		AND ps.deleted_at IS NULL
+		AND pp.deleted_at IS NULL
+		AND p.deleted_at IS NULL
+`
