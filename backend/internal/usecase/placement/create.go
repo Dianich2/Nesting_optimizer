@@ -43,7 +43,7 @@ func (uc *CreatePlacementUseCase) Execute(
 		)
 	}
 
-	input.Rotation = NormalizeRotation(input.Rotation)
+	input.Rotation = geometry.NormalizeDegrees(input.Rotation)
 
 	projectSurface, err := uc.projectSurfaceRepo.GetByID(
 		ctx,

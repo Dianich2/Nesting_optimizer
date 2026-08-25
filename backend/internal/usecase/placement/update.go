@@ -40,7 +40,7 @@ func (uc *UpdatePlacementUseCase) Execute(
 	}
 
 	if input.Rotation != nil {
-		*input.Rotation = NormalizeRotation(*input.Rotation)
+		*input.Rotation = geometry.NormalizeDegrees(*input.Rotation)
 	}
 
 	placement, err := uc.placementRepo.GetByIDWithPatternGeometry(

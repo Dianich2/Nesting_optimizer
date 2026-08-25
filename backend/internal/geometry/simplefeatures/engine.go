@@ -6,7 +6,6 @@ import (
 	"math"
 	domaingeometry "server_nesting_optimizer/internal/domain/geometry"
 	"server_nesting_optimizer/internal/geometry"
-	placementusecase "server_nesting_optimizer/internal/usecase/placement"
 
 	"github.com/peterstace/simplefeatures/geom"
 )
@@ -231,7 +230,7 @@ func (e *Engine) Transform(
 		)
 	}
 
-	rotation = placementusecase.NormalizeRotation(rotation)
+	rotation = geometry.NormalizeDegrees(rotation)
 
 	sfPolygon := toSimpleFeaturesPolygon(polygon)
 

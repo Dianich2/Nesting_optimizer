@@ -1,70 +1,20 @@
 package placement
 
 import (
-	"math"
+	"server_nesting_optimizer/internal/validation"
 	"server_nesting_optimizer/pkg/apperror"
 )
-
-func validateID(
-	id int64,
-	fieldName string,
-) []apperror.FieldError {
-	if id <= 0 {
-		return []apperror.FieldError{
-			apperror.NewFieldError(
-				fieldName,
-				apperror.FieldCodeInvalid,
-				"id must be greater than 0",
-			),
-		}
-	}
-
-	return nil
-}
-
-func validateCoordinate(
-	field string,
-	value float64,
-) []apperror.FieldError {
-	if math.IsInf(value, 0) || math.IsNaN(value) {
-		return []apperror.FieldError{
-			apperror.NewFieldError(
-				field,
-				apperror.FieldCodeInvalid,
-				"coordinate must not be NaN or Inf",
-			),
-		}
-	}
-
-	return nil
-}
-
-func validateRotation(
-	rotation float64,
-) []apperror.FieldError {
-	if math.IsInf(rotation, 0) || math.IsNaN(rotation) {
-		return []apperror.FieldError{
-			apperror.NewFieldError(
-				"rotation",
-				apperror.FieldCodeInvalid,
-				"rotation must not be NaN or Inf",
-			),
-		}
-	}
-
-	return nil
-}
 
 func (input *CreatePlacementInput) Validate() []apperror.FieldError {
 	var errors []apperror.FieldError
 
-	errors = append(errors, validateID(input.UserID, "user_id")...)
-	errors = append(errors, validateID(input.ProjectID, "project_id")...)
-	errors = append(errors, validateID(input.ProjectSurfaceID, "project_surface_id")...)
-	errors = append(errors, validateID(input.ProjectPatternID, "project_pattern_id")...)
-	errors = append(errors, validateCoordinate("x", input.X)...)
-	errors = append(errors, validateCoordinate("y", input.Y)...)
-	errors = append(errors, validateRotation(input.Rotation)...)
+	errors = append(errors, validation.ValidateID(input.UserID, "user_id")...)
+	errors = append(errors, validation.ValidateID(input.ProjectID, "project_id")...)
+	errors = append(errors, validation.ValidateID(input.ProjectSurfaceID, "project_surface_id")...)
+	errors = append(errors, validation.ValidateID(input.ProjectPatternID, "project_pattern_id")...)
+	errors = append(errors, validation.ValidateCoordinate("x", input.X)...)
+	errors = append(errors, validation.ValidateCoordinate("y", input.Y)...)
+	errors = append(errors, validation.ValidateRotation(input.Rotation)...)
 
 	return errors
 }
@@ -72,9 +22,9 @@ func (input *CreatePlacementInput) Validate() []apperror.FieldError {
 func (input *GetPlacementByIDInput) Validate() []apperror.FieldError {
 	var errors []apperror.FieldError
 
-	errors = append(errors, validateID(input.UserID, "user_id")...)
-	errors = append(errors, validateID(input.ProjectID, "project_id")...)
-	errors = append(errors, validateID(input.PlacementID, "placement_id")...)
+	errors = append(errors, validation.ValidateID(input.UserID, "user_id")...)
+	errors = append(errors, validation.ValidateID(input.ProjectID, "project_id")...)
+	errors = append(errors, validation.ValidateID(input.PlacementID, "placement_id")...)
 
 	return errors
 }
@@ -82,9 +32,9 @@ func (input *GetPlacementByIDInput) Validate() []apperror.FieldError {
 func (input *ListPlacementsInput) Validate() []apperror.FieldError {
 	var errors []apperror.FieldError
 
-	errors = append(errors, validateID(input.UserID, "user_id")...)
-	errors = append(errors, validateID(input.ProjectID, "project_id")...)
-	errors = append(errors, validateID(input.ProjectSurfaceID, "project_surface_id")...)
+	errors = append(errors, validation.ValidateID(input.UserID, "user_id")...)
+	errors = append(errors, validation.ValidateID(input.ProjectID, "project_id")...)
+	errors = append(errors, validation.ValidateID(input.ProjectSurfaceID, "project_surface_id")...)
 
 	return errors
 }
@@ -92,9 +42,9 @@ func (input *ListPlacementsInput) Validate() []apperror.FieldError {
 func (input *UpdatePlacementInput) Validate() []apperror.FieldError {
 	var errors []apperror.FieldError
 
-	errors = append(errors, validateID(input.UserID, "user_id")...)
-	errors = append(errors, validateID(input.ProjectID, "project_id")...)
-	errors = append(errors, validateID(input.PlacementID, "placement_id")...)
+	errors = append(errors, validation.ValidateID(input.UserID, "user_id")...)
+	errors = append(errors, validation.ValidateID(input.ProjectID, "project_id")...)
+	errors = append(errors, validation.ValidateID(input.PlacementID, "placement_id")...)
 
 	if input.X == nil &&
 		input.Y == nil &&
@@ -110,15 +60,15 @@ func (input *UpdatePlacementInput) Validate() []apperror.FieldError {
 	}
 
 	if input.X != nil {
-		errors = append(errors, validateCoordinate("x", *input.X)...)
+		errors = append(errors, validation.ValidateCoordinate("x", *input.X)...)
 	}
 
 	if input.Y != nil {
-		errors = append(errors, validateCoordinate("y", *input.Y)...)
+		errors = append(errors, validation.ValidateCoordinate("y", *input.Y)...)
 	}
 
 	if input.Rotation != nil {
-		errors = append(errors, validateRotation(*input.Rotation)...)
+		errors = append(errors, validation.ValidateRotation(*input.Rotation)...)
 	}
 
 	return errors
@@ -127,9 +77,9 @@ func (input *UpdatePlacementInput) Validate() []apperror.FieldError {
 func (input *DeletePlacementInput) Validate() []apperror.FieldError {
 	var errors []apperror.FieldError
 
-	errors = append(errors, validateID(input.UserID, "user_id")...)
-	errors = append(errors, validateID(input.ProjectID, "project_id")...)
-	errors = append(errors, validateID(input.PlacementID, "placement_id")...)
+	errors = append(errors, validation.ValidateID(input.UserID, "user_id")...)
+	errors = append(errors, validation.ValidateID(input.ProjectID, "project_id")...)
+	errors = append(errors, validation.ValidateID(input.PlacementID, "placement_id")...)
 
 	return errors
 }
