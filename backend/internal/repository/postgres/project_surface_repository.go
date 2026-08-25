@@ -299,3 +299,27 @@ func (r *ProjectSurfaceRepository) SoftDelete(
 
 	return nil
 }
+
+func (r *ProjectSurfaceRepository) HasActivePlacements(
+	ctx context.Context,
+	projectSurfaceID int64,
+	projectID int64,
+	userID int64,
+) (bool, error) {
+	var hasActivePlacements bool
+	if err := r.db.GetContext(
+		ctx,
+		&hasActivePlacements,
+		hasActivePlacementsByProjectSurfaceIDQuery,
+		projectSurfaceID,
+		projectID,
+		userID,
+	); err != nil {
+		return false, fmt.Errorf(
+			"check active placements for project surface: %w",
+			err,
+		)
+	}
+
+	return hasActivePlacements, nil
+}

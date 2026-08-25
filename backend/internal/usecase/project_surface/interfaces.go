@@ -43,4 +43,11 @@ type ProjectSurfaceRepository interface {
 		projectID int64,
 		userID int64,
 	) error
+
+	HasActivePlacements(
+		ctx context.Context,
+		projectSurfaceID int64,
+		projectID int64,
+		userID int64,
+	) (bool, error)
 }

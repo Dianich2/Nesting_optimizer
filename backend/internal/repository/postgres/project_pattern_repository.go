@@ -299,3 +299,27 @@ func (r *ProjectPatternRepository) SoftDelete(
 
 	return nil
 }
+
+func (r *ProjectPatternRepository) HasActivePlacements(
+	ctx context.Context,
+	projectPatternID int64,
+	projectID int64,
+	userID int64,
+) (bool, error) {
+	var hasActivePlacements bool
+	if err := r.db.GetContext(
+		ctx,
+		&hasActivePlacements,
+		hasActivePlacementsByProjectPatternIDQuery,
+		projectPatternID,
+		projectID,
+		userID,
+	); err != nil {
+		return false, fmt.Errorf(
+			"check active placements for project pattern: %w",
+			err,
+		)
+	}
+
+	return hasActivePlacements, nil
+}

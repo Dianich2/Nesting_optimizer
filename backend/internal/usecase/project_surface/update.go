@@ -59,6 +59,25 @@ func (uc *UpdateProjectSurfaceUseCase) Execute(
 	var scaledGeometry *domaingeometry.Polygon
 
 	if input.Scale != nil {
+		hasPlacements, err := uc.repo.HasActivePlacements(
+			ctx,
+			input.ProjectSurfaceID,
+			input.ProjectID,
+			input.UserID,
+		)
+		if err != nil {
+			return UpdateProjectSurfaceOutput{}, apperror.Internal(
+				"failed to check project surface placements",
+				err,
+			)
+		}
+
+		if hasPlacements {
+			return UpdateProjectSurfaceOutput{}, apperror.Conflict(
+				"project surface is used by active placements",
+			)
+		}
+
 		scaled, err := uc.geometryEngine.Scale(projectSurface.Geometry, *input.Scale)
 		if err != nil {
 			if errors.Is(err, geometry.ErrInvalidScale) {

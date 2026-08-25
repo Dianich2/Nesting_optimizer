@@ -18,5 +18,9 @@ CREATE INDEX idx_placements_active_project_surface_id
 ON placements(project_surface_id)
 WHERE deleted_at IS NULL;
 
+CREATE INDEX idx_placements_active_project_pattern_id
+ON placements(project_pattern_id)
+WHERE deleted_at IS NULL;
+
 -- +goose Down
 DROP TABLE IF EXISTS placements;

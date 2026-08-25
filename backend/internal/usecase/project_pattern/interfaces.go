@@ -43,4 +43,11 @@ type ProjectPatternRepository interface {
 		projectID int64,
 		userID int64,
 	) error
+
+	HasActivePlacements(
+		ctx context.Context,
+		projectPatternID int64,
+		projectID int64,
+		userID int64,
+	) (bool, error)
 }

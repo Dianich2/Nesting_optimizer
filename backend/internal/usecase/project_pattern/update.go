@@ -59,6 +59,25 @@ func (uc *UpdateProjectPatternUseCase) Execute(
 	var scaledGeometry *domaingeometry.Polygon
 
 	if input.Scale != nil {
+		hasPlacements, err := uc.repo.HasActivePlacements(
+			ctx,
+			input.ProjectPatternID,
+			input.ProjectID,
+			input.UserID,
+		)
+		if err != nil {
+			return UpdateProjectPatternOutput{}, apperror.Internal(
+				"failed to check project pattern placements",
+				err,
+			)
+		}
+
+		if hasPlacements {
+			return UpdateProjectPatternOutput{}, apperror.Conflict(
+				"project pattern is used by active placements",
+			)
+		}
+
 		scaled, err := uc.geometryEngine.Scale(projectPattern.Geometry, *input.Scale)
 		if err != nil {
 			if errors.Is(err, geometry.ErrInvalidScale) {
