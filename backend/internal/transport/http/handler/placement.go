@@ -17,17 +17,20 @@ type PlacementHandler struct {
 	createPlacementUseCase  *placementusecase.CreatePlacementUseCase
 	getPlacementByIDUseCase *placementusecase.GetPlacementByIDUseCase
 	listPlacementsUseCase   *placementusecase.ListPlacementsUseCase
+	updatePlacementUseCase  *placementusecase.UpdatePlacementUseCase
 }
 
 func NewPlacementHandler(
 	createPlacementUseCase *placementusecase.CreatePlacementUseCase,
 	getPlacementByIDUseCase *placementusecase.GetPlacementByIDUseCase,
 	listPlacementsUseCase *placementusecase.ListPlacementsUseCase,
+	updatePlacementUseCase *placementusecase.UpdatePlacementUseCase,
 ) *PlacementHandler {
 	return &PlacementHandler{
 		createPlacementUseCase:  createPlacementUseCase,
 		getPlacementByIDUseCase: getPlacementByIDUseCase,
 		listPlacementsUseCase:   listPlacementsUseCase,
+		updatePlacementUseCase:  updatePlacementUseCase,
 	}
 }
 
@@ -270,4 +273,93 @@ func (h *PlacementHandler) ListPlacements(c fiber.Ctx) error {
 	listPlacementsResp := mapper.ToListPlacementsResponse(outputListPlacementsUseCase)
 
 	return c.Status(fiber.StatusOK).JSON(listPlacementsResp)
+}
+
+// godoc: UpdatePlacement godoc
+// @Summary Update Placement
+// @Description Update Placement
+// @Accept json
+// @Produce json
+// @Param project_id path int true "Project ID"
+// @Param placement_id path int true "Placement ID"
+// @Param placement body dto.UpdatePlacementRequest true "Placement"
+// @Success 200 {object} dto.UpdatePlacementResponse
+// @Failure 400 {object} httperror.ErrorResponse
+// @Failure 401 {object} httperror.ErrorResponse
+// @Failure 404 {object} httperror.ErrorResponse
+// @Failure 409 {object} httperror.ErrorResponse
+// @Failure 500 {object} httperror.ErrorResponse
+// @Resource Placements
+// @Security BearerAuth
+// @Router /api/v1/projects/{project_id}/placements/{placement_id} [patch]
+func (h *PlacementHandler) Update(c fiber.Ctx) error {
+	var placementReq dto.UpdatePlacementRequest
+	err := c.Bind().Body(&placementReq)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			apperror.Validation("invalid request body"),
+		)
+	}
+
+	projectID, err := strconv.ParseInt(c.Params("project_id"), 10, 64)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			apperror.Validation(
+				"invalid id",
+				apperror.NewFieldError(
+					"project_id",
+					apperror.FieldCodeInvalid,
+					"project id must be a valid positive integer",
+				),
+			),
+		)
+	}
+
+	placementID, err := strconv.ParseInt(c.Params("placement_id"), 10, 64)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			apperror.Validation(
+				"invalid id",
+				apperror.NewFieldError(
+					"placement_id",
+					apperror.FieldCodeInvalid,
+					"placement id must be a valid positive integer",
+				),
+			),
+		)
+	}
+
+	userID := c.Locals(middleware.UserIDLocalKey)
+	u, ok := userID.(int64)
+	if !ok {
+		return httperror.Handle(
+			c,
+			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
+		)
+	}
+
+	inputUpdatePlacementUseCase := mapper.ToUpdatePlacementInput(
+		placementReq,
+		u,
+		projectID,
+		placementID,
+	)
+
+	outputUpdatePlacementUseCase, err := h.updatePlacementUseCase.Execute(
+		c.Context(),
+		inputUpdatePlacementUseCase,
+	)
+	if err != nil {
+		return httperror.Handle(
+			c,
+			err,
+		)
+	}
+
+	updatePlacementResp := mapper.ToUpdatePlacementResponse(outputUpdatePlacementUseCase)
+
+	return c.Status(fiber.StatusOK).JSON(updatePlacementResp)
 }

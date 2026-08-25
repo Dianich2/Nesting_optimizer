@@ -100,3 +100,35 @@ func ToListPlacementsResponse(
 
 	return placements
 }
+
+func ToUpdatePlacementInput(
+	req dto.UpdatePlacementRequest,
+	userID int64,
+	projectID int64,
+	placementID int64,
+) placementusecase.UpdatePlacementInput {
+	return placementusecase.UpdatePlacementInput{
+		UserID:      userID,
+		ProjectID:   projectID,
+		PlacementID: placementID,
+		X:           req.X,
+		Y:           req.Y,
+		Rotation:    req.Rotation,
+	}
+}
+
+func ToUpdatePlacementResponse(
+	resp placementusecase.UpdatePlacementOutput,
+) dto.UpdatePlacementResponse {
+	return dto.UpdatePlacementResponse{
+		ID:               resp.ID,
+		ProjectPatternID: resp.ProjectPatternID,
+		ProjectSurfaceID: resp.ProjectSurfaceID,
+		X:                resp.X,
+		Y:                resp.Y,
+		Rotation:         resp.Rotation,
+		Geometry:         toGeometryPolygon(resp.Geometry),
+		CreatedAt:        resp.CreatedAt,
+		UpdatedAt:        resp.UpdatedAt,
+	}
+}

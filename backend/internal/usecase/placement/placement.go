@@ -79,3 +79,25 @@ type ListPlacementsItem struct {
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }
+
+type UpdatePlacementInput struct {
+	UserID      int64
+	ProjectID   int64
+	PlacementID int64
+
+	X        *float64
+	Y        *float64
+	Rotation *float64
+}
+
+type UpdatePlacementOutput struct {
+	ID               int64
+	ProjectSurfaceID int64
+	ProjectPatternID int64
+	X                float64
+	Y                float64
+	Rotation         float64
+	Geometry         domaingeometry.Polygon
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}

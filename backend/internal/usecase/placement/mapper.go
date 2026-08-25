@@ -36,3 +36,20 @@ func toGetPlacementByIDOutput(
 		UpdatedAt:        placement.Placement.UpdatedAt,
 	}
 }
+
+func toUpdatePlacementOutput(
+	placement domainplacement.Placement,
+	transformedGeometry geometry.Polygon,
+) UpdatePlacementOutput {
+	return UpdatePlacementOutput{
+		ID:               placement.ID,
+		ProjectSurfaceID: placement.ProjectSurfaceID,
+		ProjectPatternID: placement.ProjectPatternID,
+		X:                placement.X,
+		Y:                placement.Y,
+		Rotation:         placement.Rotation,
+		Geometry:         transformedGeometry,
+		CreatedAt:        placement.CreatedAt,
+		UpdatedAt:        placement.UpdatedAt,
+	}
+}

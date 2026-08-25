@@ -35,6 +35,21 @@ type PlacementRepository interface {
 		projectID int64,
 		projectSurfaceID int64,
 	) ([]PlacementWithPatternGeometry, error)
+
+	ListForCollisionCheckExcluding(
+		ctx context.Context,
+		projectSurfaceID int64,
+		projectID int64,
+		userID int64,
+		excludePlacementID int64,
+	) ([]PlacementWithPatternGeometry, error)
+
+	Update(
+		ctx context.Context,
+		placement domainplacement.Placement,
+		projectID int64,
+		userID int64,
+	) (domainplacement.Placement, error)
 }
 
 type ProjectSurfaceRepository interface {

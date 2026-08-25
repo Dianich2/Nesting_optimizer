@@ -223,3 +223,88 @@ func (r *PlacementRepository) ListPlacements(
 
 	return placements, nil
 }
+
+func (r *PlacementRepository) Update(
+	ctx context.Context,
+	placement domainplacement.Placement,
+	projectID int64,
+	userID int64,
+) (domainplacement.Placement, error) {
+	var placementNew PlacementRow
+	if err := r.db.GetContext(
+		ctx,
+		&placementNew,
+		updatePlacementQuery,
+		placement.ID,
+		projectID,
+		userID,
+		placement.X,
+		placement.Y,
+		placement.Rotation,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domainplacement.Placement{},
+				domainplacement.ErrNotFound
+		}
+
+		return domainplacement.Placement{}, fmt.Errorf(
+			"update placement: %w",
+			err,
+		)
+	}
+
+	return placementRowToDomain(placementNew), nil
+}
+
+func (r *PlacementRepository) ListForCollisionCheckExcluding(
+	ctx context.Context,
+	projectSurfaceID int64,
+	projectID int64,
+	userID int64,
+	excludePlacementID int64,
+) ([]placementusecase.PlacementWithPatternGeometry, error) {
+	var rows []PlacementWithPatternGeometryDB
+
+	if err := r.db.SelectContext(
+		ctx,
+		&rows,
+		listPlacementsForCollisionCheckExcludingQuery,
+		projectSurfaceID,
+		projectID,
+		userID,
+		excludePlacementID,
+	); err != nil {
+		return nil, fmt.Errorf(
+			"list placements for collision check: %w",
+			err,
+		)
+	}
+
+	placements := make([]placementusecase.PlacementWithPatternGeometry, 0, len(rows))
+
+	for _, item := range rows {
+		polygon, err := r.geometryCodec.DecodeWKB(item.PatternGeometry)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"decode placement pattern geometry: %w",
+				err,
+			)
+		}
+
+		placements = append(placements, placementusecase.PlacementWithPatternGeometry{
+			Placement: domainplacement.Placement{
+				ID:               item.ID,
+				ProjectSurfaceID: item.ProjectSurfaceID,
+				ProjectPatternID: item.ProjectPatternID,
+				X:                item.X,
+				Y:                item.Y,
+				Rotation:         item.Rotation,
+				CreatedAt:        item.CreatedAt,
+				UpdatedAt:        item.UpdatedAt,
+			},
+			PatternGeometry: polygon,
+		})
+	}
+
+	return placements, nil
+}

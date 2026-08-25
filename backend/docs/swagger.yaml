@@ -566,6 +566,36 @@ definitions:
       updated_at:
         type: string
     type: object
+  dto.UpdatePlacementRequest:
+    properties:
+      rotation:
+        type: number
+      x:
+        type: number
+      "y":
+        type: number
+    type: object
+  dto.UpdatePlacementResponse:
+    properties:
+      created_at:
+        type: string
+      geometry:
+        $ref: '#/definitions/dto.PolygonGeometry'
+      id:
+        type: integer
+      project_pattern_id:
+        type: integer
+      project_surface_id:
+        type: integer
+      rotation:
+        type: number
+      updated_at:
+        type: string
+      x:
+        type: number
+      "y":
+        type: number
+    type: object
   dto.UpdateProfileRequest:
     properties:
       first_name:
@@ -1384,6 +1414,57 @@ paths:
       security:
       - BearerAuth: []
       summary: Get Placement by ID
+    patch:
+      consumes:
+      - application/json
+      description: Update Placement
+      parameters:
+      - description: Project ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      - description: Placement ID
+        in: path
+        name: placement_id
+        required: true
+        type: integer
+      - description: Placement
+        in: body
+        name: placement
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdatePlacementRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.UpdatePlacementResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update Placement
   /api/v1/projects/{project_id}/surfaces:
     get:
       description: List Project Surfaces

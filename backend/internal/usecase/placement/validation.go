@@ -88,3 +88,38 @@ func (input *ListPlacementsInput) Validate() []apperror.FieldError {
 
 	return errors
 }
+
+func (input *UpdatePlacementInput) Validate() []apperror.FieldError {
+	var errors []apperror.FieldError
+
+	errors = append(errors, validateID(input.UserID, "user_id")...)
+	errors = append(errors, validateID(input.ProjectID, "project_id")...)
+	errors = append(errors, validateID(input.PlacementID, "placement_id")...)
+
+	if input.X == nil &&
+		input.Y == nil &&
+		input.Rotation == nil {
+		errors = append(
+			errors,
+			apperror.NewFieldError(
+				"placement",
+				apperror.FieldCodeRequired,
+				"at least one placement field must be provided",
+			),
+		)
+	}
+
+	if input.X != nil {
+		errors = append(errors, validateCoordinate("x", *input.X)...)
+	}
+
+	if input.Y != nil {
+		errors = append(errors, validateCoordinate("y", *input.Y)...)
+	}
+
+	if input.Rotation != nil {
+		errors = append(errors, validateRotation(*input.Rotation)...)
+	}
+
+	return errors
+}

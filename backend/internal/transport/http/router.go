@@ -73,6 +73,7 @@ func NewRouter(deps *container.Container) *fiber.App {
 		deps.CreatePlacementUseCase,
 		deps.GetPlacementByIDUseCase,
 		deps.ListPlacementsUseCase,
+		deps.UpdatePlacementUseCase,
 	)
 
 	app.Get("/health", healthHandler.Check)
@@ -121,6 +122,7 @@ func NewRouter(deps *container.Container) *fiber.App {
 	api.Post("/projects/:project_id/surfaces/:project_surface_id/placements", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), placementHandler.Create)
 	api.Get("/projects/:project_id/placements/:placement_id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), placementHandler.GetByID)
 	api.Get("/projects/:project_id/surfaces/:project_surface_id/placements", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), placementHandler.ListPlacements)
+	api.Patch("/projects/:project_id/placements/:placement_id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), placementHandler.Update)
 
 	return app
 }
