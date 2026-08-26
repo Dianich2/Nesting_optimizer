@@ -1,14 +1,10 @@
 package handler
 
 import (
-	"errors"
 	"server_nesting_optimizer/internal/transport/http/dto"
 	httperror "server_nesting_optimizer/internal/transport/http/errors"
 	"server_nesting_optimizer/internal/transport/http/mapper"
-	"server_nesting_optimizer/internal/transport/http/middleware"
 	projectpatternusecase "server_nesting_optimizer/internal/usecase/project_pattern"
-	"server_nesting_optimizer/pkg/apperror"
-	"strconv"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -53,40 +49,27 @@ func NewProjectPatternHandler(
 // @Security BearerAuth
 // @Router /api/v1/projects/{project_id}/patterns [post]
 func (h *ProjectPatternHandler) Create(c fiber.Ctx) error {
+	projectID, err := getIDFromPath(c, "project_id")
+	if err != nil {
+		return err
+	}
+
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
+	}
+
 	var projectPatternReq dto.CreateProjectPatternRequest
-	err := c.Bind().Body(&projectPatternReq)
+	err = parseBody(c, &projectPatternReq)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation("invalid request body"),
-		)
+		return err
 	}
 
-	projectID, err := strconv.ParseInt(c.Params("project_id"), 10, 64)
-	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"project_id",
-					apperror.FieldCodeInvalid,
-					"project_id must be a valid positive integer",
-				),
-			),
-		)
-	}
-
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
-	}
-
-	inputCreateProjectPatternUseCase := mapper.ToCreateProjectPatternInput(projectPatternReq, u, projectID)
+	inputCreateProjectPatternUseCase := mapper.ToCreateProjectPatternInput(
+		projectPatternReq,
+		userID,
+		projectID,
+	)
 
 	outputCreateProjectPatternUseCase, err := h.createProjectPatternUseCase.Execute(
 		c.Context(),
@@ -119,46 +102,26 @@ func (h *ProjectPatternHandler) Create(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/projects/{project_id}/patterns/{id} [get]
 func (h *ProjectPatternHandler) GetByID(c fiber.Ctx) error {
-	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	id, err := getIDFromPath(c, "id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"id",
-					apperror.FieldCodeInvalid,
-					"id must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	projectID, err := strconv.ParseInt(c.Params("project_id"), 10, 64)
+	projectID, err := getIDFromPath(c, "project_id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"project_id",
-					apperror.FieldCodeInvalid,
-					"project_id must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
 	}
 
-	inputGetProjectPatternByIDUseCase := mapper.ToGetProjectPatternByIDInput(id, u, projectID)
+	inputGetProjectPatternByIDUseCase := mapper.ToGetProjectPatternByIDInput(
+		id,
+		userID,
+		projectID,
+	)
 
 	outputGetProjectPatternByIDUseCase, err := h.getProjectPatternByIDUseCase.Execute(
 		c.Context(),
@@ -192,71 +155,27 @@ func (h *ProjectPatternHandler) GetByID(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/projects/{project_id}/patterns [get]
 func (h *ProjectPatternHandler) ListProjectPatterns(c fiber.Ctx) error {
-	projectID, err := strconv.ParseInt(c.Params("project_id"), 10, 64)
+	projectID, err := getIDFromPath(c, "project_id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"project_id",
-					apperror.FieldCodeInvalid,
-					"project_id must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	pageSizeQuery, pageQuery := c.Query("page_size"), c.Query("page")
-
-	if pageSizeQuery == "" {
-		pageSizeQuery = "20"
-	}
-
-	if pageQuery == "" {
-		pageQuery = "1"
-	}
-
-	pageSize, err := strconv.Atoi(pageSizeQuery)
+	userID, err := getUserID(c)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid page size",
-				apperror.NewFieldError(
-					"page_size",
-					apperror.FieldCodeInvalid,
-					"page size must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	page, err := strconv.Atoi(pageQuery)
+	page, pageSize, err := parsePagination(c)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid page",
-				apperror.NewFieldError(
-					"page",
-					apperror.FieldCodeInvalid,
-					"page must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
-	}
-
-	inputListProjectPatternsUseCase := mapper.ToListProjectPatternsInput(u, projectID, page, pageSize)
+	inputListProjectPatternsUseCase := mapper.ToListProjectPatternsInput(
+		userID,
+		projectID,
+		page,
+		pageSize,
+	)
 
 	outputListProjectPatternsUseCase, err := h.listProjectPatternsUseCase.Execute(
 		c.Context(),
@@ -291,55 +210,33 @@ func (h *ProjectPatternHandler) ListProjectPatterns(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/projects/{project_id}/patterns/{id} [patch]
 func (h *ProjectPatternHandler) Update(c fiber.Ctx) error {
-	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	id, err := getIDFromPath(c, "id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"id",
-					apperror.FieldCodeInvalid,
-					"id must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	projectID, err := strconv.ParseInt(c.Params("project_id"), 10, 64)
+	projectID, err := getIDFromPath(c, "project_id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid project id",
-				apperror.NewFieldError(
-					"project_id",
-					apperror.FieldCodeInvalid,
-					"project_id must be a valid positive integer",
-				),
-			),
-		)
+		return err
+	}
+
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var projectPatternReq dto.UpdateProjectPatternRequest
-	err = c.Bind().Body(&projectPatternReq)
+	err = parseBody(c, &projectPatternReq)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation("invalid request body"),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
-	}
-
-	inputUpdateProjectPatternUseCase := mapper.ToUpdateProjectPatternInput(projectPatternReq, u, projectID, id)
+	inputUpdateProjectPatternUseCase := mapper.ToUpdateProjectPatternInput(
+		projectPatternReq,
+		userID,
+		projectID,
+		id,
+	)
 
 	outputUpdateProjectPatternUseCase, err := h.updateProjectPatternUseCase.Execute(
 		c.Context(),
@@ -371,46 +268,26 @@ func (h *ProjectPatternHandler) Update(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/projects/{project_id}/patterns/{id} [delete]
 func (h *ProjectPatternHandler) Delete(c fiber.Ctx) error {
-	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	id, err := getIDFromPath(c, "id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"id",
-					apperror.FieldCodeInvalid,
-					"id must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	projectID, err := strconv.ParseInt(c.Params("project_id"), 10, 64)
+	projectID, err := getIDFromPath(c, "project_id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid project id",
-				apperror.NewFieldError(
-					"project_id",
-					apperror.FieldCodeInvalid,
-					"project_id must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
 	}
 
-	inputDeleteProjectPatternUseCase := mapper.ToDeleteProjectPatternInput(u, projectID, id)
+	inputDeleteProjectPatternUseCase := mapper.ToDeleteProjectPatternInput(
+		userID,
+		projectID,
+		id,
+	)
 
 	err = h.deleteProjectPatternUseCase.Execute(
 		c.Context(),

@@ -1,14 +1,10 @@
 package handler
 
 import (
-	"errors"
 	"server_nesting_optimizer/internal/transport/http/dto"
 	httperror "server_nesting_optimizer/internal/transport/http/errors"
 	"server_nesting_optimizer/internal/transport/http/mapper"
-	"server_nesting_optimizer/internal/transport/http/middleware"
 	patternusecase "server_nesting_optimizer/internal/usecase/pattern"
-	"server_nesting_optimizer/pkg/apperror"
-	"strconv"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -51,25 +47,20 @@ func NewPatternHandler(
 // @Security BearerAuth
 // @Router /api/v1/patterns [post]
 func (h *PatternHandler) Create(c fiber.Ctx) error {
-	var patternReq dto.CreatePatternRequest
-	err := c.Bind().Body(&patternReq)
+	userID, err := getUserID(c)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation("invalid request body"),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+	var patternReq dto.CreatePatternRequest
+	err = parseBody(c, &patternReq)
+	if err != nil {
+		return err
 	}
 
-	inputCreatePatternUseCase := mapper.ToCreatePatternInput(patternReq, u)
+	inputCreatePatternUseCase := mapper.ToCreatePatternInput(
+		patternReq, userID,
+	)
 
 	outputCreatePatternUseCase, err := h.createPatternUseCase.Execute(
 		c.Context(),
@@ -101,31 +92,20 @@ func (h *PatternHandler) Create(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/patterns/{id} [get]
 func (h *PatternHandler) GetByID(c fiber.Ctx) error {
-	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	id, err := getIDFromPath(c, "id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"id",
-					apperror.FieldCodeInvalid,
-					"id must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
 	}
 
-	inputGetPatternUseCase := mapper.ToGetPatternInput(id, u)
+	inputGetPatternUseCase := mapper.ToGetPatternInput(
+		id,
+		userID,
+	)
 
 	outputGetPatternUseCase, err := h.getPatternByIDUseCase.Execute(
 		c.Context(),
@@ -157,56 +137,21 @@ func (h *PatternHandler) GetByID(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/patterns [get]
 func (h *PatternHandler) ListPatterns(c fiber.Ctx) error {
-	pageSizeQuery, pageQuery := c.Query("page_size"), c.Query("page")
-
-	if pageSizeQuery == "" {
-		pageSizeQuery = "20"
-	}
-
-	if pageQuery == "" {
-		pageQuery = "1"
-	}
-
-	pageSize, err := strconv.Atoi(pageSizeQuery)
+	userID, err := getUserID(c)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid page size",
-				apperror.NewFieldError(
-					"page_size",
-					apperror.FieldCodeInvalid,
-					"page size must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	page, err := strconv.Atoi(pageQuery)
+	page, pageSize, err := parsePagination(c)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid page",
-				apperror.NewFieldError(
-					"page",
-					apperror.FieldCodeInvalid,
-					"page must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
-	}
-
-	inputListPatternsUseCase := mapper.ToListPatternsInput(page, pageSize, u)
+	inputListPatternsUseCase := mapper.ToListPatternsInput(
+		page,
+		pageSize,
+		userID,
+	)
 
 	outputListPatternsUseCase, err := h.listPatternsUseCase.Execute(
 		c.Context(),
@@ -240,40 +185,27 @@ func (h *PatternHandler) ListPatterns(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/patterns/{id} [patch]
 func (h *PatternHandler) Update(c fiber.Ctx) error {
-	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	id, err := getIDFromPath(c, "id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"id",
-					apperror.FieldCodeInvalid,
-					"id must be a valid positive integer",
-				),
-			),
-		)
+		return err
+	}
+
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var patternReq dto.UpdatePatternRequest
-	err = c.Bind().Body(&patternReq)
+	err = parseBody(c, &patternReq)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation("invalid request body"),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
-	}
-
-	inputUpdatePatternUseCase := mapper.ToUpdatePatternInput(patternReq, u, id)
+	inputUpdatePatternUseCase := mapper.ToUpdatePatternInput(
+		patternReq,
+		userID,
+		id,
+	)
 
 	outputUpdatePatternUseCase, err := h.updatePatternUseCase.Execute(
 		c.Context(),
@@ -304,31 +236,20 @@ func (h *PatternHandler) Update(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/patterns/{id} [delete]
 func (h *PatternHandler) Delete(c fiber.Ctx) error {
-	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	id, err := getIDFromPath(c, "id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"id",
-					apperror.FieldCodeInvalid,
-					"id must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
 	}
 
-	inputDeletePatternUseCase := mapper.ToDeletePatternInput(id, u)
+	inputDeletePatternUseCase := mapper.ToDeletePatternInput(
+		id,
+		userID,
+	)
 
 	err = h.deletePatternUseCase.Execute(
 		c.Context(),

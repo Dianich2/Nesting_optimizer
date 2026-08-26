@@ -13,6 +13,8 @@ const (
 	MinPageSize       = 1
 	MaxPageSize       = 100
 	MinPage           = 1
+	DefaultPage       = "1"
+	DefaultPageSize   = "20"
 )
 
 var (

@@ -60,12 +60,9 @@ func NewUserHandler(
 // @Router /api/v1/users [post]
 func (h *UserHandler) Create(c fiber.Ctx) error {
 	var userReq dto.CreateUserRequest
-	err := c.Bind().Body(&userReq)
+	err := parseBody(c, &userReq)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation("invalid request body"),
-		)
+		return err
 	}
 
 	inputUserUseCase := mapper.ToCreateUserInput(userReq)
@@ -100,12 +97,9 @@ func (h *UserHandler) Create(c fiber.Ctx) error {
 // @Router /api/v1/auth/login [post]
 func (h *UserHandler) Login(c fiber.Ctx) error {
 	var loginReq dto.LoginRequest
-	err := c.Bind().Body(&loginReq)
+	err := parseBody(c, &loginReq)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation("invalid request body"),
-		)
+		return err
 	}
 
 	inputLoginUseCase := mapper.ToLoginInput(loginReq)
@@ -137,12 +131,9 @@ func (h *UserHandler) Login(c fiber.Ctx) error {
 // @Router /api/v1/auth/refresh [post]
 func (h *UserHandler) Refresh(c fiber.Ctx) error {
 	var refreshReq dto.RefreshRequest
-	err := c.Bind().Body(&refreshReq)
+	err := parseBody(c, &refreshReq)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation("invalid request body"),
-		)
+		return err
 	}
 
 	inputRefreshUseCase := mapper.ToRefreshInput(refreshReq)
@@ -209,16 +200,12 @@ func (h *UserHandler) Logout(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/users/me [get]
 func (h *UserHandler) GetCurrentUser(c fiber.Ctx) error {
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
 	}
 
-	inputGetCurrentUserUseCase := mapper.ToGetCurrentUserInput(u)
+	inputGetCurrentUserUseCase := mapper.ToGetCurrentUserInput(userID)
 
 	outputGetCurrentUserUseCase, err := h.getCurrentUserUseCase.Execute(
 		c.Context(),
@@ -248,22 +235,15 @@ func (h *UserHandler) GetCurrentUser(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/users/me [patch]
 func (h *UserHandler) UpdateProfile(c fiber.Ctx) error {
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var updateProfileReq dto.UpdateProfileRequest
-	err := c.Bind().Body(&updateProfileReq)
+	err = parseBody(c, &updateProfileReq)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation("invalid request body"),
-		)
+		return err
 	}
 
 	inputUpdateProfileUseCase := mapper.ToUpdateProfileInput(updateProfileReq)
@@ -271,7 +251,7 @@ func (h *UserHandler) UpdateProfile(c fiber.Ctx) error {
 	outputUpdateProfileUseCase, err := h.updateProfileUseCase.Execute(
 		c.Context(),
 		inputUpdateProfileUseCase,
-		u,
+		userID,
 	)
 	if err != nil {
 		return httperror.Handle(c, err)
@@ -297,22 +277,15 @@ func (h *UserHandler) UpdateProfile(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/users/me/password [patch]
 func (h *UserHandler) ChangePassword(c fiber.Ctx) error {
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var changePasswordReq dto.ChangePasswordRequest
-	err := c.Bind().Body(&changePasswordReq)
+	err = parseBody(c, &changePasswordReq)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation("invalid request body"),
-		)
+		return err
 	}
 
 	inputChangePasswordUseCase := mapper.ToChangePasswordInput(changePasswordReq)
@@ -320,7 +293,7 @@ func (h *UserHandler) ChangePassword(c fiber.Ctx) error {
 	err = h.changePasswordUseCase.Execute(
 		c.Context(),
 		inputChangePasswordUseCase,
-		u,
+		userID,
 	)
 	if err != nil {
 		return httperror.Handle(c, err)
@@ -345,22 +318,15 @@ func (h *UserHandler) ChangePassword(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/users/me/delete [post]
 func (h *UserHandler) DeleteCurrentUser(c fiber.Ctx) error {
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var deleteCurrentUserReq dto.DeleteCurrentUserRequest
-	err := c.Bind().Body(&deleteCurrentUserReq)
+	err = parseBody(c, &deleteCurrentUserReq)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation("invalid request body"),
-		)
+		return err
 	}
 
 	inputDeleteCurrentUserUseCase := mapper.ToDeleteCurrentUserInput(deleteCurrentUserReq)
@@ -368,7 +334,7 @@ func (h *UserHandler) DeleteCurrentUser(c fiber.Ctx) error {
 	err = h.deleteCurrentUserUseCase.Execute(
 		c.Context(),
 		inputDeleteCurrentUserUseCase,
-		u,
+		userID,
 	)
 	if err != nil {
 		return httperror.Handle(c, err)

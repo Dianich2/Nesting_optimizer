@@ -1,14 +1,10 @@
 package handler
 
 import (
-	"errors"
 	"server_nesting_optimizer/internal/transport/http/dto"
 	httperror "server_nesting_optimizer/internal/transport/http/errors"
 	"server_nesting_optimizer/internal/transport/http/mapper"
-	"server_nesting_optimizer/internal/transport/http/middleware"
 	projectusecase "server_nesting_optimizer/internal/usecase/project"
-	"server_nesting_optimizer/pkg/apperror"
-	"strconv"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -51,25 +47,21 @@ func NewProjectHandler(
 // @Security BearerAuth
 // @Router /api/v1/projects [post]
 func (h *ProjectHandler) Create(c fiber.Ctx) error {
-	var projectReq dto.CreateProjectRequest
-	err := c.Bind().Body(&projectReq)
+	userID, err := getUserID(c)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation("invalid request body"),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+	var projectReq dto.CreateProjectRequest
+	err = parseBody(c, &projectReq)
+	if err != nil {
+		return err
 	}
 
-	inputCreateProjectUseCase := mapper.ToCreateProjectInput(projectReq, u)
+	inputCreateProjectUseCase := mapper.ToCreateProjectInput(
+		projectReq,
+		userID,
+	)
 
 	outputCreateProjectUseCase, err := h.createProjectUseCase.Execute(
 		c.Context(),
@@ -101,31 +93,20 @@ func (h *ProjectHandler) Create(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/projects/{id} [get]
 func (h *ProjectHandler) GetByID(c fiber.Ctx) error {
-	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	id, err := getIDFromPath(c, "id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"id",
-					apperror.FieldCodeInvalid,
-					"id must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
 	}
 
-	inputGetProjectByIDUseCase := mapper.ToGetProjectByIDInput(id, u)
+	inputGetProjectByIDUseCase := mapper.ToGetProjectByIDInput(
+		id,
+		userID,
+	)
 
 	outputGetProjectByIDUseCase, err := h.getProjectByIDUseCase.Execute(
 		c.Context(),
@@ -157,56 +138,21 @@ func (h *ProjectHandler) GetByID(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/projects [get]
 func (h *ProjectHandler) ListProjects(c fiber.Ctx) error {
-	pageSizeQuery, pageQuery := c.Query("page_size"), c.Query("page")
-
-	if pageSizeQuery == "" {
-		pageSizeQuery = "20"
-	}
-
-	if pageQuery == "" {
-		pageQuery = "1"
-	}
-
-	pageSize, err := strconv.Atoi(pageSizeQuery)
+	userID, err := getUserID(c)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid page size",
-				apperror.NewFieldError(
-					"page_size",
-					apperror.FieldCodeInvalid,
-					"page size must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	page, err := strconv.Atoi(pageQuery)
+	page, pageSize, err := parsePagination(c)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid page",
-				apperror.NewFieldError(
-					"page",
-					apperror.FieldCodeInvalid,
-					"page must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
-	}
-
-	inputListProjectsUseCase := mapper.ToListProjectsInput(u, page, pageSize)
+	inputListProjectsUseCase := mapper.ToListProjectsInput(
+		userID,
+		page,
+		pageSize,
+	)
 
 	outputListProjectsUseCase, err := h.listProjectsUseCase.Execute(
 		c.Context(),
@@ -240,40 +186,27 @@ func (h *ProjectHandler) ListProjects(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/projects/{id} [patch]
 func (h *ProjectHandler) Update(c fiber.Ctx) error {
-	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	id, err := getIDFromPath(c, "id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"id",
-					apperror.FieldCodeInvalid,
-					"id must be a valid positive integer",
-				),
-			),
-		)
+		return err
+	}
+
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var projectReq dto.UpdateProjectRequest
-	err = c.Bind().Body(&projectReq)
+	err = parseBody(c, &projectReq)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation("invalid request body"),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
-	}
-
-	inputUpdateProjectUseCase := mapper.ToUpdateProjectInput(projectReq, id, u)
+	inputUpdateProjectUseCase := mapper.ToUpdateProjectInput(
+		projectReq,
+		id,
+		userID,
+	)
 
 	outputUpdateProjectUseCase, err := h.updateProjectUseCase.Execute(
 		c.Context(),
@@ -304,31 +237,20 @@ func (h *ProjectHandler) Update(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/projects/{id} [delete]
 func (h *ProjectHandler) DeleteProject(c fiber.Ctx) error {
-	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	id, err := getIDFromPath(c, "id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"id",
-					apperror.FieldCodeInvalid,
-					"id must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
 	}
 
-	inputDeleteProjectUseCase := mapper.ToDeleteProjectInput(id, u)
+	inputDeleteProjectUseCase := mapper.ToDeleteProjectInput(
+		id,
+		userID,
+	)
 
 	err = h.deleteProjectUseCase.Execute(
 		c.Context(),

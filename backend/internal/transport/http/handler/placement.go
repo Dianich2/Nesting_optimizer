@@ -1,14 +1,10 @@
 package handler
 
 import (
-	"errors"
 	"server_nesting_optimizer/internal/transport/http/dto"
 	httperror "server_nesting_optimizer/internal/transport/http/errors"
 	"server_nesting_optimizer/internal/transport/http/mapper"
-	"server_nesting_optimizer/internal/transport/http/middleware"
 	placementusecase "server_nesting_optimizer/internal/usecase/placement"
-	"server_nesting_optimizer/pkg/apperror"
-	"strconv"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -55,57 +51,30 @@ func NewPlacementHandler(
 // @Security BearerAuth
 // @Router /api/v1/projects/{project_id}/surfaces/{project_surface_id}/placements [post]
 func (h *PlacementHandler) Create(c fiber.Ctx) error {
+	projectID, err := getIDFromPath(c, "project_id")
+	if err != nil {
+		return err
+	}
+
+	projectSurfaceID, err := getIDFromPath(c, "project_surface_id")
+	if err != nil {
+		return err
+	}
+
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
+	}
+
 	var placementReq dto.CreatePlacementRequest
-	err := c.Bind().Body(&placementReq)
+	err = parseBody(c, &placementReq)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation("invalid request body"),
-		)
-	}
-
-	projectID, err := strconv.ParseInt(c.Params("project_id"), 10, 64)
-	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"project_id",
-					apperror.FieldCodeInvalid,
-					"project id must be a valid positive integer",
-				),
-			),
-		)
-	}
-
-	projectSurfaceID, err := strconv.ParseInt(c.Params("project_surface_id"), 10, 64)
-	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"project_surface_id",
-					apperror.FieldCodeInvalid,
-					"project surface id must be a valid positive integer",
-				),
-			),
-		)
-	}
-
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+		return err
 	}
 
 	inputCreatePlacementUseCase := mapper.ToCreatePlacementInput(
 		placementReq,
-		u,
+		userID,
 		projectID,
 		projectSurfaceID,
 	)
@@ -141,47 +110,23 @@ func (h *PlacementHandler) Create(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/projects/{project_id}/placements/{placement_id} [get]
 func (h *PlacementHandler) GetByID(c fiber.Ctx) error {
-	projectID, err := strconv.ParseInt(c.Params("project_id"), 10, 64)
+	projectID, err := getIDFromPath(c, "project_id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"project_id",
-					apperror.FieldCodeInvalid,
-					"project id must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	placementID, err := strconv.ParseInt(c.Params("placement_id"), 10, 64)
+	placementID, err := getIDFromPath(c, "placement_id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"placement_id",
-					apperror.FieldCodeInvalid,
-					"placement id must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
 	}
 
 	inputGetPlacementByIDUseCase := mapper.ToGetPlacementByIDInput(
-		u,
+		userID,
 		projectID,
 		placementID,
 	)
@@ -217,47 +162,23 @@ func (h *PlacementHandler) GetByID(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/projects/{project_id}/surfaces/{project_surface_id}/placements [get]
 func (h *PlacementHandler) ListPlacements(c fiber.Ctx) error {
-	projectID, err := strconv.ParseInt(c.Params("project_id"), 10, 64)
+	projectID, err := getIDFromPath(c, "project_id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"project_id",
-					apperror.FieldCodeInvalid,
-					"project id must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	projectSurfaceID, err := strconv.ParseInt(c.Params("project_surface_id"), 10, 64)
+	projectSurfaceID, err := getIDFromPath(c, "project_surface_id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"project_surface_id",
-					apperror.FieldCodeInvalid,
-					"project surface id must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
 	}
 
 	inputListPlacementsUseCase := mapper.ToListPlacementsInput(
-		u,
+		userID,
 		projectID,
 		projectSurfaceID,
 	)
@@ -296,57 +217,30 @@ func (h *PlacementHandler) ListPlacements(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/projects/{project_id}/placements/{placement_id} [patch]
 func (h *PlacementHandler) Update(c fiber.Ctx) error {
+	projectID, err := getIDFromPath(c, "project_id")
+	if err != nil {
+		return err
+	}
+
+	placementID, err := getIDFromPath(c, "placement_id")
+	if err != nil {
+		return err
+	}
+
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
+	}
+
 	var placementReq dto.UpdatePlacementRequest
-	err := c.Bind().Body(&placementReq)
+	err = parseBody(c, &placementReq)
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation("invalid request body"),
-		)
-	}
-
-	projectID, err := strconv.ParseInt(c.Params("project_id"), 10, 64)
-	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"project_id",
-					apperror.FieldCodeInvalid,
-					"project id must be a valid positive integer",
-				),
-			),
-		)
-	}
-
-	placementID, err := strconv.ParseInt(c.Params("placement_id"), 10, 64)
-	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"placement_id",
-					apperror.FieldCodeInvalid,
-					"placement id must be a valid positive integer",
-				),
-			),
-		)
-	}
-
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+		return err
 	}
 
 	inputUpdatePlacementUseCase := mapper.ToUpdatePlacementInput(
 		placementReq,
-		u,
+		userID,
 		projectID,
 		placementID,
 	)
@@ -381,46 +275,26 @@ func (h *PlacementHandler) Update(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /api/v1/projects/{project_id}/placements/{placement_id} [delete]
 func (h *PlacementHandler) Delete(c fiber.Ctx) error {
-	placementID, err := strconv.ParseInt(c.Params("placement_id"), 10, 64)
+	projectID, err := getIDFromPath(c, "project_id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid id",
-				apperror.NewFieldError(
-					"placement_id",
-					apperror.FieldCodeInvalid,
-					"placement id must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	projectID, err := strconv.ParseInt(c.Params("project_id"), 10, 64)
+	placementID, err := getIDFromPath(c, "placement_id")
 	if err != nil {
-		return httperror.Handle(
-			c,
-			apperror.Validation(
-				"invalid project id",
-				apperror.NewFieldError(
-					"project_id",
-					apperror.FieldCodeInvalid,
-					"project_id must be a valid positive integer",
-				),
-			),
-		)
+		return err
 	}
 
-	userID := c.Locals(middleware.UserIDLocalKey)
-	u, ok := userID.(int64)
-	if !ok {
-		return httperror.Handle(
-			c,
-			apperror.Internal("failed to get user id from request context", errors.New("user_id local is missing or invalid")),
-		)
+	userID, err := getUserID(c)
+	if err != nil {
+		return err
 	}
 
-	inputDeletePlacementUseCase := mapper.ToDeletePlacementInput(u, projectID, placementID)
+	inputDeletePlacementUseCase := mapper.ToDeletePlacementInput(
+		userID,
+		projectID,
+		placementID,
+	)
 
 	err = h.deletePlacementUseCase.Execute(
 		c.Context(),
