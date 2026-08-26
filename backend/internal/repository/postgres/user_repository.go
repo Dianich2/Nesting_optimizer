@@ -174,14 +174,14 @@ func (r *UserRepository) ChangePassword(
 	oldPasswordHash string,
 	newPasswordHash string,
 ) error {
-	result, err := r.db.ExecContext(
+	affected, err := execAffected(
 		ctx,
+		r.db,
 		updatePasswordQuery,
 		newPasswordHash,
 		oldPasswordHash,
 		userID,
 	)
-
 	if err != nil {
 		return fmt.Errorf(
 			"change password: %w",
@@ -189,15 +189,7 @@ func (r *UserRepository) ChangePassword(
 		)
 	}
 
-	count, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf(
-			"change password: %w",
-			err,
-		)
-	}
-
-	if count == 0 {
+	if affected == 0 {
 		return fmt.Errorf(
 			"change user password: %w",
 			domainuser.ErrPasswordChanged,
@@ -212,29 +204,18 @@ func (r *UserRepository) SoftDelete(
 	userID int64,
 	expectedPasswordHash string,
 ) error {
-	result, err := r.db.ExecContext(
+	affected, err := execAffected(
 		ctx,
+		r.db,
 		softDeleteUserQuery,
 		userID,
 		expectedPasswordHash,
 	)
-
 	if err != nil {
-		return fmt.Errorf(
-			"soft delete user: %w",
-			err,
-		)
+		return fmt.Errorf("soft delete user: %w", err)
 	}
 
-	count, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf(
-			"soft delete user: %w",
-			err,
-		)
-	}
-
-	if count == 0 {
+	if affected == 0 {
 		return fmt.Errorf(
 			"soft delete user: %w",
 			domainuser.ErrUserChanged,

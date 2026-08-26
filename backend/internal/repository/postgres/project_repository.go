@@ -124,15 +124,7 @@ func (r *ProjectRepository) ListByUserID(
 			continue
 		}
 
-		project := domainproject.Project{
-			ID:          row.ID.Int64,
-			UserID:      row.UserID.Int64,
-			Name:        row.Name.String,
-			Description: row.Description.String,
-			CreatedAt:   row.CreatedAt.Time,
-			UpdatedAt:   row.UpdatedAt.Time,
-			DeletedAt:   nil,
-		}
+		project := r.projectListRowToDomain(row)
 
 		listOfProjects.Projects = append(
 			listOfProjects.Projects,
@@ -181,28 +173,18 @@ func (r *ProjectRepository) SoftDelete(
 	projectID int64,
 	userID int64,
 ) error {
-	res, err := r.db.ExecContext(
+	affected, err := execAffected(
 		ctx,
+		r.db,
 		softDeleteProjectQuery,
 		projectID,
 		userID,
 	)
 	if err != nil {
-		return fmt.Errorf(
-			"soft delete project: %w",
-			err,
-		)
+		return fmt.Errorf("soft delete project: %w", err)
 	}
 
-	count, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf(
-			"soft delete project: %w",
-			err,
-		)
-	}
-
-	if count == 0 {
+	if affected == 0 {
 		return fmt.Errorf(
 			"soft delete project: %w",
 			domainproject.ErrNotFound,

@@ -174,29 +174,12 @@ func (r *ProjectSurfaceRepository) ListByProjectID(
 			continue
 		}
 
-		polygon, err := r.geometryCodec.DecodeWKB(row.Geometry)
+		projectSurface, err := r.projectSurfaceListRowToDomain(row)
 		if err != nil {
 			return projectsurfaceusecase.ProjectSurfaceListResult{}, fmt.Errorf(
-				"decode project surface geometry: %w",
+				"list project surfaces: map row: %w",
 				err,
 			)
-		}
-
-		var sourceSurfaceID *int64
-		if row.SourceSurfaceID.Valid {
-			id := row.SourceSurfaceID.Int64
-			sourceSurfaceID = &id
-		}
-
-		projectSurface := domainprojectsurface.ProjectSurface{
-			ID:              row.ID.Int64,
-			ProjectID:       row.ProjectID.Int64,
-			SourceSurfaceID: sourceSurfaceID,
-			Name:            row.Name.String,
-			Geometry:        polygon,
-			CreatedAt:       row.CreatedAt.Time,
-			UpdatedAt:       row.UpdatedAt.Time,
-			DeletedAt:       nil,
 		}
 
 		listOfSurfaces.ProjectSurfaces = append(
@@ -241,8 +224,10 @@ func (r *ProjectSurfaceRepository) Update(
 		encodedGeometry,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return domainprojectsurface.ProjectSurface{},
-				domainprojectsurface.ErrNotFound
+			return domainprojectsurface.ProjectSurface{}, fmt.Errorf(
+				"update project surface: %w",
+				domainprojectsurface.ErrNotFound,
+			)
 		}
 
 		return domainprojectsurface.ProjectSurface{}, fmt.Errorf(
@@ -268,29 +253,19 @@ func (r *ProjectSurfaceRepository) SoftDelete(
 	projectID int64,
 	userID int64,
 ) error {
-	res, err := r.db.ExecContext(
+	affected, err := execAffected(
 		ctx,
+		r.db,
 		softDeleteProjectSurfaceQuery,
 		projectSurfaceID,
 		projectID,
 		userID,
 	)
 	if err != nil {
-		return fmt.Errorf(
-			"soft delete project surface: %w",
-			err,
-		)
+		return fmt.Errorf("soft delete project surface: %w", err)
 	}
 
-	count, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf(
-			"soft delete project surface: %w",
-			err,
-		)
-	}
-
-	if count == 0 {
+	if affected == 0 {
 		return fmt.Errorf(
 			"soft delete project surface: %w",
 			domainprojectsurface.ErrNotFound,

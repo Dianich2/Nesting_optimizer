@@ -174,29 +174,12 @@ func (r *ProjectPatternRepository) ListByProjectID(
 			continue
 		}
 
-		polygon, err := r.geometryCodec.DecodeWKB(row.Geometry)
+		projectPattern, err := r.projectPatternListRowToDomain(row)
 		if err != nil {
 			return projectpatternusecase.ProjectPatternListResult{}, fmt.Errorf(
-				"decode project pattern geometry: %w",
+				"list project patterns: map row: %w",
 				err,
 			)
-		}
-
-		var sourcePatternID *int64
-		if row.SourcePatternID.Valid {
-			id := row.SourcePatternID.Int64
-			sourcePatternID = &id
-		}
-
-		projectPattern := domainprojectpattern.ProjectPattern{
-			ID:              row.ID.Int64,
-			ProjectID:       row.ProjectID.Int64,
-			SourcePatternID: sourcePatternID,
-			Name:            row.Name.String,
-			Geometry:        polygon,
-			CreatedAt:       row.CreatedAt.Time,
-			UpdatedAt:       row.UpdatedAt.Time,
-			DeletedAt:       nil,
 		}
 
 		listOfPatterns.ProjectPatterns = append(
@@ -241,8 +224,10 @@ func (r *ProjectPatternRepository) Update(
 		encodedGeometry,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return domainprojectpattern.ProjectPattern{},
-				domainprojectpattern.ErrNotFound
+			return domainprojectpattern.ProjectPattern{}, fmt.Errorf(
+				"update project pattern: %w",
+				domainprojectpattern.ErrNotFound,
+			)
 		}
 
 		return domainprojectpattern.ProjectPattern{}, fmt.Errorf(
@@ -268,29 +253,19 @@ func (r *ProjectPatternRepository) SoftDelete(
 	projectID int64,
 	userID int64,
 ) error {
-	res, err := r.db.ExecContext(
+	affected, err := execAffected(
 		ctx,
+		r.db,
 		softDeleteProjectPatternQuery,
 		projectPatternID,
 		projectID,
 		userID,
 	)
 	if err != nil {
-		return fmt.Errorf(
-			"soft delete project pattern: %w",
-			err,
-		)
+		return fmt.Errorf("soft delete project pattern: %w", err)
 	}
 
-	count, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf(
-			"soft delete project pattern: %w",
-			err,
-		)
-	}
-
-	if count == 0 {
+	if affected == 0 {
 		return fmt.Errorf(
 			"soft delete project pattern: %w",
 			domainprojectpattern.ErrNotFound,

@@ -165,22 +165,12 @@ func (r *SurfaceRepository) ListByUserID(
 			continue
 		}
 
-		polygon, err := r.geometryCodec.DecodeWKB(row.Geometry)
+		surface, err := r.surfaceListRowToDomain(row)
 		if err != nil {
 			return surfaceusecase.SurfaceListResult{}, fmt.Errorf(
-				"decode surface geometry: %w",
+				"list surfaces: map row: %w",
 				err,
 			)
-		}
-
-		surface := domainsurface.Surface{
-			ID:        row.ID.Int64,
-			UserID:    row.UserID.Int64,
-			Name:      row.Name.String,
-			Geometry:  polygon,
-			CreatedAt: row.CreatedAt.Time,
-			UpdatedAt: row.UpdatedAt.Time,
-			DeletedAt: nil,
 		}
 
 		listOfSurfaces.Surfaces = append(
@@ -252,28 +242,18 @@ func (r *SurfaceRepository) SoftDelete(
 	surfaceID int64,
 	userID int64,
 ) error {
-	res, err := r.db.ExecContext(
+	affected, err := execAffected(
 		ctx,
+		r.db,
 		softDeleteSurfaceQuery,
 		surfaceID,
 		userID,
 	)
 	if err != nil {
-		return fmt.Errorf(
-			"soft delete surface: %w",
-			err,
-		)
+		return fmt.Errorf("soft delete surface: %w", err)
 	}
 
-	count, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf(
-			"soft delete surface: %w",
-			err,
-		)
-	}
-
-	if count == 0 {
+	if affected == 0 {
 		return fmt.Errorf(
 			"soft delete surface: %w",
 			domainsurface.ErrNotFound,

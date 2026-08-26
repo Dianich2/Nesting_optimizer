@@ -165,22 +165,12 @@ func (r *PatternRepository) ListByUserID(
 			continue
 		}
 
-		polygon, err := r.geometryCodec.DecodeWKB(row.Geometry)
+		pattern, err := r.patternListRowToDomain(row)
 		if err != nil {
 			return patternusecase.PatternListResult{}, fmt.Errorf(
-				"decode pattern geometry: %w",
+				"list patterns: map row: %w",
 				err,
 			)
-		}
-
-		pattern := domainpattern.Pattern{
-			ID:        row.ID.Int64,
-			UserID:    row.UserID.Int64,
-			Name:      row.Name.String,
-			Geometry:  polygon,
-			CreatedAt: row.CreatedAt.Time,
-			UpdatedAt: row.UpdatedAt.Time,
-			DeletedAt: nil,
 		}
 
 		listOfPatterns.Patterns = append(
@@ -252,28 +242,18 @@ func (r *PatternRepository) SoftDelete(
 	patternID int64,
 	userID int64,
 ) error {
-	res, err := r.db.ExecContext(
+	affected, err := execAffected(
 		ctx,
+		r.db,
 		softDeletePatternQuery,
 		patternID,
 		userID,
 	)
 	if err != nil {
-		return fmt.Errorf(
-			"soft delete pattern: %w",
-			err,
-		)
+		return fmt.Errorf("soft delete pattern: %w", err)
 	}
 
-	count, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf(
-			"soft delete pattern: %w",
-			err,
-		)
-	}
-
-	if count == 0 {
+	if affected == 0 {
 		return fmt.Errorf(
 			"soft delete pattern: %w",
 			domainpattern.ErrNotFound,

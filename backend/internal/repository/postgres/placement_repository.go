@@ -315,29 +315,19 @@ func (r *PlacementRepository) SoftDelete(
 	projectID int64,
 	userID int64,
 ) error {
-	res, err := r.db.ExecContext(
+	affected, err := execAffected(
 		ctx,
+		r.db,
 		softDeletePlacementQuery,
 		placementID,
 		projectID,
 		userID,
 	)
 	if err != nil {
-		return fmt.Errorf(
-			"soft delete placement: %w",
-			err,
-		)
+		return fmt.Errorf("soft delete placement: %w", err)
 	}
 
-	count, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf(
-			"soft delete placement: %w",
-			err,
-		)
-	}
-
-	if count == 0 {
+	if affected == 0 {
 		return fmt.Errorf(
 			"soft delete placement: %w",
 			domainplacement.ErrNotFound,

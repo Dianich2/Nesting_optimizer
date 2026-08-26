@@ -3,7 +3,6 @@ package postgres
 import (
 	"fmt"
 	domainpattern "server_nesting_optimizer/internal/domain/pattern"
-	"time"
 )
 
 func (r *PatternRepository) patternRowToDomain(
@@ -17,12 +16,6 @@ func (r *PatternRepository) patternRowToDomain(
 		)
 	}
 
-	var deletedAt *time.Time
-	if row.DeletedAt.Valid {
-		t := row.DeletedAt.Time
-		deletedAt = &t
-	}
-
 	return domainpattern.Pattern{
 		ID:        row.ID,
 		UserID:    row.UserID,
@@ -30,6 +23,30 @@ func (r *PatternRepository) patternRowToDomain(
 		Geometry:  polygon,
 		CreatedAt: row.CreatedAt,
 		UpdatedAt: row.UpdatedAt,
-		DeletedAt: deletedAt,
+		DeletedAt: nullTimeToPtr(row.DeletedAt),
 	}, nil
+}
+
+func (r *PatternRepository) patternListRowToDomain(
+	row PatternListRow,
+) (domainpattern.Pattern, error) {
+	polygon, err := r.geometryCodec.DecodeWKB(row.Geometry)
+	if err != nil {
+		return domainpattern.Pattern{}, fmt.Errorf(
+			"decode pattern geometry: %w",
+			err,
+		)
+	}
+
+	pattern := domainpattern.Pattern{
+		ID:        row.ID.Int64,
+		UserID:    row.UserID.Int64,
+		Name:      row.Name.String,
+		Geometry:  polygon,
+		CreatedAt: row.CreatedAt.Time,
+		UpdatedAt: row.UpdatedAt.Time,
+		DeletedAt: nil,
+	}
+
+	return pattern, nil
 }
