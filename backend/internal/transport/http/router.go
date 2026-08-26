@@ -81,50 +81,22 @@ func NewRouter(deps *container.Container) *fiber.App {
 	app.Get("/swagger/*", swaggo.HandlerDefault)
 
 	api := app.Group("/api/v1")
-	api.Post("/users", userHandler.Create)
-	api.Post("/auth/login", userHandler.Login)
-	api.Post("/auth/refresh", userHandler.Refresh)
-	api.Post("/auth/logout", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), userHandler.Logout)
-	api.Get("/users/me", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), userHandler.GetCurrentUser)
-	api.Patch("/users/me", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), userHandler.UpdateProfile)
-	api.Patch("/users/me/password", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), userHandler.ChangePassword)
-	api.Post("/users/me/delete", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), userHandler.DeleteCurrentUser)
+	protected := api.Group(
+		"",
+		middleware.AuthRequired(
+			deps.JWTManager,
+			deps.SessionRepository,
+		),
+	)
 
-	api.Post("/projects", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectHandler.Create)
-	api.Get("/projects/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectHandler.GetByID)
-	api.Get("/projects", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectHandler.ListProjects)
-	api.Patch("/projects/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectHandler.Update)
-	api.Delete("/projects/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectHandler.DeleteProject)
-
-	api.Post("/surfaces", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), surfaceHandler.Create)
-	api.Get("/surfaces/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), surfaceHandler.GetByID)
-	api.Get("/surfaces", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), surfaceHandler.ListSurfaces)
-	api.Patch("/surfaces/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), surfaceHandler.Update)
-	api.Delete("/surfaces/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), surfaceHandler.Delete)
-
-	api.Post("/projects/:project_id/surfaces", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectSurfaceHandler.Create)
-	api.Get("/projects/:project_id/surfaces/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectSurfaceHandler.GetByID)
-	api.Get("/projects/:project_id/surfaces", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectSurfaceHandler.ListProjectSurfaces)
-	api.Patch("/projects/:project_id/surfaces/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectSurfaceHandler.Update)
-	api.Delete("/projects/:project_id/surfaces/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectSurfaceHandler.Delete)
-
-	api.Post("/patterns", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), patternHandler.Create)
-	api.Get("/patterns/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), patternHandler.GetByID)
-	api.Get("/patterns", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), patternHandler.ListPatterns)
-	api.Patch("/patterns/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), patternHandler.Update)
-	api.Delete("/patterns/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), patternHandler.Delete)
-
-	api.Post("/projects/:project_id/patterns", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectPatternHandler.Create)
-	api.Get("/projects/:project_id/patterns/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectPatternHandler.GetByID)
-	api.Get("/projects/:project_id/patterns", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectPatternHandler.ListProjectPatterns)
-	api.Patch("/projects/:project_id/patterns/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectPatternHandler.Update)
-	api.Delete("/projects/:project_id/patterns/:id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), projectPatternHandler.Delete)
-
-	api.Post("/projects/:project_id/surfaces/:project_surface_id/placements", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), placementHandler.Create)
-	api.Get("/projects/:project_id/placements/:placement_id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), placementHandler.GetByID)
-	api.Get("/projects/:project_id/surfaces/:project_surface_id/placements", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), placementHandler.ListPlacements)
-	api.Patch("/projects/:project_id/placements/:placement_id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), placementHandler.Update)
-	api.Delete("/projects/:project_id/placements/:placement_id", middleware.AuthRequired(deps.JWTManager, deps.SessionRepository), placementHandler.Delete)
+	registerPublicRoutes(api, userHandler)
+	registerUserRoutes(protected, userHandler)
+	registerProjectRoutes(protected, projectHandler)
+	registerSurfaceRoutes(protected, surfaceHandler)
+	registerProjectSurfaceRoutes(protected, projectSurfaceHandler)
+	registerPatternRoutes(protected, patternHandler)
+	registerProjectPatternRoutes(protected, projectPatternHandler)
+	registerPlacementRoutes(protected, placementHandler)
 
 	return app
 }
