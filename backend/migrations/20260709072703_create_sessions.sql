@@ -1,10 +1,10 @@
 -- +goose Up
-create table sessions(
-    session_id uuid, 
-    user_id bigint not null,
-    refresh_token_hash text not null,
-    created_at timestamptz not null default now(),
-    expires_at timestamptz not null,
+CREATE TABLE sessions (
+    session_id UUID, 
+    user_id BIGINT NOT NULL,
+    refresh_token_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
 
     CONSTRAINT sessions_pkey PRIMARY KEY (session_id),
 
@@ -16,4 +16,4 @@ create table sessions(
 );
 
 -- +goose Down
-drop table if exists sessions;
+DROP TABLE IF EXISTS sessions;

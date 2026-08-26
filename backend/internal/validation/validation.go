@@ -101,7 +101,7 @@ func ValidatePagination(
 		)
 	}
 
-	return nil
+	return errors
 }
 
 func ValidateFieldForEmptiness(
@@ -120,12 +120,22 @@ func ValidateFieldForEmptiness(
 		)
 	}
 
-	return nil
+	return errors
 }
 
 func ValidateScale(
 	scale float64,
 ) []apperror.FieldError {
+	if math.IsNaN(scale) || math.IsInf(scale, 0) {
+		return []apperror.FieldError{
+			apperror.NewFieldError(
+				"scale",
+				apperror.FieldCodeInvalid,
+				"scale must not be NaN or Inf",
+			),
+		}
+	}
+
 	if scale <= 0 {
 		return []apperror.FieldError{
 			apperror.NewFieldError(
