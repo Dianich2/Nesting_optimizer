@@ -57,7 +57,7 @@ const listProjectSurfacesQuery = `
 			AND user_id = $2
 			AND deleted_at IS NULL
 	),
-	filtered AS(
+	filtered AS (
 		SELECT
 			ps.id,
     		ps.project_id,
@@ -66,13 +66,13 @@ const listProjectSurfacesQuery = `
     		ST_AsBinary(ps.geometry) AS geometry,
     		ps.created_at,
     		ps.updated_at,
-			COUNT(*) OVER() as total
+			COUNT(*) OVER() AS total
 		FROM project_surfaces ps
 		INNER JOIN accessible_project p
 		    ON p.id = ps.project_id
 		WHERE ps.deleted_at IS NULL
 	),
-	paged AS(
+	paged AS (
 		SELECT 
 			id,
 			project_id,

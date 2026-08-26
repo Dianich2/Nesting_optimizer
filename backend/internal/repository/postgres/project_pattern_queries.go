@@ -57,7 +57,7 @@ const listProjectPatternsQuery = `
 			AND user_id = $2
 			AND deleted_at IS NULL
 	),
-	filtered AS(
+	filtered AS (
 		SELECT
 			pp.id,
     		pp.project_id,
@@ -66,13 +66,13 @@ const listProjectPatternsQuery = `
     		ST_AsBinary(pp.geometry) AS geometry,
     		pp.created_at,
     		pp.updated_at,
-			COUNT(*) OVER() as total
+			COUNT(*) OVER() AS total
 		FROM project_patterns pp
 		INNER JOIN accessible_project p
 		    ON p.id = pp.project_id
 		WHERE pp.deleted_at IS NULL
 	),
-	paged AS(
+	paged AS (
 		SELECT 
 			id,
 			project_id,

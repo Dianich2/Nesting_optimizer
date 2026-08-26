@@ -39,7 +39,7 @@ const getSurfaceByIDQuery = `
 `
 
 const listSurfacesQuery = `
-	WITH filtered AS(
+	WITH filtered AS (
 		SELECT
 			id,
 			user_id,
@@ -47,12 +47,12 @@ const listSurfacesQuery = `
 			geometry,
 			created_at,
 			updated_at,
-			COUNT(*) OVER() as total
+			COUNT(*) OVER() AS total
 		FROM surfaces
 		WHERE user_id = $1
 			AND deleted_at IS NULL
 	),
-	paged AS(
+	paged AS (
 		SELECT 
 			id,
 			user_id,

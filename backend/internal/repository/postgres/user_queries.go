@@ -1,7 +1,7 @@
 package postgres
 
 const existsUserByLoginQuery = `
-	SELECT exists(
+	SELECT EXISTS (
 		SELECT 1 
 		FROM users 
 		WHERE login = $1
@@ -9,7 +9,7 @@ const existsUserByLoginQuery = `
 `
 
 const existsUserByEmailQuery = `
-	SELECT exists(
+	SELECT EXISTS (
 		SELECT 1 
 		FROM users 
 		WHERE email = $1
@@ -17,14 +17,14 @@ const existsUserByEmailQuery = `
 `
 
 const createUserQuery = `
-	INSERT INTO users(
+	INSERT INTO users (
 		login, 
 		email, 
 		password_hash, 
 		first_name, 
 		last_name
 	)
-	VALUES($1, $2, $3, $4, $5)
+	VALUES ($1, $2, $3, $4, $5)
 	RETURNING 
 		id, 
 		login, 

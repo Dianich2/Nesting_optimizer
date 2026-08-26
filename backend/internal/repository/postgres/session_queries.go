@@ -1,13 +1,13 @@
 package postgres
 
 const upsertSessionQuery = `
-	INSERT INTO sessions(
+	INSERT INTO sessions (
 		session_id, 
 		user_id, 
 		refresh_token_hash, 
 		expires_at
 	)
-	VALUES($1, $2, $3, $4)
+	VALUES ($1, $2, $3, $4)
 	ON CONFLICT (user_id) DO UPDATE
 	SET
 		session_id = EXCLUDED.session_id,

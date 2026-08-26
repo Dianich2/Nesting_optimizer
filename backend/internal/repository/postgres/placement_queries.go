@@ -49,11 +49,11 @@ const listPlacementsForCollisionCheckQuery = `
 		ON ps.id = pl.project_surface_id
 	INNER JOIN project_patterns pp
 		ON pp.id = pl.project_pattern_id
+			AND pp.project_id = ps.project_id
 	INNER JOIN projects p
 		ON p.id = ps.project_id
 	WHERE pl.project_surface_id = $1
 		AND ps.project_id = $2
-		AND pp.project_id = $2
 		AND p.user_id = $3
 		AND pl.deleted_at IS NULL
 		AND ps.deleted_at IS NULL

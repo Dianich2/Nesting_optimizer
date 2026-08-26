@@ -1,7 +1,7 @@
 package postgres
 
 const createProjectQuery = `
-	INSERT INTO projects(
+	INSERT INTO projects (
 		user_id,
 		name,
 		description
@@ -35,7 +35,7 @@ const getProjectByIDQuery = `
 `
 
 const listProjectsQuery = `
-	WITH filtered AS(
+	WITH filtered AS (
 		SELECT
 			id,
 			user_id,
@@ -43,12 +43,12 @@ const listProjectsQuery = `
 			description,
 			created_at,
 			updated_at,
-			COUNT(*) OVER() as total
+			COUNT(*) OVER() AS total
 		FROM projects
 		WHERE user_id = $1
 			AND deleted_at IS NULL
 	),
-	paged AS(
+	paged AS (
 		SELECT 
 			id,
 			user_id,
