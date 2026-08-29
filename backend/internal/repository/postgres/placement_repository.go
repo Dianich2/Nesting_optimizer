@@ -7,6 +7,7 @@ import (
 	"fmt"
 	domainplacement "server_nesting_optimizer/internal/domain/placement"
 	"server_nesting_optimizer/internal/geometry"
+	nestingusecase "server_nesting_optimizer/internal/usecase/nesting"
 	placementusecase "server_nesting_optimizer/internal/usecase/placement"
 	"time"
 )
@@ -25,6 +26,9 @@ func NewPlacementRepository(
 		geometryCodec: geometryCodec,
 	}
 }
+
+var _ nestingusecase.PlacementRepository = (*PlacementRepository)(nil)
+var _ nestingusecase.PlacementWriter = (*PlacementRepository)(nil)
 
 type PlacementRow struct {
 	ID               int64     `db:"id"`
@@ -82,7 +86,7 @@ func (r *PlacementRepository) ListForCollisionCheck(
 	projectSurfaceID int64,
 	projectID int64,
 	userID int64,
-) ([]placementusecase.CollisionPlacement, error) {
+) ([]domainplacement.CollisionPlacement, error) {
 	var rows []CollisionPlacementRow
 
 	if err := r.db.SelectContext(
@@ -99,7 +103,7 @@ func (r *PlacementRepository) ListForCollisionCheck(
 		)
 	}
 
-	placements := make([]placementusecase.CollisionPlacement, 0, len(rows))
+	placements := make([]domainplacement.CollisionPlacement, 0, len(rows))
 
 	for _, row := range rows {
 		placement, err := r.toCollisionPlacement(row)
@@ -332,6 +336,26 @@ func (r *PlacementRepository) SoftDelete(
 			"soft delete placement: %w",
 			domainplacement.ErrNotFound,
 		)
+	}
+
+	return nil
+}
+
+func (r *PlacementRepository) DeleteByProjectSurface(
+	ctx context.Context,
+	userID int64,
+	projectID int64,
+	projectSurfaceID int64,
+) error {
+	_, err := r.db.ExecContext(
+		ctx,
+		deletePlacementsQuery,
+		projectSurfaceID,
+		projectID,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("delete placement: %w", err)
 	}
 
 	return nil

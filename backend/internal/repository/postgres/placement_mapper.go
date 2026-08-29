@@ -3,21 +3,20 @@ package postgres
 import (
 	"fmt"
 	domainplacement "server_nesting_optimizer/internal/domain/placement"
-	placementusecase "server_nesting_optimizer/internal/usecase/placement"
 )
 
 func (r *PlacementRepository) toCollisionPlacement(
 	row CollisionPlacementRow,
-) (placementusecase.CollisionPlacement, error) {
+) (domainplacement.CollisionPlacement, error) {
 	polygon, err := r.geometryCodec.DecodeWKB(row.PatternGeometry)
 	if err != nil {
-		return placementusecase.CollisionPlacement{}, fmt.Errorf(
+		return domainplacement.CollisionPlacement{}, fmt.Errorf(
 			"decode collision placement geometry: %w",
 			err,
 		)
 	}
 
-	return placementusecase.CollisionPlacement{
+	return domainplacement.CollisionPlacement{
 		ID:              row.ID,
 		PatternGeometry: polygon,
 		X:               row.X,

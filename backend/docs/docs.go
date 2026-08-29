@@ -1529,6 +1529,80 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/projects/{project_id}/surfaces/{project_surface_id}/nesting": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Run automatic nesting for a project surface",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Run automatic nesting",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Project ID",
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Project Surface ID",
+                        "name": "project_surface_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Nesting Params",
+                        "name": "nestingParams",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.RunNestingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.RunNestingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httperror.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httperror.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httperror.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httperror.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/projects/{project_id}/surfaces/{project_surface_id}/placements": {
             "get": {
                 "security": [
@@ -3051,6 +3125,120 @@ const docTemplate = `{
                 },
                 "refresh_token": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.RunNestingMetricsResponse": {
+            "type": "object",
+            "properties": {
+                "placed_area": {
+                    "type": "number"
+                },
+                "placed_count": {
+                    "type": "integer"
+                },
+                "requested_count": {
+                    "type": "integer"
+                },
+                "surface_area": {
+                    "type": "number"
+                },
+                "utilization": {
+                    "type": "number"
+                }
+            }
+        },
+        "dto.RunNestingPatternRequest": {
+            "type": "object",
+            "properties": {
+                "project_pattern_id": {
+                    "type": "integer"
+                },
+                "quantity": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.RunNestingPlacementResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "geometry": {
+                    "$ref": "#/definitions/dto.PolygonGeometry"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "project_pattern_id": {
+                    "type": "integer"
+                },
+                "project_surface_id": {
+                    "type": "integer"
+                },
+                "rotation": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "x": {
+                    "type": "number"
+                },
+                "y": {
+                    "type": "number"
+                }
+            }
+        },
+        "dto.RunNestingRequest": {
+            "type": "object",
+            "properties": {
+                "allowed_rotations": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "keep_existing": {
+                    "type": "boolean"
+                },
+                "patterns": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.RunNestingPatternRequest"
+                    }
+                }
+            }
+        },
+        "dto.RunNestingResponse": {
+            "type": "object",
+            "properties": {
+                "metrics": {
+                    "$ref": "#/definitions/dto.RunNestingMetricsResponse"
+                },
+                "placements": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.RunNestingPlacementResponse"
+                    }
+                },
+                "unplaced": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.RunNestingUnplacedPatternResponse"
+                    }
+                }
+            }
+        },
+        "dto.RunNestingUnplacedPatternResponse": {
+            "type": "object",
+            "properties": {
+                "project_pattern_id": {
+                    "type": "integer"
+                },
+                "quantity": {
+                    "type": "integer"
                 }
             }
         },

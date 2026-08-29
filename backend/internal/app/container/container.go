@@ -3,7 +3,9 @@ package container
 import (
 	"server_nesting_optimizer/internal/config"
 	"server_nesting_optimizer/internal/geometry/simplefeatures"
+	"server_nesting_optimizer/internal/nesting"
 	"server_nesting_optimizer/internal/repository/postgres"
+	nestingusecase "server_nesting_optimizer/internal/usecase/nesting"
 	patternusecase "server_nesting_optimizer/internal/usecase/pattern"
 	placementusecase "server_nesting_optimizer/internal/usecase/placement"
 	projectusecase "server_nesting_optimizer/internal/usecase/project"
@@ -11,6 +13,7 @@ import (
 	projectsurfaceusecase "server_nesting_optimizer/internal/usecase/project_surface"
 	surfaceusecase "server_nesting_optimizer/internal/usecase/surface"
 	userusecase "server_nesting_optimizer/internal/usecase/user"
+
 	"server_nesting_optimizer/pkg/password"
 	"time"
 
@@ -59,6 +62,7 @@ type Container struct {
 	ListPlacementsUseCase        *placementusecase.ListPlacementsUseCase
 	UpdatePlacementUseCase       *placementusecase.UpdatePlacementUseCase
 	DeletePlacementUseCase       *placementusecase.DeletePlacementUseCase
+	RunNestingUseCase            *nestingusecase.RunNestingUseCase
 	JWTManager                   *jwtpkg.Manager
 	SessionRepository            *postgres.SessionRepository
 }
@@ -70,6 +74,8 @@ func New(
 	unitOfWork := postgres.NewUnitOfWork(db)
 	sfCodec := simplefeatures.NewCodec()
 	sfEngine := simplefeatures.NewEngine()
+	nestingUnitOfWork := postgres.NewNestingUnitOfWork(db, sfCodec)
+	baselineOptimizer := nesting.NewBaselineOptimizer(sfEngine)
 
 	userRepo := postgres.NewUserRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
@@ -292,6 +298,15 @@ func New(
 		placementRepo,
 	)
 
+	runNestingUseCase := nestingusecase.NewRunNestingUseCase(
+		projectSurfaceRepo,
+		projectPatternRepo,
+		placementRepo,
+		sfEngine,
+		baselineOptimizer,
+		nestingUnitOfWork,
+	)
+
 	return &Container{
 		CreateUserUseCase:            createUserUseCase,
 		LoginUseCase:                 loginUseCase,
@@ -331,6 +346,7 @@ func New(
 		ListPlacementsUseCase:        listPlacementsUseCase,
 		UpdatePlacementUseCase:       updatePlacementUseCase,
 		DeletePlacementUseCase:       deletePlacementUseCase,
+		RunNestingUseCase:            runNestingUseCase,
 		JWTManager:                   jwtManager,
 		SessionRepository:            sessionRepo,
 	}

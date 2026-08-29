@@ -92,3 +92,10 @@ func registerPlacementRoutes(
 	api.Patch("/projects/:project_id/placements/:placement_id", placementHandler.Update)
 	api.Delete("/projects/:project_id/placements/:placement_id", placementHandler.Delete)
 }
+
+func registerNestingRoutes(
+	api fiber.Router,
+	nestingHandler *handler.NestingHandler,
+) {
+	api.Post("/projects/:project_id/surfaces/:project_surface_id/nesting", nestingHandler.Run)
+}

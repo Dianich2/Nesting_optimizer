@@ -548,6 +548,80 @@ definitions:
       refresh_token:
         type: string
     type: object
+  dto.RunNestingMetricsResponse:
+    properties:
+      placed_area:
+        type: number
+      placed_count:
+        type: integer
+      requested_count:
+        type: integer
+      surface_area:
+        type: number
+      utilization:
+        type: number
+    type: object
+  dto.RunNestingPatternRequest:
+    properties:
+      project_pattern_id:
+        type: integer
+      quantity:
+        type: integer
+    type: object
+  dto.RunNestingPlacementResponse:
+    properties:
+      created_at:
+        type: string
+      geometry:
+        $ref: '#/definitions/dto.PolygonGeometry'
+      id:
+        type: integer
+      project_pattern_id:
+        type: integer
+      project_surface_id:
+        type: integer
+      rotation:
+        type: number
+      updated_at:
+        type: string
+      x:
+        type: number
+      "y":
+        type: number
+    type: object
+  dto.RunNestingRequest:
+    properties:
+      allowed_rotations:
+        items:
+          type: number
+        type: array
+      keep_existing:
+        type: boolean
+      patterns:
+        items:
+          $ref: '#/definitions/dto.RunNestingPatternRequest'
+        type: array
+    type: object
+  dto.RunNestingResponse:
+    properties:
+      metrics:
+        $ref: '#/definitions/dto.RunNestingMetricsResponse'
+      placements:
+        items:
+          $ref: '#/definitions/dto.RunNestingPlacementResponse'
+        type: array
+      unplaced:
+        items:
+          $ref: '#/definitions/dto.RunNestingUnplacedPatternResponse'
+        type: array
+    type: object
+  dto.RunNestingUnplacedPatternResponse:
+    properties:
+      project_pattern_id:
+        type: integer
+      quantity:
+        type: integer
+    type: object
   dto.UpdatePatternRequest:
     properties:
       geometry:
@@ -1711,6 +1785,54 @@ paths:
       security:
       - BearerAuth: []
       summary: Update Project Surface
+  /api/v1/projects/{project_id}/surfaces/{project_surface_id}/nesting:
+    post:
+      consumes:
+      - application/json
+      description: Run automatic nesting for a project surface
+      parameters:
+      - description: Project ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      - description: Project Surface ID
+        in: path
+        name: project_surface_id
+        required: true
+        type: integer
+      - description: Nesting Params
+        in: body
+        name: nestingParams
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RunNestingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.RunNestingResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Run automatic nesting
   /api/v1/projects/{project_id}/surfaces/{project_surface_id}/placements:
     get:
       description: List Placements

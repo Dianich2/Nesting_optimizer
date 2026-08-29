@@ -1,6 +1,9 @@
 package placement
 
-import "time"
+import (
+	domaingeometry "server_nesting_optimizer/internal/domain/geometry"
+	"time"
+)
 
 type Placement struct {
 	ID               int64
@@ -12,4 +15,12 @@ type Placement struct {
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 	DeletedAt        *time.Time
+}
+
+type CollisionPlacement struct {
+	ID              int64
+	PatternGeometry domaingeometry.Polygon
+	X               float64
+	Y               float64
+	Rotation        float64
 }

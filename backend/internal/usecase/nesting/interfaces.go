@@ -1,4 +1,4 @@
-package placement
+package nesting
 
 import (
 	"context"
@@ -8,54 +8,27 @@ import (
 )
 
 type PlacementRepository interface {
-	Create(
-		ctx context.Context,
-		placement domainplacement.Placement,
-		projectID int64,
-		userID int64,
-	) (domainplacement.Placement, error)
-
 	ListForCollisionCheck(
 		ctx context.Context,
 		projectSurfaceID int64,
 		projectID int64,
 		userID int64,
 	) ([]domainplacement.CollisionPlacement, error)
+}
 
-	GetByIDWithPatternGeometry(
+type PlacementWriter interface {
+	Create(
 		ctx context.Context,
-		userID int64,
-		projectID int64,
-		placementID int64,
-	) (PlacementWithPatternGeometry, error)
-
-	ListPlacements(
-		ctx context.Context,
-		userID int64,
-		projectID int64,
-		projectSurfaceID int64,
-	) ([]PlacementWithPatternGeometry, error)
-
-	ListForCollisionCheckExcluding(
-		ctx context.Context,
-		projectSurfaceID int64,
-		projectID int64,
-		userID int64,
-		excludePlacementID int64,
-	) ([]PlacementWithPatternGeometry, error)
-
-	Update(
-		ctx context.Context,
-		placement domainplacement.Placement,
+		input domainplacement.Placement,
 		projectID int64,
 		userID int64,
 	) (domainplacement.Placement, error)
 
-	SoftDelete(
+	DeleteByProjectSurface(
 		ctx context.Context,
-		placementID int64,
-		projectID int64,
 		userID int64,
+		projectID int64,
+		projectSurfaceID int64,
 	) error
 }
 
@@ -69,10 +42,21 @@ type ProjectSurfaceRepository interface {
 }
 
 type ProjectPatternRepository interface {
-	GetByID(
+	GetByIDs(
 		ctx context.Context,
 		userID int64,
 		projectID int64,
-		projectPatternID int64,
-	) (domainprojectpattern.ProjectPattern, error)
+		ids []int64,
+	) ([]domainprojectpattern.ProjectPattern, error)
+}
+
+type TransactionRepositories struct {
+	Placements PlacementWriter
+}
+
+type UnitOfWork interface {
+	WithinTransaction(
+		ctx context.Context,
+		fn func(repositories TransactionRepositories) error,
+	) error
 }

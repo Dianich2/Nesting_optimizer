@@ -199,3 +199,16 @@ const softDeletePlacementQuery = `
 		AND pp.deleted_at IS NULL
 		AND p.deleted_at IS NULL
 `
+
+const deletePlacementsQuery = `
+	DELETE FROM placements pl
+	USING project_surfaces ps,
+		  projects p
+	WHERE pl.project_surface_id = ps.id
+	  AND ps.project_id = p.id
+	  AND ps.id = $1
+	  AND ps.project_id = $2
+	  AND p.user_id = $3
+	  AND ps.deleted_at IS NULL
+	  AND p.deleted_at IS NULL
+`

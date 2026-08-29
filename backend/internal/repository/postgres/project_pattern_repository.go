@@ -8,8 +8,11 @@ import (
 	domaingeometry "server_nesting_optimizer/internal/domain/geometry"
 	domainprojectpattern "server_nesting_optimizer/internal/domain/project_pattern"
 	"server_nesting_optimizer/internal/geometry"
+	nestingusecase "server_nesting_optimizer/internal/usecase/nesting"
 	projectpatternusecase "server_nesting_optimizer/internal/usecase/project_pattern"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 type ProjectPatternRepository struct {
@@ -28,6 +31,7 @@ func NewProjectPatternRepository(
 }
 
 var _ projectpatternusecase.ProjectPatternRepository = (*ProjectPatternRepository)(nil)
+var _ nestingusecase.ProjectPatternRepository = (*ProjectPatternRepository)(nil)
 
 type ProjectPatternRow struct {
 	ID              int64         `db:"id"`
@@ -297,4 +301,41 @@ func (r *ProjectPatternRepository) HasActivePlacements(
 	}
 
 	return hasActivePlacements, nil
+}
+
+func (r *ProjectPatternRepository) GetByIDs(
+	ctx context.Context,
+	userID int64,
+	projectID int64,
+	ids []int64,
+) ([]domainprojectpattern.ProjectPattern, error) {
+	var projectPatternRows []ProjectPatternRow
+	if err := r.db.SelectContext(
+		ctx,
+		&projectPatternRows,
+		getProjectPatternsByIDsQuery,
+		pq.Array(ids),
+		projectID,
+		userID,
+	); err != nil {
+		return nil, fmt.Errorf(
+			"get project patterns by ids: %w",
+			err,
+		)
+	}
+
+	res := make([]domainprojectpattern.ProjectPattern, 0, len(projectPatternRows))
+	for _, projectPatternRow := range projectPatternRows {
+		projectPattern, err := r.projectPatternRowToDomain(projectPatternRow)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"get project patterns by ids: map row: %w",
+				err,
+			)
+		}
+
+		res = append(res, projectPattern)
+	}
+
+	return res, nil
 }

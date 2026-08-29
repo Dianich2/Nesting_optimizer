@@ -77,6 +77,10 @@ func NewRouter(deps *container.Container) *fiber.App {
 		deps.DeletePlacementUseCase,
 	)
 
+	nestingHandler := handler.NewNestingHandler(
+		deps.RunNestingUseCase,
+	)
+
 	app.Get("/health", healthHandler.Check)
 	app.Get("/swagger/*", swaggo.HandlerDefault)
 
@@ -97,6 +101,7 @@ func NewRouter(deps *container.Container) *fiber.App {
 	registerPatternRoutes(protected, patternHandler)
 	registerProjectPatternRoutes(protected, projectPatternHandler)
 	registerPlacementRoutes(protected, placementHandler)
+	registerNestingRoutes(protected, nestingHandler)
 
 	return app
 }

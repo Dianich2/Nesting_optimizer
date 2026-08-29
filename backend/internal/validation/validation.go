@@ -8,6 +8,22 @@ import (
 	"unicode/utf8"
 )
 
+func ValidateQuantity(
+	quantity int,
+) []apperror.FieldError {
+	if quantity <= 0 {
+		return []apperror.FieldError{
+			apperror.NewFieldError(
+				"quantity",
+				apperror.FieldCodeInvalid,
+				"quantity must be greater than 0",
+			),
+		}
+	}
+
+	return nil
+}
+
 func ValidateID(
 	id int64,
 	fieldName string,

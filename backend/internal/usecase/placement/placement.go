@@ -28,14 +28,6 @@ type CreatePlacementOutput struct {
 	UpdatedAt        time.Time
 }
 
-type CollisionPlacement struct {
-	ID              int64
-	PatternGeometry domaingeometry.Polygon
-	X               float64
-	Y               float64
-	Rotation        float64
-}
-
 type PlacementWithPatternGeometry struct {
 	Placement       placement.Placement
 	PatternGeometry domaingeometry.Polygon

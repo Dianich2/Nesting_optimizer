@@ -169,3 +169,22 @@ const hasActivePlacementsByProjectPatternIDQuery = `
 			AND p.deleted_at IS NULL
 	)
 `
+
+const getProjectPatternsByIDsQuery = `
+	SELECT
+		pp.id,
+		pp.project_id,
+		pp.source_pattern_id,
+		pp.name,
+		ST_AsBinary(pp.geometry) AS geometry,
+		pp.created_at,
+		pp.updated_at
+	FROM project_patterns pp
+	INNER JOIN projects p
+		ON p.id = pp.project_id
+	WHERE pp.id = ANY($1::BIGINT[])
+		AND pp.project_id = $2
+		AND p.user_id = $3
+		AND pp.deleted_at IS NULL
+		AND p.deleted_at IS NULL
+`
