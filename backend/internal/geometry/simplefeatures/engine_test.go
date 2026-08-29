@@ -2,6 +2,7 @@ package simplefeatures
 
 import (
 	"math"
+	"server_nesting_optimizer/internal/config"
 	domaingeometry "server_nesting_optimizer/internal/domain/geometry"
 	"server_nesting_optimizer/internal/geometry"
 	"testing"
@@ -9,8 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-const epsilon = 1e-9
 
 func assertPolygonInDelta(
 	t *testing.T,
@@ -199,7 +198,7 @@ func TestValidatePolygon(t *testing.T) {
 			err := sfEngine.ValidatePolygon(tt.polygon)
 
 			if tt.wantErr == nil {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				return
 			}
 
@@ -336,7 +335,7 @@ func TestArea(t *testing.T) {
 					t,
 					tt.wantArea,
 					area,
-					epsilon,
+					config.Epsilon,
 				)
 
 				return
@@ -539,13 +538,13 @@ func TestNormalize(t *testing.T) {
 			normalizedPolygon, err := sfEngine.Normalize(tt.polygon)
 
 			if tt.wantErr == nil {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				assertPolygonInDelta(
 					t,
 					tt.wantPolygon,
 					normalizedPolygon,
-					epsilon,
+					config.Epsilon,
 				)
 
 				return
@@ -610,7 +609,7 @@ func TestArea_BeforeAndAfterNormalize(t *testing.T) {
 		t,
 		areaAfter,
 		areaBefore,
-		epsilon,
+		config.Epsilon,
 	)
 }
 
@@ -866,13 +865,13 @@ func TestScale(t *testing.T) {
 			scaledPolygon, err := sfEngine.Scale(tt.polygon, tt.factor)
 
 			if tt.wantErr == nil {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				assertPolygonInDelta(
 					t,
 					tt.wantPolygon,
 					scaledPolygon,
-					epsilon,
+					config.Epsilon,
 				)
 
 				return
@@ -939,7 +938,7 @@ func TestArea_BeforeAndAfterScale(t *testing.T) {
 		t,
 		areaBefore*factor*factor,
 		areaAfter,
-		epsilon,
+		config.Epsilon,
 	)
 }
 
@@ -1283,13 +1282,13 @@ func TestTransform(t *testing.T) {
 			)
 
 			if tt.wantErr == nil {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				assertPolygonInDelta(
 					t,
 					tt.wantPolygon,
 					transformedPolygon,
-					epsilon,
+					config.Epsilon,
 				)
 
 				return
@@ -1610,7 +1609,7 @@ func TestCoveredBy(t *testing.T) {
 			)
 
 			if tt.wantErr == nil {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				assert.Equal(
 					t,
@@ -1893,7 +1892,7 @@ func TestInteriorsIntersect(t *testing.T) {
 			)
 
 			if tt.wantErr == nil {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				assert.Equal(
 					t,
@@ -1970,6 +1969,192 @@ func TestArea_BeforeAndAfterTransform(t *testing.T) {
 		t,
 		areaBefore,
 		areaAfter,
-		epsilon,
+		config.Epsilon,
 	)
+}
+
+func TestBounds(t *testing.T) {
+	sfEngine := NewEngine()
+
+	tests := []struct {
+		name       string
+		polygon    domaingeometry.Polygon
+		wantBounds domaingeometry.Bounds
+		wantErr    error
+	}{
+		{
+			name: "rectangle polygon",
+			polygon: domaingeometry.Polygon{
+				Exterior: domaingeometry.Ring{
+					Points: []domaingeometry.Point{
+						{X: 0, Y: 0},
+						{X: 20, Y: 0},
+						{X: 20, Y: 20},
+						{X: 0, Y: 20},
+					},
+				},
+			},
+			wantBounds: domaingeometry.Bounds{
+				MinX: 0,
+				MinY: 0,
+				MaxX: 20,
+				MaxY: 20,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "polygon with negative coordinates",
+			polygon: domaingeometry.Polygon{
+				Exterior: domaingeometry.Ring{
+					Points: []domaingeometry.Point{
+						{X: 0, Y: 0},
+						{X: -20, Y: 0},
+						{X: -20, Y: -20},
+						{X: 0, Y: -20},
+					},
+				},
+			},
+			wantBounds: domaingeometry.Bounds{
+				MinX: -20,
+				MinY: -20,
+				MaxX: 0,
+				MaxY: 0,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "polygon with fractional coordinates",
+			polygon: domaingeometry.Polygon{
+				Exterior: domaingeometry.Ring{
+					Points: []domaingeometry.Point{
+						{X: 2.5, Y: 2.5},
+						{X: 7.5, Y: 2.5},
+						{X: 7.5, Y: 7.5},
+						{X: 2.5, Y: 7.5},
+					},
+				},
+			},
+			wantBounds: domaingeometry.Bounds{
+				MinX: 2.5,
+				MinY: 2.5,
+				MaxX: 7.5,
+				MaxY: 7.5,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "polygon with holes",
+			polygon: domaingeometry.Polygon{
+				Exterior: domaingeometry.Ring{
+					Points: []domaingeometry.Point{
+						{X: 0, Y: 0},
+						{X: 100, Y: 0},
+						{X: 100, Y: 100},
+						{X: 0, Y: 100},
+					},
+				},
+				Holes: []domaingeometry.Ring{
+					domaingeometry.Ring{
+						Points: []domaingeometry.Point{
+							{X: 30, Y: 30},
+							{X: 30, Y: 60},
+							{X: 60, Y: 60},
+							{X: 60, Y: 30},
+						},
+					},
+					domaingeometry.Ring{
+						Points: []domaingeometry.Point{
+							{X: 90, Y: 90},
+							{X: 95, Y: 90},
+							{X: 95, Y: 95},
+							{X: 90, Y: 95},
+						},
+					},
+				},
+			},
+			wantBounds: domaingeometry.Bounds{
+				MinX: 0,
+				MinY: 0,
+				MaxX: 100,
+				MaxY: 100,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "non-normalized polygon",
+			polygon: domaingeometry.Polygon{
+				Exterior: domaingeometry.Ring{
+					Points: []domaingeometry.Point{
+						{X: 2.5, Y: 2.5},
+						{X: 7.5, Y: 2.5},
+						{X: 7.5, Y: 7.5},
+						{X: 2.5, Y: 7.5},
+					},
+				},
+			},
+			wantBounds: domaingeometry.Bounds{
+				MinX: 2.5,
+				MinY: 2.5,
+				MaxX: 7.5,
+				MaxY: 7.5,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "invalid polygon",
+			polygon: domaingeometry.Polygon{
+				Exterior: domaingeometry.Ring{
+					Points: []domaingeometry.Point{
+						{X: 0, Y: 0},
+						{X: 0, Y: 10},
+						{X: 0, Y: 20},
+						{X: 0, Y: 30},
+					},
+				},
+			},
+			wantErr: geometry.ErrInvalidPolygon,
+		},
+		{
+			name: "empty polygon",
+			polygon: domaingeometry.Polygon{
+				Exterior: domaingeometry.Ring{
+					Points: []domaingeometry.Point{
+						{X: 0, Y: 0},
+						{X: 0, Y: 0},
+						{X: 0, Y: 0},
+						{X: 0, Y: 0},
+					},
+				},
+			},
+			wantErr: geometry.ErrInvalidPolygon,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			polygonBounds, err := sfEngine.Bounds(
+				tt.polygon,
+			)
+
+			if tt.wantErr == nil {
+				require.NoError(t, err)
+
+				assert.Equal(
+					t,
+					tt.wantBounds,
+					polygonBounds,
+				)
+
+				return
+			}
+
+			assert.Zero(t, polygonBounds)
+
+			assert.ErrorIs(
+				t,
+				err,
+				tt.wantErr,
+			)
+		})
+	}
 }

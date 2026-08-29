@@ -38,4 +38,8 @@ type Engine interface {
 		first domaingeometry.Polygon,
 		second domaingeometry.Polygon,
 	) (bool, error)
+
+	Bounds(
+		polygon domaingeometry.Polygon,
+	) (domaingeometry.Bounds, error)
 }

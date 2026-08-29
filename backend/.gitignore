@@ -18,6 +18,3 @@ coverage/
 # IDE
 .vscode/
 .idea/
-
-# Swagger generated files
-docs/swagger/swagger.json

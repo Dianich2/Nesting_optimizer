@@ -1,12 +1,11 @@
 package geometry
 
 import (
+	"server_nesting_optimizer/internal/config"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
-
-const epsilon = 1e-9
 
 func TestNormalizeDegrees(t *testing.T) {
 	tests := []struct {
@@ -78,7 +77,7 @@ func TestNormalizeDegrees(t *testing.T) {
 				t,
 				tt.wantNormalizeAngle,
 				NormalizeDegrees(tt.angle),
-				epsilon,
+				config.Epsilon,
 			)
 
 		})

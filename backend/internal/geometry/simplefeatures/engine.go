@@ -346,3 +346,31 @@ func (e *Engine) InteriorsIntersect(
 
 	return doInteriorsIntersect, nil
 }
+
+func (e *Engine) Bounds(
+	polygon domaingeometry.Polygon,
+) (domaingeometry.Bounds, error) {
+	if err := e.ValidatePolygon(polygon); err != nil {
+		return domaingeometry.Bounds{}, fmt.Errorf(
+			"get polygon bounds: %w",
+			err,
+		)
+	}
+
+	sfPolygon := toSimpleFeaturesPolygon(polygon)
+
+	minXY, maxXY, ok := sfPolygon.Envelope().MinMaxXYs()
+	if !ok {
+		return domaingeometry.Bounds{}, fmt.Errorf(
+			"get polygon bounds: %w",
+			geometry.ErrInvalidPolygon,
+		)
+	}
+
+	return domaingeometry.Bounds{
+		MinX: minXY.X,
+		MinY: minXY.Y,
+		MaxX: maxXY.X,
+		MaxY: maxXY.Y,
+	}, nil
+}

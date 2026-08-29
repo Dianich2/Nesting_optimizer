@@ -15,6 +15,7 @@ const (
 	MinPage           = 1
 	DefaultPage       = "1"
 	DefaultPageSize   = "20"
+	Epsilon           = 1e-9
 )
 
 var (
