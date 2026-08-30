@@ -44,7 +44,8 @@ func (nuow *NestingUnitOfWork) WithinTransaction(
 	}()
 
 	repositories := nestingusecase.TransactionRepositories{
-		Placements: NewPlacementRepository(tx, nuow.geometryCodec),
+		Placements:  NewPlacementRepository(tx, nuow.geometryCodec),
+		NestingRuns: NewNestingRunRepository(tx),
 	}
 
 	if callbackErr := fn(repositories); callbackErr != nil {

@@ -1,6 +1,7 @@
 package mapper
 
 import (
+	"server_nesting_optimizer/internal/nesting"
 	"server_nesting_optimizer/internal/transport/http/dto"
 	nestingusecase "server_nesting_optimizer/internal/usecase/nesting"
 )
@@ -22,6 +23,7 @@ func ToRunNestingInput(
 	}
 
 	return nestingusecase.RunNestingInput{
+		Algorithm:        nesting.Algorithm(req.Algorithm),
 		UserID:           userID,
 		ProjectID:        projectID,
 		ProjectSurfaceID: projectSurfaceID,

@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	domaingeometry "server_nesting_optimizer/internal/domain/geometry"
+	nestingrun "server_nesting_optimizer/internal/domain/nesting_run"
 	domainplacement "server_nesting_optimizer/internal/domain/placement"
 	projectpattern "server_nesting_optimizer/internal/domain/project_pattern"
 	domainprojectsurface "server_nesting_optimizer/internal/domain/project_surface"
 	"server_nesting_optimizer/internal/geometry"
 	"server_nesting_optimizer/internal/nesting"
 	"server_nesting_optimizer/pkg/apperror"
+	"time"
 )
 
 type RunNestingUseCase struct {
@@ -18,7 +20,7 @@ type RunNestingUseCase struct {
 	projectPatternRepository ProjectPatternRepository
 	placementRepository      PlacementRepository
 	geometryEngine           geometry.Engine
-	optimizer                nesting.Optimizer
+	optimizerRegistry        *nesting.OptimizerRegistry
 	unitOfWork               UnitOfWork
 }
 
@@ -27,7 +29,7 @@ func NewRunNestingUseCase(
 	projectPatternRepository ProjectPatternRepository,
 	placementRepository PlacementRepository,
 	geometryEngine geometry.Engine,
-	optimizer nesting.Optimizer,
+	optimizerRegistry *nesting.OptimizerRegistry,
 	unitOfWork UnitOfWork,
 ) *RunNestingUseCase {
 	return &RunNestingUseCase{
@@ -35,7 +37,7 @@ func NewRunNestingUseCase(
 		projectPatternRepository: projectPatternRepository,
 		placementRepository:      placementRepository,
 		geometryEngine:           geometryEngine,
-		optimizer:                optimizer,
+		optimizerRegistry:        optimizerRegistry,
 		unitOfWork:               unitOfWork,
 	}
 }
@@ -61,6 +63,16 @@ func (uc *RunNestingUseCase) Execute(
 		return RunNestingOutput{}, apperror.Validation(
 			"validation failed",
 			details...,
+		)
+	}
+
+	optimizer, err := uc.optimizerRegistry.Get(
+		input.Algorithm,
+	)
+	if err != nil {
+		return RunNestingOutput{}, apperror.Internal(
+			"failed to get nesting optimizer",
+			err,
 		)
 	}
 
@@ -189,7 +201,9 @@ func (uc *RunNestingUseCase) Execute(
 		)
 	}
 
-	result, err := uc.optimizer.Optimize(
+	startAt := time.Now()
+
+	result, err := optimizer.Optimize(
 		ctx,
 		problem,
 	)
@@ -212,6 +226,21 @@ func (uc *RunNestingUseCase) Execute(
 			"failed to optimize nesting problem",
 			err,
 		)
+	}
+
+	duration := time.Since(startAt)
+	nestingRun := nestingrun.NestingRun{
+		ProjectSurfaceID: input.ProjectSurfaceID,
+		Algorithm:        input.Algorithm,
+		KeepExisting:     input.KeepExisting,
+
+		RequestedCount: result.Metrics.RequestedCount,
+		PlacedCount:    result.Metrics.PlacedCount,
+		SurfaceArea:    result.Metrics.SurfaceArea,
+		PlacedArea:     result.Metrics.PlacedArea,
+		Utilization:    result.Metrics.Utilization,
+
+		Duration: duration,
 	}
 
 	preparedPlacements := make([]preparedPlacement, 0, len(result.Placements))
@@ -283,6 +312,14 @@ func (uc *RunNestingUseCase) Execute(
 				}
 
 				savedPlacements = append(savedPlacements, savedPlacement)
+			}
+
+			_, err := repositories.NestingRuns.Create(
+				ctx,
+				nestingRun,
+			)
+			if err != nil {
+				return fmt.Errorf("create nesting run: %w", err)
 			}
 
 			return nil

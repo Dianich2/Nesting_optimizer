@@ -13,6 +13,7 @@ type RunNestingUnplacedPatternResponse struct {
 }
 
 type RunNestingRequest struct {
+	Algorithm        string                     `json:"algorithm"`
 	Patterns         []RunNestingPatternRequest `json:"patterns"`
 	AllowedRotations []float64                  `json:"allowed_rotations"`
 	KeepExisting     bool                       `json:"keep_existing"`

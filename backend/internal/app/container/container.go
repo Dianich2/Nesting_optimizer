@@ -1,6 +1,7 @@
 package container
 
 import (
+	"fmt"
 	"server_nesting_optimizer/internal/config"
 	"server_nesting_optimizer/internal/geometry/simplefeatures"
 	"server_nesting_optimizer/internal/nesting"
@@ -70,7 +71,7 @@ type Container struct {
 func New(
 	db *sqlx.DB,
 	cfg config.Config,
-) *Container {
+) (*Container, error) {
 	unitOfWork := postgres.NewUnitOfWork(db)
 	sfCodec := simplefeatures.NewCodec()
 	sfEngine := simplefeatures.NewEngine()
@@ -298,12 +299,23 @@ func New(
 		placementRepo,
 	)
 
+	optimizers := map[nesting.Algorithm]nesting.Optimizer{
+		nesting.BaselineAlgorithm: baselineOptimizer,
+	}
+
+	optimizerRegistry, err := nesting.NewOptimizerRegistry(
+		optimizers,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create optimizer registry: %w", err)
+	}
+
 	runNestingUseCase := nestingusecase.NewRunNestingUseCase(
 		projectSurfaceRepo,
 		projectPatternRepo,
 		placementRepo,
 		sfEngine,
-		baselineOptimizer,
+		optimizerRegistry,
 		nestingUnitOfWork,
 	)
 
@@ -349,5 +361,5 @@ func New(
 		RunNestingUseCase:            runNestingUseCase,
 		JWTManager:                   jwtManager,
 		SessionRepository:            sessionRepo,
-	}
+	}, nil
 }

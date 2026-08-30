@@ -38,7 +38,14 @@ func New() (*App, error) {
 		return nil, fmt.Errorf("create db connection pool: %w", err)
 	}
 
-	deps := container.New(db, cfg)
+	deps, err := container.New(db, cfg)
+	if err != nil {
+		if err := db.Close(); err != nil {
+			log.Error("failed to close DB", "error", err)
+		}
+
+		return nil, fmt.Errorf("create dependencies: %w", err)
+	}
 
 	server := httptransport.NewRouter(deps)
 

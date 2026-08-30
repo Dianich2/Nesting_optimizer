@@ -85,6 +85,9 @@ func NewRouter(deps *container.Container) *fiber.App {
 	app.Get("/swagger/*", swaggo.HandlerDefault)
 
 	api := app.Group("/api/v1")
+
+	registerPublicRoutes(api, userHandler)
+
 	protected := api.Group(
 		"",
 		middleware.AuthRequired(
@@ -93,7 +96,6 @@ func NewRouter(deps *container.Container) *fiber.App {
 		),
 	)
 
-	registerPublicRoutes(api, userHandler)
 	registerUserRoutes(protected, userHandler)
 	registerProjectRoutes(protected, projectHandler)
 	registerSurfaceRoutes(protected, surfaceHandler)

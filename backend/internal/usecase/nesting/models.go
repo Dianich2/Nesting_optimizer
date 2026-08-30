@@ -12,6 +12,7 @@ type RunNestingPatternInput struct {
 }
 
 type RunNestingInput struct {
+	Algorithm        nesting.Algorithm
 	UserID           int64
 	ProjectID        int64
 	ProjectSurfaceID int64

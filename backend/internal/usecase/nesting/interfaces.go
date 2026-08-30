@@ -2,6 +2,7 @@ package nesting
 
 import (
 	"context"
+	nestingrun "server_nesting_optimizer/internal/domain/nesting_run"
 	domainplacement "server_nesting_optimizer/internal/domain/placement"
 	domainprojectpattern "server_nesting_optimizer/internal/domain/project_pattern"
 	domainprojectsurface "server_nesting_optimizer/internal/domain/project_surface"
@@ -50,8 +51,16 @@ type ProjectPatternRepository interface {
 	) ([]domainprojectpattern.ProjectPattern, error)
 }
 
+type NestingRunWriter interface {
+	Create(
+		ctx context.Context,
+		input nestingrun.NestingRun,
+	) (nestingrun.NestingRun, error)
+}
+
 type TransactionRepositories struct {
-	Placements PlacementWriter
+	Placements  PlacementWriter
+	NestingRuns NestingRunWriter
 }
 
 type UnitOfWork interface {

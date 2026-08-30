@@ -12,6 +12,22 @@ func (input *RunNestingInput) Validate() []apperror.FieldError {
 	errors = append(errors, validation.ValidateID(input.ProjectID, "project_id")...)
 	errors = append(errors, validation.ValidateID(input.ProjectSurfaceID, "project_surface_id")...)
 
+	if input.Algorithm == "" {
+		errors = append(errors, apperror.NewFieldError(
+			"algorithm",
+			apperror.FieldCodeRequired,
+			"algorithm must not be empty",
+		))
+	}
+
+	if input.Algorithm != "" && !input.Algorithm.IsValid() {
+		errors = append(errors, apperror.NewFieldError(
+			"algorithm",
+			apperror.FieldCodeInvalid,
+			"algorithm is invalid",
+		))
+	}
+
 	if len(input.Patterns) == 0 {
 		errors = append(errors, apperror.NewFieldError(
 			"patterns",
