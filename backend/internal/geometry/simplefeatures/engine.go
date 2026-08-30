@@ -374,3 +374,47 @@ func (e *Engine) Bounds(
 		MaxY: maxXY.Y,
 	}, nil
 }
+
+func (e *Engine) CenterAtOrigin(
+	polygon domaingeometry.Polygon,
+) (domaingeometry.Polygon, error) {
+	bounds, err := e.Bounds(polygon)
+	if err != nil {
+		return domaingeometry.Polygon{}, fmt.Errorf(
+			"center polygon at origin: %w",
+			err,
+		)
+	}
+
+	centerX := (bounds.MinX + bounds.MaxX) / 2
+	centerY := (bounds.MinY + bounds.MaxY) / 2
+
+	newPolygon := domaingeometry.Polygon{
+		Exterior: domaingeometry.Ring{
+			Points: make([]domaingeometry.Point, len(polygon.Exterior.Points)),
+		},
+	}
+
+	if len(polygon.Holes) != 0 {
+		newPolygon.Holes = make([]domaingeometry.Ring, len(polygon.Holes))
+	}
+
+	for i, exteriorPoint := range polygon.Exterior.Points {
+		newPolygon.Exterior.Points[i] = domaingeometry.Point{
+			X: exteriorPoint.X - centerX,
+			Y: exteriorPoint.Y - centerY,
+		}
+	}
+
+	for i, hole := range polygon.Holes {
+		newPolygon.Holes[i].Points = make([]domaingeometry.Point, len(polygon.Holes[i].Points))
+		for j, holePoint := range hole.Points {
+			newPolygon.Holes[i].Points[j] = domaingeometry.Point{
+				X: holePoint.X - centerX,
+				Y: holePoint.Y - centerY,
+			}
+		}
+	}
+
+	return newPolygon, nil
+}

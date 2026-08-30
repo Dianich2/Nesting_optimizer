@@ -11,6 +11,7 @@ require (
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.12.3
 	github.com/peterstace/simplefeatures v0.59.0
+	github.com/rclancey/earcut v0.0.0-20180411045245-f3ec78d87470
 	github.com/stretchr/testify v1.11.1
 	github.com/swaggo/swag v1.16.6
 	golang.org/x/crypto v0.53.0

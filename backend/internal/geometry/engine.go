@@ -42,4 +42,8 @@ type Engine interface {
 	Bounds(
 		polygon domaingeometry.Polygon,
 	) (domaingeometry.Bounds, error)
+
+	CenterAtOrigin(
+		polygon domaingeometry.Polygon,
+	) (domaingeometry.Polygon, error)
 }

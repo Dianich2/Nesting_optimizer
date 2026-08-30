@@ -3,19 +3,20 @@ package config
 import "regexp"
 
 const (
-	MaxNameLen        = 150
-	MaxDescriptionLen = 2000
-	MaxUserNamesLen   = 50
-	MaxEmailLen       = 254
-	MaxLoginLen       = 100
-	MinPasswordLen    = 8
-	MaxPasswordLen    = 72
-	MinPageSize       = 1
-	MaxPageSize       = 100
-	MinPage           = 1
-	DefaultPage       = "1"
-	DefaultPageSize   = "20"
-	Epsilon           = 1e-9
+	MaxNameLen                      = 150
+	MaxDescriptionLen               = 2000
+	MaxUserNamesLen                 = 50
+	MaxEmailLen                     = 254
+	MaxLoginLen                     = 100
+	MinPasswordLen                  = 8
+	MaxPasswordLen                  = 72
+	MinPageSize                     = 1
+	MaxPageSize                     = 100
+	MinPage                         = 1
+	DefaultPage                     = "1"
+	DefaultPageSize                 = "20"
+	Epsilon                         = 1e-9
+	TriangulationDeviationTolerance = 1e-8
 )
 
 var (
