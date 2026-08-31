@@ -3,6 +3,7 @@ package container
 import (
 	"fmt"
 	"server_nesting_optimizer/internal/config"
+	"server_nesting_optimizer/internal/geometry/nfp"
 	"server_nesting_optimizer/internal/geometry/simplefeatures"
 	"server_nesting_optimizer/internal/nesting"
 	"server_nesting_optimizer/internal/repository/postgres"
@@ -77,6 +78,8 @@ func New(
 	sfEngine := simplefeatures.NewEngine()
 	nestingUnitOfWork := postgres.NewNestingUnitOfWork(db, sfCodec)
 	baselineOptimizer := nesting.NewBaselineOptimizer(sfEngine)
+	nfpBuilder := nfp.NewBuilder(sfEngine)
+	nfpOptimizer := nesting.NewNFPGreedyOptimizer(sfEngine, nfpBuilder)
 
 	userRepo := postgres.NewUserRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
@@ -300,7 +303,8 @@ func New(
 	)
 
 	optimizers := map[nesting.Algorithm]nesting.Optimizer{
-		nesting.BaselineAlgorithm: baselineOptimizer,
+		nesting.BaselineAlgorithm:  baselineOptimizer,
+		nesting.NFPGreedyAlgorithm: nfpOptimizer,
 	}
 
 	optimizerRegistry, err := nesting.NewOptimizerRegistry(
