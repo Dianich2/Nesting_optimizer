@@ -102,6 +102,18 @@ func New(
 			err,
 		)
 	}
+	hybridOptimizer, err := nesting.NewHybridOptimizer(
+		sfEngine,
+		geneticOptimizer,
+		simulatedAnnealingOptimizer,
+		nesting.DefaultCompactionConfig(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"create hybrid optimizer: %w",
+			err,
+		)
+	}
 
 	userRepo := postgres.NewUserRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
@@ -329,6 +341,7 @@ func New(
 		nesting.NFPGreedyAlgorithm:          nfpOptimizer,
 		nesting.GeneticAlgorithm:            geneticOptimizer,
 		nesting.SimulatedAnnealingAlgorithm: simulatedAnnealingOptimizer,
+		nesting.HybridAlgorithm:             hybridOptimizer,
 	}
 
 	optimizerRegistry, err := nesting.NewOptimizerRegistry(

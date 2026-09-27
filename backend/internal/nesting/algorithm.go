@@ -7,6 +7,7 @@ const (
 	NFPGreedyAlgorithm          Algorithm = "nfp_greedy"
 	GeneticAlgorithm            Algorithm = "genetic"
 	SimulatedAnnealingAlgorithm Algorithm = "simulated_annealing"
+	HybridAlgorithm             Algorithm = "hybrid"
 )
 
 func (a Algorithm) IsValid() bool {
@@ -14,7 +15,8 @@ func (a Algorithm) IsValid() bool {
 	case BaselineAlgorithm,
 		NFPGreedyAlgorithm,
 		GeneticAlgorithm,
-		SimulatedAnnealingAlgorithm:
+		SimulatedAnnealingAlgorithm,
+		HybridAlgorithm:
 		return true
 	default:
 		return false

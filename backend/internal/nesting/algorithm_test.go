@@ -33,6 +33,11 @@ func TestAlgorithmIsValid(t *testing.T) {
 			want:      true,
 		},
 		{
+			name:      "hybrid",
+			algorithm: HybridAlgorithm,
+			want:      true,
+		},
+		{
 			name:      "unknown",
 			algorithm: Algorithm("unknown"),
 			want:      false,
