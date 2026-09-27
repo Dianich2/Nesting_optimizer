@@ -80,6 +80,17 @@ func New(
 	baselineOptimizer := nesting.NewBaselineOptimizer(sfEngine)
 	nfpBuilder := nfp.NewBuilder(sfEngine)
 	nfpOptimizer := nesting.NewNFPGreedyOptimizer(sfEngine, nfpBuilder)
+	geneticOptimizer, err := nesting.NewGeneticOptimizer(
+		sfEngine,
+		nfpBuilder,
+		nesting.DefaultGeneticConfig(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"create genetic optimizer: %w",
+			err,
+		)
+	}
 
 	userRepo := postgres.NewUserRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
@@ -305,6 +316,7 @@ func New(
 	optimizers := map[nesting.Algorithm]nesting.Optimizer{
 		nesting.BaselineAlgorithm:  baselineOptimizer,
 		nesting.NFPGreedyAlgorithm: nfpOptimizer,
+		nesting.GeneticAlgorithm:   geneticOptimizer,
 	}
 
 	optimizerRegistry, err := nesting.NewOptimizerRegistry(

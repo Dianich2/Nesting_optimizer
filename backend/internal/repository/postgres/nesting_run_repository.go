@@ -3,8 +3,10 @@ package postgres
 import (
 	"context"
 	"fmt"
-	nestingrun "server_nesting_optimizer/internal/domain/nesting_run"
 	"time"
+
+	nestingrun "server_nesting_optimizer/internal/domain/nesting_run"
+	"server_nesting_optimizer/internal/nesting"
 )
 
 type NestingRunRepository struct {
@@ -19,15 +21,29 @@ func NewNestingRunRepository(
 	}
 }
 
+type NestingRunRow struct {
+	ID               int64     `db:"id"`
+	ProjectSurfaceID int64     `db:"project_surface_id"`
+	Algorithm        string    `db:"algorithm"`
+	KeepExisting     bool      `db:"keep_existing"`
+	RequestedCount   int       `db:"requested_count"`
+	PlacedCount      int       `db:"placed_count"`
+	SurfaceArea      float64   `db:"surface_area"`
+	PlacedArea       float64   `db:"placed_area"`
+	Utilization      float64   `db:"utilization"`
+	DurationMS       int64     `db:"duration_ms"`
+	CreatedAt        time.Time `db:"created_at"`
+}
+
 func (r *NestingRunRepository) Create(
 	ctx context.Context,
 	input nestingrun.NestingRun,
 ) (nestingrun.NestingRun, error) {
-	var nestingRun nestingrun.NestingRun
+	var row NestingRunRow
 
 	if err := r.db.GetContext(
 		ctx,
-		&nestingRun,
+		&row,
 		createNestingRun,
 		input.ProjectSurfaceID,
 		input.Algorithm,
@@ -37,7 +53,7 @@ func (r *NestingRunRepository) Create(
 		input.SurfaceArea,
 		input.PlacedArea,
 		input.Utilization,
-		input.Duration/time.Millisecond,
+		input.Duration.Milliseconds(),
 	); err != nil {
 		return nestingrun.NestingRun{}, fmt.Errorf(
 			"create nesting run: %w",
@@ -45,7 +61,23 @@ func (r *NestingRunRepository) Create(
 		)
 	}
 
-	nestingRun.Duration = time.Duration(nestingRun.Duration) * time.Millisecond
+	return nestingRunRowToDomain(row), nil
+}
 
-	return nestingRun, nil
+func nestingRunRowToDomain(
+	row NestingRunRow,
+) nestingrun.NestingRun {
+	return nestingrun.NestingRun{
+		ID:               row.ID,
+		ProjectSurfaceID: row.ProjectSurfaceID,
+		Algorithm:        nesting.Algorithm(row.Algorithm),
+		KeepExisting:     row.KeepExisting,
+		RequestedCount:   row.RequestedCount,
+		PlacedCount:      row.PlacedCount,
+		SurfaceArea:      row.SurfaceArea,
+		PlacedArea:       row.PlacedArea,
+		Utilization:      row.Utilization,
+		Duration:         time.Duration(row.DurationMS) * time.Millisecond,
+		CreatedAt:        row.CreatedAt,
+	}
 }
