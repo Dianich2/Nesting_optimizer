@@ -91,6 +91,17 @@ func New(
 			err,
 		)
 	}
+	simulatedAnnealingOptimizer, err := nesting.NewSimulatedAnnealingOptimizer(
+		sfEngine,
+		nfpBuilder,
+		nesting.DefaultAnnealingConfig(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"create simulated annealing optimizer: %w",
+			err,
+		)
+	}
 
 	userRepo := postgres.NewUserRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
@@ -314,9 +325,10 @@ func New(
 	)
 
 	optimizers := map[nesting.Algorithm]nesting.Optimizer{
-		nesting.BaselineAlgorithm:  baselineOptimizer,
-		nesting.NFPGreedyAlgorithm: nfpOptimizer,
-		nesting.GeneticAlgorithm:   geneticOptimizer,
+		nesting.BaselineAlgorithm:           baselineOptimizer,
+		nesting.NFPGreedyAlgorithm:          nfpOptimizer,
+		nesting.GeneticAlgorithm:            geneticOptimizer,
+		nesting.SimulatedAnnealingAlgorithm: simulatedAnnealingOptimizer,
 	}
 
 	optimizerRegistry, err := nesting.NewOptimizerRegistry(

@@ -28,6 +28,11 @@ func TestAlgorithmIsValid(t *testing.T) {
 			want:      true,
 		},
 		{
+			name:      "simulated annealing",
+			algorithm: SimulatedAnnealingAlgorithm,
+			want:      true,
+		},
+		{
 			name:      "unknown",
 			algorithm: Algorithm("unknown"),
 			want:      false,

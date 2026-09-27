@@ -7,9 +7,18 @@ type Random interface {
 	Shuffle(n int, swap func(i int, j int))
 }
 
+type AnnealingRandom interface {
+	Random
+	Float64() float64
+}
+
 type defaultRandom struct{}
 
 func newDefaultRandom() Random {
+	return defaultRandom{}
+}
+
+func newDefaultAnnealingRandom() AnnealingRandom {
 	return defaultRandom{}
 }
 
@@ -24,4 +33,8 @@ func (defaultRandom) Shuffle(
 	swap func(i int, j int),
 ) {
 	rand.Shuffle(n, swap)
+}
+
+func (defaultRandom) Float64() float64 {
+	return rand.Float64()
 }
