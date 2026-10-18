@@ -18,3 +18,6 @@ coverage/
 # IDE
 .vscode/
 .idea/
+
+# Local profiling artifacts
+/profiles/

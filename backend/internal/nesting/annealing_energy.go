@@ -13,7 +13,7 @@ func calculateAnnealingEnergy(
 	surface domaingeometry.Polygon,
 	fitness Fitness,
 ) (float64, error) {
-	bounds, err := engine.Bounds(surface)
+	surfaceBounds, err := engine.Bounds(surface)
 	if err != nil {
 		return 0, fmt.Errorf(
 			"calculate annealing energy: %w",
@@ -21,8 +21,25 @@ func calculateAnnealingEnergy(
 		)
 	}
 
-	surfaceWidth := bounds.MaxX - bounds.MinX
-	surfaceHeight := bounds.MaxY - bounds.MinY
+	surfaceArea, err := engine.Area(surface)
+	if err != nil {
+		return 0, fmt.Errorf(
+			"calculate annealing energy: %w",
+			err,
+		)
+	}
+
+	if surfaceArea <= 0 {
+		return 0, fmt.Errorf(
+			"calculate annealing energy: invalid surface area",
+		)
+	}
+
+	surfaceWidth :=
+		surfaceBounds.MaxX - surfaceBounds.MinX
+
+	surfaceHeight :=
+		surfaceBounds.MaxY - surfaceBounds.MinY
 
 	if surfaceWidth <= 0 || surfaceHeight <= 0 {
 		return 0, fmt.Errorf(
@@ -30,16 +47,37 @@ func calculateAnnealingEnergy(
 		)
 	}
 
-	boundingArea := surfaceWidth * surfaceHeight
+	boundingArea :=
+		surfaceWidth * surfaceHeight
 
-	normalizedArea := fitness.UsedArea / boundingArea
-	normalizedHeight := fitness.UsedHeight / surfaceHeight
+	normalizedUnplaced :=
+		float64(fitness.UnplacedCount)
 
-	const unplacedPenalty = 3.0
+	normalizedMissingPlacedArea :=
+		1 - fitness.PlacedArea/surfaceArea
 
-	return float64(fitness.UnplacedCount)*unplacedPenalty +
-		normalizedArea +
-		normalizedHeight, nil
+	if normalizedMissingPlacedArea < 0 {
+		normalizedMissingPlacedArea = 0
+	}
+
+	normalizedUsedArea :=
+		fitness.UsedArea / boundingArea
+
+	normalizedHeight :=
+		fitness.UsedHeight / surfaceHeight
+
+	const (
+		unplacedPenalty   = 4.0
+		placedAreaPenalty = 2.0
+	)
+
+	energy :=
+		normalizedUnplaced*unplacedPenalty +
+			normalizedMissingPlacedArea*placedAreaPenalty +
+			normalizedUsedArea +
+			normalizedHeight
+
+	return energy, nil
 }
 
 func shouldAcceptWorse(

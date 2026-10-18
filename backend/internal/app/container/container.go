@@ -77,43 +77,6 @@ func New(
 	sfCodec := simplefeatures.NewCodec()
 	sfEngine := simplefeatures.NewEngine()
 	nestingUnitOfWork := postgres.NewNestingUnitOfWork(db, sfCodec)
-	baselineOptimizer := nesting.NewBaselineOptimizer(sfEngine)
-	nfpBuilder := nfp.NewBuilder(sfEngine)
-	nfpOptimizer := nesting.NewNFPGreedyOptimizer(sfEngine, nfpBuilder)
-	geneticOptimizer, err := nesting.NewGeneticOptimizer(
-		sfEngine,
-		nfpBuilder,
-		nesting.DefaultGeneticConfig(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"create genetic optimizer: %w",
-			err,
-		)
-	}
-	simulatedAnnealingOptimizer, err := nesting.NewSimulatedAnnealingOptimizer(
-		sfEngine,
-		nfpBuilder,
-		nesting.DefaultAnnealingConfig(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"create simulated annealing optimizer: %w",
-			err,
-		)
-	}
-	hybridOptimizer, err := nesting.NewHybridOptimizer(
-		sfEngine,
-		geneticOptimizer,
-		simulatedAnnealingOptimizer,
-		nesting.DefaultCompactionConfig(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"create hybrid optimizer: %w",
-			err,
-		)
-	}
 
 	userRepo := postgres.NewUserRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
@@ -336,19 +299,98 @@ func New(
 		placementRepo,
 	)
 
-	optimizers := map[nesting.Algorithm]nesting.Optimizer{
-		nesting.BaselineAlgorithm:           baselineOptimizer,
-		nesting.NFPGreedyAlgorithm:          nfpOptimizer,
-		nesting.GeneticAlgorithm:            geneticOptimizer,
-		nesting.SimulatedAnnealingAlgorithm: simulatedAnnealingOptimizer,
-		nesting.HybridAlgorithm:             hybridOptimizer,
+	optimizerFactories := map[nesting.Algorithm]nesting.OptimizerFactory{
+		nesting.BaselineAlgorithm: func() (nesting.Optimizer, error) {
+			engine := simplefeatures.NewEngine()
+
+			return nesting.NewBaselineOptimizer(engine), nil
+		},
+
+		nesting.NFPGreedyAlgorithm: func() (nesting.Optimizer, error) {
+			engine := simplefeatures.NewEngine()
+			builder := nfp.NewCachedBuilder(
+				nfp.NewBuilder(engine),
+			)
+
+			return nesting.NewNFPGreedyOptimizer(
+				engine,
+				builder,
+			), nil
+		},
+
+		nesting.GeneticAlgorithm: func() (nesting.Optimizer, error) {
+			engine := simplefeatures.NewEngine()
+			builder := nfp.NewCachedBuilder(
+				nfp.NewBuilder(engine),
+			)
+
+			return nesting.NewGeneticOptimizer(
+				engine,
+				builder,
+				nesting.DefaultGeneticConfig(),
+			)
+		},
+
+		nesting.SimulatedAnnealingAlgorithm: func() (nesting.Optimizer, error) {
+			engine := simplefeatures.NewEngine()
+			builder := nfp.NewCachedBuilder(
+				nfp.NewBuilder(engine),
+			)
+
+			return nesting.NewSimulatedAnnealingOptimizer(
+				engine,
+				builder,
+				nesting.DefaultAnnealingConfig(),
+			)
+		},
+
+		nesting.HybridAlgorithm: func() (nesting.Optimizer, error) {
+			engine := simplefeatures.NewEngine()
+			builder := nfp.NewCachedBuilder(
+				nfp.NewBuilder(engine),
+			)
+
+			geneticOptimizer, err := nesting.NewGeneticOptimizer(
+				engine,
+				builder,
+				nesting.DefaultGeneticConfig(),
+			)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"create hybrid genetic optimizer: %w",
+					err,
+				)
+			}
+
+			annealingOptimizer, err := nesting.NewSimulatedAnnealingOptimizer(
+				engine,
+				builder,
+				nesting.DefaultAnnealingConfig(),
+			)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"create hybrid annealing optimizer: %w",
+					err,
+				)
+			}
+
+			return nesting.NewHybridOptimizer(
+				engine,
+				geneticOptimizer,
+				annealingOptimizer,
+				nesting.DefaultCompactionConfig(),
+			)
+		},
 	}
 
-	optimizerRegistry, err := nesting.NewOptimizerRegistry(
-		optimizers,
+	optimizerRegistry, err := nesting.NewOptimizerFactoryRegistry(
+		optimizerFactories,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create optimizer registry: %w", err)
+		return nil, fmt.Errorf(
+			"create optimizer registry: %w",
+			err,
+		)
 	}
 
 	runNestingUseCase := nestingusecase.NewRunNestingUseCase(

@@ -4,7 +4,7 @@ import "math/rand"
 
 type Random interface {
 	Intn(n int) int
-	Shuffle(n int, swap func(i int, j int))
+	Shuffle(n int, swap func(i, j int))
 }
 
 type AnnealingRandom interface {
@@ -12,29 +12,39 @@ type AnnealingRandom interface {
 	Float64() float64
 }
 
-type defaultRandom struct{}
+type defaultRandom struct {
+	source *rand.Rand
+}
 
 func newDefaultRandom() Random {
-	return defaultRandom{}
+	return &defaultRandom{
+		source: rand.New(
+			rand.NewSource(rand.Int63()),
+		),
+	}
 }
 
 func newDefaultAnnealingRandom() AnnealingRandom {
-	return defaultRandom{}
+	return &defaultRandom{
+		source: rand.New(
+			rand.NewSource(rand.Int63()),
+		),
+	}
 }
 
-func (defaultRandom) Intn(
+func (r *defaultRandom) Intn(
 	n int,
 ) int {
-	return rand.Intn(n)
+	return r.source.Intn(n)
 }
 
-func (defaultRandom) Shuffle(
+func (r *defaultRandom) Shuffle(
 	n int,
-	swap func(i int, j int),
+	swap func(i, j int),
 ) {
-	rand.Shuffle(n, swap)
+	r.source.Shuffle(n, swap)
 }
 
-func (defaultRandom) Float64() float64 {
-	return rand.Float64()
+func (r *defaultRandom) Float64() float64 {
+	return r.source.Float64()
 }

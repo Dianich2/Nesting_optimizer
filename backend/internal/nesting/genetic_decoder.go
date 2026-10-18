@@ -41,8 +41,6 @@ func decodeChromosome(
 		len(chromosome.Genes),
 	)
 
-	unplacedCount := 0
-
 	for _, gene := range chromosome.Genes {
 		if err := ctx.Err(); err != nil {
 			return DecodedChromosome{}, fmt.Errorf(
@@ -76,7 +74,6 @@ func decodeChromosome(
 		}
 
 		if !found {
-			unplacedCount++
 			continue
 		}
 
@@ -98,9 +95,10 @@ func decodeChromosome(
 		)
 	}
 
-	usedArea, usedHeight, err := calculateDecodedLayoutSize(
+	fitness, err := calculatePlacedGeometriesFitness(
 		engine,
-		problem.Surface,
+		problem,
+		placements,
 		placedGeometries,
 	)
 	if err != nil {
@@ -112,63 +110,6 @@ func decodeChromosome(
 
 	return DecodedChromosome{
 		Placements: placements,
-		Fitness: Fitness{
-			UnplacedCount: unplacedCount,
-			UsedArea:      usedArea,
-			UsedHeight:    usedHeight,
-		},
+		Fitness:    fitness,
 	}, nil
-}
-
-func calculateDecodedLayoutSize(
-	engine geometry.Engine,
-	surface domaingeometry.Polygon,
-	placed []domaingeometry.Polygon,
-) (float64, float64, error) {
-	if len(placed) == 0 {
-		return 0, 0, nil
-	}
-
-	surfaceBounds, err := engine.Bounds(surface)
-	if err != nil {
-		return 0, 0, fmt.Errorf(
-			"calculate decoded layout size: %w",
-			err,
-		)
-	}
-
-	firstBounds, err := engine.Bounds(placed[0])
-	if err != nil {
-		return 0, 0, fmt.Errorf(
-			"calculate decoded layout size: %w",
-			err,
-		)
-	}
-
-	maxX := firstBounds.MaxX
-	maxY := firstBounds.MaxY
-
-	for i := 1; i < len(placed); i++ {
-		bounds, err := engine.Bounds(placed[i])
-		if err != nil {
-			return 0, 0, fmt.Errorf(
-				"calculate decoded layout size: %w",
-				err,
-			)
-		}
-
-		if bounds.MaxX > maxX {
-			maxX = bounds.MaxX
-		}
-
-		if bounds.MaxY > maxY {
-			maxY = bounds.MaxY
-		}
-	}
-
-	usedWidth := maxX - surfaceBounds.MinX
-	usedHeight := maxY - surfaceBounds.MinY
-	usedArea := usedWidth * usedHeight
-
-	return usedArea, usedHeight, nil
 }

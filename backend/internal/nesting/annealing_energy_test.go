@@ -1,9 +1,11 @@
 package nesting
 
 import (
+	"server_nesting_optimizer/internal/geometry/simplefeatures"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type fakeAnnealingRandom struct {
@@ -97,4 +99,45 @@ func TestShouldAcceptWorse(t *testing.T) {
 			)
 		})
 	}
+}
+
+func TestCalculateAnnealingEnergyPrefersMorePlacedArea(
+	t *testing.T,
+) {
+	engine := simplefeatures.NewEngine()
+	surface := rectangle(100, 100)
+
+	smallerPlacedArea := Fitness{
+		UnplacedCount: 1,
+		PlacedArea:    3000,
+		UsedArea:      5000,
+		UsedHeight:    50,
+	}
+
+	largerPlacedArea := Fitness{
+		UnplacedCount: 1,
+		PlacedArea:    4000,
+		UsedArea:      5000,
+		UsedHeight:    50,
+	}
+
+	smallerEnergy, err := calculateAnnealingEnergy(
+		engine,
+		surface,
+		smallerPlacedArea,
+	)
+	require.NoError(t, err)
+
+	largerEnergy, err := calculateAnnealingEnergy(
+		engine,
+		surface,
+		largerPlacedArea,
+	)
+	require.NoError(t, err)
+
+	require.Less(
+		t,
+		largerEnergy,
+		smallerEnergy,
+	)
 }

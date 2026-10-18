@@ -532,6 +532,13 @@ func TestCalculatePlacementsFitness(
 	require.InDelta(
 		t,
 		800,
+		fitness.PlacedArea,
+		config.Epsilon,
+	)
+
+	require.InDelta(
+		t,
+		800,
 		fitness.UsedArea,
 		config.Epsilon,
 	)

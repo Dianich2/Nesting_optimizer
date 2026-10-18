@@ -68,6 +68,28 @@ func generateNFPCandidates(
 ) ([]Candidate, error) {
 	candidates := make([]Candidate, 0)
 	seen := make(map[Candidate]struct{}, 0)
+	vertices := ringVertices(rotatedPattern.Exterior)
+
+	minX, maxX := vertices[0].X, vertices[0].X
+	minY, maxY := vertices[0].Y, vertices[0].Y
+
+	for _, point := range vertices[1:] {
+		if point.X < minX {
+			minX = point.X
+		}
+		if point.X > maxX {
+			maxX = point.X
+		}
+		if point.Y < minY {
+			minY = point.Y
+		}
+		if point.Y > maxY {
+			maxY = point.Y
+		}
+	}
+
+	centerX := minX/2 + maxX/2
+	centerY := minY/2 + maxY/2
 
 	var anchors []domaingeometry.Point
 	surfaceVertices := ringVertices(surface.Exterior)
@@ -109,8 +131,8 @@ func generateNFPCandidates(
 		for _, nfpPolygon := range nfp.Polygons {
 			for _, exteriorPoint := range nfpPolygon.Exterior.Points {
 				candidate := Candidate{
-					X:        exteriorPoint.X,
-					Y:        exteriorPoint.Y,
+					X:        exteriorPoint.X - centerX,
+					Y:        exteriorPoint.Y - centerY,
 					Rotation: rotation,
 				}
 
@@ -124,8 +146,8 @@ func generateNFPCandidates(
 			for _, hole := range nfpPolygon.Holes {
 				for _, holePoint := range hole.Points {
 					candidate := Candidate{
-						X:        holePoint.X,
-						Y:        holePoint.Y,
+						X:        holePoint.X - centerX,
+						Y:        holePoint.Y - centerY,
 						Rotation: rotation,
 					}
 

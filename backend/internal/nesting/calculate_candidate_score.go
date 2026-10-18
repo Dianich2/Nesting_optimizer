@@ -2,6 +2,7 @@ package nesting
 
 import (
 	"fmt"
+
 	domaingeometry "server_nesting_optimizer/internal/domain/geometry"
 	"server_nesting_optimizer/internal/geometry"
 )
@@ -28,11 +29,14 @@ func calculateCandidateScore(
 		)
 	}
 
-	maxX := candidateBounds.MaxX
-	maxY := candidateBounds.MaxY
+	occupiedBounds := make(
+		[]domaingeometry.Bounds,
+		0,
+		len(occupied),
+	)
 
-	for _, occupiedCandidate := range occupied {
-		bounds, err := engine.Bounds(occupiedCandidate)
+	for _, polygon := range occupied {
+		bounds, err := engine.Bounds(polygon)
 		if err != nil {
 			return CandidateScore{}, fmt.Errorf(
 				"calculate candidate score: %w",
@@ -40,22 +44,86 @@ func calculateCandidateScore(
 			)
 		}
 
-		if bounds.MaxX > maxX {
-			maxX = bounds.MaxX
+		occupiedBounds = append(occupiedBounds, bounds)
+	}
+
+	return calculateCandidateScoreWithBounds(
+		surfaceBounds,
+		occupiedBounds,
+		candidateBounds,
+	), nil
+}
+
+func calculateCandidateScoreWithBounds(
+	surfaceBounds domaingeometry.Bounds,
+	occupiedBounds []domaingeometry.Bounds,
+	candidateBounds domaingeometry.Bounds,
+) CandidateScore {
+	extents := calculateOccupiedScoreExtents(occupiedBounds)
+
+	return calculateCandidateScoreWithExtents(
+		surfaceBounds,
+		extents,
+		candidateBounds,
+	)
+}
+
+type occupiedScoreExtents struct {
+	MaxX        float64
+	MaxY        float64
+	HasOccupied bool
+}
+
+func calculateOccupiedScoreExtents(
+	occupiedBounds []domaingeometry.Bounds,
+) occupiedScoreExtents {
+	if len(occupiedBounds) == 0 {
+		return occupiedScoreExtents{}
+	}
+
+	extents := occupiedScoreExtents{
+		MaxX:        occupiedBounds[0].MaxX,
+		MaxY:        occupiedBounds[0].MaxY,
+		HasOccupied: true,
+	}
+
+	for _, bounds := range occupiedBounds[1:] {
+		if bounds.MaxX > extents.MaxX {
+			extents.MaxX = bounds.MaxX
 		}
 
-		if bounds.MaxY > maxY {
-			maxY = bounds.MaxY
+		if bounds.MaxY > extents.MaxY {
+			extents.MaxY = bounds.MaxY
+		}
+	}
+
+	return extents
+}
+
+func calculateCandidateScoreWithExtents(
+	surfaceBounds domaingeometry.Bounds,
+	extents occupiedScoreExtents,
+	candidateBounds domaingeometry.Bounds,
+) CandidateScore {
+	maxX := candidateBounds.MaxX
+	maxY := candidateBounds.MaxY
+
+	if extents.HasOccupied {
+		if extents.MaxX > maxX {
+			maxX = extents.MaxX
+		}
+
+		if extents.MaxY > maxY {
+			maxY = extents.MaxY
 		}
 	}
 
 	usedWidth := maxX - surfaceBounds.MinX
 	usedHeight := maxY - surfaceBounds.MinY
-	usedArea := usedWidth * usedHeight
 
 	return CandidateScore{
-		UsedArea:   usedArea,
+		UsedArea:   usedWidth * usedHeight,
 		UsedHeight: usedHeight,
 		UsedWidth:  usedWidth,
-	}, nil
+	}
 }

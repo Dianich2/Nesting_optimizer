@@ -70,6 +70,38 @@ func TestIsFitnessBetter(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "candidate has more placed area than best",
+			candidate: Fitness{
+				UnplacedCount: 1,
+				PlacedArea:    900,
+				UsedArea:      2000,
+				UsedHeight:    50,
+			},
+			best: Fitness{
+				UnplacedCount: 1,
+				PlacedArea:    800,
+				UsedArea:      1500,
+				UsedHeight:    40,
+			},
+			want: true,
+		},
+		{
+			name: "candidate has less placed area than best",
+			candidate: Fitness{
+				UnplacedCount: 1,
+				PlacedArea:    800,
+				UsedArea:      1000,
+				UsedHeight:    30,
+			},
+			best: Fitness{
+				UnplacedCount: 1,
+				PlacedArea:    900,
+				UsedArea:      2000,
+				UsedHeight:    50,
+			},
+			want: false,
+		},
+		{
 			name: "candidate has less used_height than best",
 			candidate: Fitness{
 				UnplacedCount: 3,

@@ -56,6 +56,44 @@ func chooseBestCandidate(
 		)
 	}
 
+	var surfaceBounds domaingeometry.Bounds
+
+	if len(candidates) > 0 {
+		var err error
+
+		surfaceBounds, err = engine.Bounds(surface)
+		if err != nil {
+			return CandidatePlacement{}, false, fmt.Errorf(
+				"choose best candidate: surface bounds: %w",
+				err,
+			)
+		}
+	}
+
+	occupiedBounds := make(
+		[]domaingeometry.Bounds,
+		0,
+		len(occupied),
+	)
+
+	if len(candidates) > 0 {
+		for _, polygon := range occupied {
+			bounds, err := engine.Bounds(polygon)
+			if err != nil {
+				return CandidatePlacement{}, false, fmt.Errorf(
+					"choose best candidate: occupied bounds: %w",
+					err,
+				)
+			}
+
+			occupiedBounds = append(occupiedBounds, bounds)
+		}
+	}
+
+	occupiedExtents := calculateOccupiedScoreExtents(
+		occupiedBounds,
+	)
+
 	for _, candidate := range candidates {
 		if err := ctx.Err(); err != nil {
 			return CandidatePlacement{}, false, fmt.Errorf(
@@ -77,11 +115,21 @@ func chooseBestCandidate(
 			)
 		}
 
-		feasible, err := isPlacementFeasible(
+		candidateBounds, err := engine.Bounds(transformedPattern)
+		if err != nil {
+			return CandidatePlacement{}, false, fmt.Errorf(
+				"choose best candidate: candidate bounds: %w",
+				err,
+			)
+		}
+
+		feasible, err := isPlacementFeasibleWithBounds(
 			engine,
 			transformedPattern,
+			candidateBounds,
 			surface,
 			occupied,
+			occupiedBounds,
 		)
 		if err != nil {
 			return CandidatePlacement{}, false, fmt.Errorf(
@@ -94,18 +142,11 @@ func chooseBestCandidate(
 			continue
 		}
 
-		score, err := calculateCandidateScore(
-			engine,
-			surface,
-			occupied,
-			transformedPattern,
+		score := calculateCandidateScoreWithExtents(
+			surfaceBounds,
+			occupiedExtents,
+			candidateBounds,
 		)
-		if err != nil {
-			return CandidatePlacement{}, false, fmt.Errorf(
-				"choose best candidate: %w",
-				err,
-			)
-		}
 
 		if !found {
 			bestCandidate = candidate

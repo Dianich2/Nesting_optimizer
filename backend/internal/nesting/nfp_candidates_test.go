@@ -401,3 +401,84 @@ func TestGenerateNFPCandidatesForRotationsNormalizesAndDeduplicates(t *testing.T
 		)
 	}
 }
+
+func TestNFPCandidatesRespectTransformReferenceAt45Degrees(t *testing.T) {
+	engine := simplefeatures.NewEngine()
+	builder := nfp.NewBuilder(engine)
+
+	surface := domaingeometry.Polygon{
+		Exterior: domaingeometry.Ring{
+			Points: []domaingeometry.Point{
+				{X: -100, Y: -100},
+				{X: 100, Y: -100},
+				{X: 100, Y: 100},
+				{X: -100, Y: 100},
+			},
+		},
+	}
+
+	stationary := domaingeometry.Polygon{
+		Exterior: domaingeometry.Ring{
+			Points: []domaingeometry.Point{
+				{X: 20, Y: 20},
+				{X: 30, Y: 20},
+				{X: 30, Y: 30},
+				{X: 20, Y: 30},
+			},
+		},
+	}
+
+	pattern := domaingeometry.Polygon{
+		Exterior: domaingeometry.Ring{
+			Points: []domaingeometry.Point{
+				{X: 0, Y: 0},
+				{X: 10, Y: 0},
+				{X: 4, Y: 3},
+			},
+		},
+	}
+
+	const rotation = 45.0
+
+	rotated, err := engine.Transform(
+		pattern,
+		0,
+		0,
+		rotation,
+	)
+	require.NoError(t, err)
+
+	// Первая вершина треугольника после поворота —
+	// единственная крайняя левая вершина.
+	leftVertex := rotated.Exterior.Points[0]
+
+	// Сопоставляем её с нижней правой вершиной
+	// stationary-фигуры.
+	//
+	// Эти два полигона должны касаться, а NFP
+	// должен содержать такую контактную позицию.
+	expected := Candidate{
+		X:        30 - leftVertex.X,
+		Y:        20 - leftVertex.Y,
+		Rotation: rotation,
+	}
+
+	candidates, err := generateNFPCandidatesForRotations(
+		engine,
+		builder,
+		pattern,
+		surface,
+		[]domaingeometry.Polygon{stationary},
+		[]float64{rotation},
+	)
+	require.NoError(t, err)
+	require.NotEmpty(t, candidates)
+
+	require.True(
+		t,
+		containsCandidate(candidates, expected),
+		"NFP must contain contact position for Transform reference: "+
+			"expected=%+v",
+		expected,
+	)
+}

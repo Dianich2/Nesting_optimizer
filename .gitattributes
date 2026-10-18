@@ -1,0 +1,24 @@
+# Default text files use LF
+* text=auto
+
+# Source code and project configuration
+*.go text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+*.sql text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.sh text eol=lf
+*.env text eol=lf
+
+# Build and environment files
+Makefile text eol=lf
+Dockerfile text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+.dockerignore text eol=lf
+
+# Binary profiling artifacts
+*.pprof binary
