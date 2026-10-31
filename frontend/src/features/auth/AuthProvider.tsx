@@ -27,6 +27,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const sessionRef = useRef<Session | null>(null)
 
     const [isInitializing, setIsInitializing] = useState(true)
+    const [restoreError, setRestoreError] = useState(false)
+    const [restoreAttempt, setRestoreAttempt] = useState(0)
+
+    const retryRestoreSession = useCallback(() => {
+        setRestoreError(false)
+        setIsInitializing(true)
+        setRestoreAttempt((current) => current + 1)
+    }, [])
     const [logoutRedirectPending, setLogoutRedirectPending] = useState(false)
 
     const updateSession = useCallback((next: Session | null) => {
@@ -57,8 +65,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
                         accessToken: tokens.access_token,
                     })
                 }
-            } catch {
-                // Нет доступной сессии или произошла ошибка сети.
+
+            } catch (error) {
+                if (active) {
+                    const sessionMissing =
+                        error instanceof ApiError &&
+                        (error.status === 400 || error.status === 401)
+
+                    if (!sessionMissing) {
+                        setRestoreError(true)
+                    }
+                }
             } finally {
                 if (active) {
                     setIsInitializing(false)
@@ -71,7 +88,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return () => {
             active = false
         }
-    }, [updateSession])
+    }, [updateSession, restoreAttempt])
 
     async function login(credentials: LoginRequest): Promise<void> {
         const tokens = await loginUser(credentials)
@@ -162,7 +179,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
             }
         }
 
-        // Только один повтор исходного запроса.
         return send(token)
     }
 
@@ -186,6 +202,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 user: session?.user ?? null,
                 isAuthenticated: session !== null,
                 isInitializing,
+                restoreError,
+                retryRestoreSession,
                 logoutRedirectPending,
                 acknowledgeLogoutRedirect,
                 login,

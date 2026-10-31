@@ -8,6 +8,8 @@ export interface AuthContextValue {
     isAuthenticated: boolean
     isInitializing: boolean
     logoutRedirectPending: boolean
+    restoreError: boolean
+    retryRestoreSession: () => void
     acknowledgeLogoutRedirect: () => void
     login: (credentials: LoginRequest) => Promise<void>
     logout: () => Promise<void>
