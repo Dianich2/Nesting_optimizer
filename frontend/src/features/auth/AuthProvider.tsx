@@ -102,85 +102,88 @@ export function AuthProvider({ children }: AuthProviderProps) {
         })
     }
 
-    async function authorizedRequest<T>(
-        path: string,
-        options: RequestInit = {},
-    ): Promise<T> {
-        const initialSession = sessionRef.current
+    const authorizedRequest = useCallback(
+        async <T,>(
+            path: string,
+            options: RequestInit = {},
+        ): Promise<T> => {
+            const initialSession = sessionRef.current
 
-        if (!initialSession) {
-            throw new ApiError(401, 'unauthorized_error')
-        }
-
-        function send(token: string): Promise<T> {
-            const headers = new Headers(options.headers)
-            headers.set('Authorization', `Bearer ${token}`)
-
-            return apiRequest<T>(path, {
-                ...options,
-                headers,
-            })
-        }
-
-        try {
-            return await send(initialSession.accessToken)
-        } catch (error) {
-            if (!(error instanceof ApiError) || error.status !== 401) {
-                throw error
+            if (!initialSession) {
+                throw new ApiError(401, 'unauthorized_error')
             }
-        }
 
-        let currentSession = sessionRef.current
+            function send(token: string): Promise<T> {
+                const headers = new Headers(options.headers)
+                headers.set('Authorization', `Bearer ${token}`)
 
-        if (
-            !currentSession ||
-            currentSession.user.id !== initialSession.user.id
-        ) {
-            throw new ApiError(401, 'unauthorized_error')
-        }
-
-        let token = currentSession.accessToken
-
-        if (token === initialSession.accessToken) {
-            try {
-                const refreshed = await refreshBrowserSession()
-
-                currentSession = sessionRef.current
-
-                if (
-                    !currentSession ||
-                    currentSession.user.id !== initialSession.user.id
-                ) {
-                    throw new ApiError(401, 'unauthorized_error')
-                }
-
-                token = refreshed.access_token
-
-                updateSession({
-                    ...currentSession,
-                    accessToken: token,
+                return apiRequest<T>(path, {
+                    ...options,
+                    headers,
                 })
+            }
+
+            try {
+                return await send(initialSession.accessToken)
             } catch (error) {
-                if (
-                    error instanceof ApiError &&
-                    (error.status === 400 || error.status === 401)
-                ) {
-                    const latestSession = sessionRef.current
+                if (!(error instanceof ApiError) || error.status !== 401) {
+                    throw error
+                }
+            }
+
+            let currentSession = sessionRef.current
+
+            if (
+                !currentSession ||
+                currentSession.user.id !== initialSession.user.id
+            ) {
+                throw new ApiError(401, 'unauthorized_error')
+            }
+
+            let token = currentSession.accessToken
+
+            if (token === initialSession.accessToken) {
+                try {
+                    const refreshed = await refreshBrowserSession()
+
+                    currentSession = sessionRef.current
 
                     if (
-                        latestSession &&
-                        latestSession.user.id === initialSession.user.id
+                        !currentSession ||
+                        currentSession.user.id !== initialSession.user.id
                     ) {
-                        updateSession(null)
+                        throw new ApiError(401, 'unauthorized_error')
                     }
+
+                    token = refreshed.access_token
+
+                    updateSession({
+                        ...currentSession,
+                        accessToken: token,
+                    })
+                } catch (error) {
+                    if (
+                        error instanceof ApiError &&
+                        (error.status === 400 || error.status === 401)
+                    ) {
+                        const latestSession = sessionRef.current
+
+                        if (
+                            latestSession &&
+                            latestSession.user.id === initialSession.user.id
+                        ) {
+                            updateSession(null)
+                        }
+                    }
+
+                    throw error
                 }
-
-                throw error
             }
-        }
 
-        return send(token)
-    }
+            return send(token)
+        },
+        [updateSession],
+    )
 
     async function logout(): Promise<void> {
         if (!sessionRef.current) {
