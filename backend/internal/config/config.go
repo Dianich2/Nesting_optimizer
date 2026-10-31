@@ -20,7 +20,8 @@ type AppConfig struct {
 }
 
 type HTTPConfig struct {
-	Port int `env:"PORT" env-default:"8082"`
+	Port          int    `env:"PORT" env-default:"8082"`
+	BrowserOrigin string `env:"BROWSER_ORIGIN" env-default:"http://localhost:5173"`
 }
 
 type LogConfig struct {

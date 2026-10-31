@@ -2,6 +2,7 @@ package http
 
 import (
 	"server_nesting_optimizer/internal/app/container"
+	"server_nesting_optimizer/internal/config"
 	httperror "server_nesting_optimizer/internal/transport/http/errors"
 	"server_nesting_optimizer/internal/transport/http/handler"
 	"server_nesting_optimizer/internal/transport/http/middleware"
@@ -10,7 +11,10 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func NewRouter(deps *container.Container) *fiber.App {
+func NewRouter(
+	deps *container.Container,
+	cfg config.Config,
+) *fiber.App {
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c fiber.Ctx, err error) error {
 			return httperror.Handle(c, err)
@@ -27,6 +31,13 @@ func NewRouter(deps *container.Container) *fiber.App {
 		deps.UpdateProfileUseCase,
 		deps.ChangePasswordUseCase,
 		deps.DeleteCurrentUserUseCase,
+	)
+
+	browserAuthHandler := handler.NewBrowserAuthHandler(
+		deps.LoginUseCase,
+		deps.RefreshUseCase,
+		deps.LogoutUseCase,
+		cfg,
 	)
 
 	projectHandler := handler.NewProjectHandler(
@@ -88,6 +99,9 @@ func NewRouter(deps *container.Container) *fiber.App {
 
 	registerPublicRoutes(api, userHandler)
 
+	api.Post("/auth/browser/login", browserAuthHandler.Login)
+	api.Post("/auth/browser/refresh", browserAuthHandler.Refresh)
+
 	protected := api.Group(
 		"",
 		middleware.AuthRequired(
@@ -97,6 +111,7 @@ func NewRouter(deps *container.Container) *fiber.App {
 	)
 
 	registerUserRoutes(protected, userHandler)
+	protected.Post("/auth/browser/logout", browserAuthHandler.Logout)
 	registerProjectRoutes(protected, projectHandler)
 	registerSurfaceRoutes(protected, surfaceHandler)
 	registerProjectSurfaceRoutes(protected, projectSurfaceHandler)

@@ -47,7 +47,7 @@ func New() (*App, error) {
 		return nil, fmt.Errorf("create dependencies: %w", err)
 	}
 
-	server := httptransport.NewRouter(deps)
+	server := httptransport.NewRouter(deps, cfg)
 
 	return &App{
 		cfg:       cfg,
