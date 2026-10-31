@@ -1,0 +1,83 @@
+
+import { ApiError } from './http'
+
+const FIELD_NAMES: Record<string, string> = {
+    login: 'Логин',
+    email: 'Электронная почта',
+    password: 'Пароль',
+    first_name: 'Имя',
+    last_name: 'Фамилия',
+    identifier: 'Логин или электронная почта',
+}
+
+function getFieldErrorMessage(field: string, code: string): string {
+    const name = FIELD_NAMES[field] ?? 'Поле'
+
+    switch (code) {
+        case 'required':
+            return `${name}: обязательное поле.`
+
+        case 'too_short':
+            return `${name}: слишком короткое значение.`
+
+        case 'too_long':
+            return `${name}: слишком длинное значение.`
+
+        case 'invalid':
+            return `${name}: некорректное значение.`
+
+        case 'already_exists':
+            return `${name}: такое значение уже используется.`
+
+        default:
+            return `${name}: проверьте введённое значение.`
+    }
+}
+
+export function getApiErrorMessage(
+    error: unknown,
+    context: 'login' | 'register' | 'general' = 'general',
+): string {
+    if (!(error instanceof ApiError)) {
+        return 'Не удалось связаться с сервером. Проверьте подключение.'
+    }
+
+    if (context === 'login' && error.status === 401) {
+        return 'Неверный логин, электронная почта или пароль.'
+    }
+
+    if (context === 'register' && error.status === 409) {
+        if (error.message === 'login already exists') {
+            return 'Пользователь с таким логином уже существует.'
+        }
+
+        if (error.message === 'email already exists') {
+            return 'Пользователь с такой электронной почтой уже существует.'
+        }
+
+        return 'Логин или электронная почта уже используются.'
+    }
+
+    if (error.status === 400 && error.details.length > 0) {
+        return error.details
+            .map((detail) => getFieldErrorMessage(detail.field, detail.code))
+            .join(' ')
+    }
+
+    switch (error.status) {
+        case 400:
+            return 'Проверьте правильность введённых данных.'
+        case 401:
+            return 'Необходимо войти в систему.'
+        case 403:
+            return 'У вас нет доступа к этому действию.'
+        case 404:
+            return 'Запрашиваемый объект не найден.'
+        case 409:
+            return 'Не удалось выполнить действие из-за конфликта данных.'
+        case 429:
+            return 'Слишком много запросов. Попробуйте позже.'
+        default:
+            return 'Не удалось выполнить запрос. Попробуйте позже.'
+    }
+}
