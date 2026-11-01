@@ -52,3 +52,11 @@ export function deleteProject(
         method: 'DELETE',
     })
 }
+
+
+export function getProject(
+    request: AuthorizedRequest,
+    projectId: number,
+): Promise<Project> {
+    return request<Project>(`/projects/${projectId}`)
+}
