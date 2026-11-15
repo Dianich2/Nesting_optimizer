@@ -1,3 +1,4 @@
+import { NestingPage } from '../pages/NestingPage'
 
 import {
     BrowserRouter,
@@ -25,6 +26,7 @@ export function App() {
                 <Route element={<ProtectedRoute />}>
                     <Route element={<AppLayout />}>
                         <Route path="/projects" element={<ProjectsPage />} />
+                        <Route path="/projects/:projectId/surfaces/:surfaceId/nesting" element={<NestingPage />} />
                         <Route path="/library" element={<LibraryPage />} />
                         <Route
                             path="/projects/:projectId/editor"

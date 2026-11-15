@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	domainproject "server_nesting_optimizer/internal/domain/project"
+	projecttransaction "server_nesting_optimizer/internal/usecase/project_transaction"
 	"server_nesting_optimizer/pkg/apperror"
 )
 
 type DeleteProjectUseCase struct {
-	repo ProjectRepository
+	Transactions projecttransaction.Executor
+	repo         ProjectRepository
 }
 
 func NewDeleteProjectUseCase(
@@ -20,6 +22,14 @@ func NewDeleteProjectUseCase(
 }
 
 func (uc *DeleteProjectUseCase) Execute(
+	ctx context.Context,
+	input DeleteProjectInput,
+) error {
+	_, err := projecttransaction.Run(ctx, uc.Transactions, input.ProjectID, input.UserID, func(ctx context.Context) (struct{}, error) { return struct{}{}, uc.execute(ctx, input) })
+	return err
+}
+
+func (uc *DeleteProjectUseCase) execute(
 	ctx context.Context,
 	input DeleteProjectInput,
 ) error {

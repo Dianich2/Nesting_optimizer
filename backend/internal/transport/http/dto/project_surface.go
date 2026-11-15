@@ -45,8 +45,9 @@ type ListProjectSurfacesResponse struct {
 }
 
 type UpdateProjectSurfaceRequest struct {
-	Name  *string  `json:"name"`
-	Scale *float64 `json:"scale"`
+	Geometry *PolygonGeometry `json:"geometry"`
+	Name     *string          `json:"name"`
+	Scale    *float64         `json:"scale"`
 }
 
 type UpdateProjectSurfaceResponse struct {

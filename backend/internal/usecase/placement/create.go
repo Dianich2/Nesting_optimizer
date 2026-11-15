@@ -7,10 +7,12 @@ import (
 	domainprojectpattern "server_nesting_optimizer/internal/domain/project_pattern"
 	domainprojectsurface "server_nesting_optimizer/internal/domain/project_surface"
 	"server_nesting_optimizer/internal/geometry"
+	projecttransaction "server_nesting_optimizer/internal/usecase/project_transaction"
 	"server_nesting_optimizer/pkg/apperror"
 )
 
 type CreatePlacementUseCase struct {
+	Transactions       projecttransaction.Executor
 	placementRepo      PlacementRepository
 	projectSurfaceRepo ProjectSurfaceRepository
 	projectPatternRepo ProjectPatternRepository
@@ -32,6 +34,15 @@ func NewCreatePlacementUseCase(
 }
 
 func (uc *CreatePlacementUseCase) Execute(
+	ctx context.Context,
+	input CreatePlacementInput,
+) (CreatePlacementOutput, error) {
+	return projecttransaction.Run(ctx, uc.Transactions, input.ProjectID, input.UserID, func(ctx context.Context) (CreatePlacementOutput, error) {
+		return uc.execute(ctx, input)
+	})
+}
+
+func (uc *CreatePlacementUseCase) execute(
 	ctx context.Context,
 	input CreatePlacementInput,
 ) (CreatePlacementOutput, error) {

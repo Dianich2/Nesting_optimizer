@@ -45,7 +45,7 @@ func (input *UpdateProjectSurfaceInput) Validate() []apperror.FieldError {
 	errors = append(errors, validation.ValidateID(input.ProjectID, "project_id")...)
 	errors = append(errors, validation.ValidateID(input.ProjectSurfaceID, "project_surface_id")...)
 
-	if input.Name == nil && input.Scale == nil {
+	if input.Name == nil && input.Scale == nil && input.Geometry == nil {
 		errors = append(errors, apperror.NewFieldError(
 			"project_surface",
 			apperror.FieldCodeRequired,
@@ -56,6 +56,10 @@ func (input *UpdateProjectSurfaceInput) Validate() []apperror.FieldError {
 	if input.Name != nil {
 		errors = append(errors, validation.ValidateFieldForEmptiness("name", *input.Name)...)
 		errors = append(errors, validation.ValidateMaxLen("name", *input.Name, config.MaxNameLen)...)
+	}
+
+	if input.Scale != nil && input.Geometry != nil {
+		errors = append(errors, apperror.NewFieldError("geometry", apperror.FieldCodeInvalid, "geometry and scale cannot be provided together"))
 	}
 
 	if input.Scale != nil {

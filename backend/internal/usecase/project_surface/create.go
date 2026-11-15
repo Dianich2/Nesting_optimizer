@@ -8,11 +8,13 @@ import (
 	domainsurface "server_nesting_optimizer/internal/domain/surface"
 	"server_nesting_optimizer/internal/geometry"
 	projectusecase "server_nesting_optimizer/internal/usecase/project"
+	projecttransaction "server_nesting_optimizer/internal/usecase/project_transaction"
 	surfaceusecase "server_nesting_optimizer/internal/usecase/surface"
 	"server_nesting_optimizer/pkg/apperror"
 )
 
 type CreateProjectSurfaceUseCase struct {
+	Transactions       projecttransaction.Executor
 	projectSurfaceRepo ProjectSurfaceRepository
 	projectRepo        projectusecase.ProjectRepository
 	surfaceRepo        surfaceusecase.SurfaceRepository
@@ -34,6 +36,15 @@ func NewCreateProjectSurfaceUseCase(
 }
 
 func (uc *CreateProjectSurfaceUseCase) Execute(
+	ctx context.Context,
+	input CreateProjectSurfaceInput,
+) (CreateProjectSurfaceOutput, error) {
+	return projecttransaction.Run(ctx, uc.Transactions, input.ProjectID, input.UserID, func(ctx context.Context) (CreateProjectSurfaceOutput, error) {
+		return uc.execute(ctx, input)
+	})
+}
+
+func (uc *CreateProjectSurfaceUseCase) execute(
 	ctx context.Context,
 	input CreateProjectSurfaceInput,
 ) (CreateProjectSurfaceOutput, error) {

@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { ConfirmDialog } from '../../components/dialogs/ConfirmDialog'
+import { fitAspect, zoomView } from '../../shared/geometry/viewport'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { FormEvent, PointerEvent } from 'react'
 
 import { getApiErrorMessage } from '../../shared/api/errorMessages'
 import type { LibraryKind } from './api'
-import type { CreateLibraryItemRequest, LibraryGeometry, LibraryPoint } from './types'
+import type { CreateLibraryItemRequest, LibraryGeometry, LibraryItem, LibraryPoint } from './types'
 import {
     fitDrawingView,
     rectangleGeometry,
@@ -11,6 +13,7 @@ import {
     validatePolygonDraft,
 } from './geometryDraft'
 import type { DrawingViewBox } from './geometryDraft'
+import { insertVertex } from './insertVertex'
 import { importSVGGeometry } from './svgImport'
 
 import './CreateLibraryItemDialog.css'
@@ -18,6 +21,7 @@ import './CreateLibraryItemDialog.css'
 interface Props {
     kind: LibraryKind
     onClose: () => void
+    initialItem?: LibraryItem
     onSave: (data: CreateLibraryItemRequest) => Promise<void>
 }
 
@@ -67,32 +71,73 @@ const EMPTY: LibraryGeometry = {
     holes: [],
 }
 
+function cloneGeometry(value: LibraryGeometry): LibraryGeometry {
+    return {
+        exterior: { points: value.exterior.points.map((point) => ({ ...point })) },
+        holes: value.holes.map((hole) => ({
+            points: hole.points.map((point) => ({ ...point })),
+        })),
+    }
+}
+
 function contourPath(points: LibraryPoint[], closed: boolean): string {
     if (points.length === 0) return ''
     return `M ${points.map((point) => `${point.x} ${point.y}`).join(' L ')}${closed ? ' Z' : ''}`
 }
 
-export function CreateLibraryItemDialog({ kind, onClose, onSave }: Props) {
+export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: Props) {
     const dialogRef = useRef<HTMLDialogElement>(null)
     const fileRef = useRef<HTMLInputElement>(null)
     const svgRef = useRef<SVGSVGElement>(null)
-    const draftRef = useRef<LibraryGeometry>({ exterior: { points: [] }, holes: [] })
+    const [initialDraft] = useState<LibraryGeometry>(() =>
+        cloneGeometry(initialItem?.geometry ?? EMPTY),
+    )
+    const draftRef = useRef<LibraryGeometry>(initialDraft)
     const dragRef = useRef<{ ring: number; index: number; pointerId: number } | null>(null)
     const allowHoles = kind === 'surfaces'
 
-    const [name, setName] = useState('')
-    const [mode, setMode] = useState<EditorMode>('rectangle')
-    const [width, setWidth] = useState(kind === 'surfaces' ? '1000' : '100')
-    const [height, setHeight] = useState(kind === 'surfaces' ? '600' : '60')
-    const [draft, setDraft] = useState<LibraryGeometry>(EMPTY)
+    const [name, setName] = useState(initialItem?.name ?? '')
+    // Editing starts in free-point mode to preserve arbitrary existing geometry.
+    const [mode, setMode] = useState<EditorMode>(initialItem ? 'points' : 'rectangle')
+    const [width, setWidth] = useState(() => {
+        const points = initialItem?.geometry.exterior.points
+        if (!points?.length) return kind === 'surfaces' ? '1000' : '100'
+        return String(Math.max(...points.map((p) => p.x)) - Math.min(...points.map((p) => p.x)))
+    })
+    const [height, setHeight] = useState(() => {
+        const points = initialItem?.geometry.exterior.points
+        if (!points?.length) return kind === 'surfaces' ? '600' : '60'
+        return String(Math.max(...points.map((p) => p.y)) - Math.min(...points.map((p) => p.y)))
+    })
+    const [draft, setDraft] = useState<LibraryGeometry>(initialDraft)
     const [activeRing, setActiveRing] = useState(-1) // -1 = exterior, 0+ = holes
     const [newX, setNewX] = useState('0')
     const [newY, setNewY] = useState('0')
     const [view, setView] = useState<DrawingViewBox>(() =>
         fitDrawingView(
-            rectangleGeometry(kind === 'surfaces' ? 1000 : 100, kind === 'surfaces' ? 600 : 60),
+            initialItem
+                ? initialDraft
+                : rectangleGeometry(kind === 'surfaces' ? 1000 : 100, kind === 'surfaces' ? 600 : 60),
         ),
     )
+    const gridId = useId()
+    const [gridStep, setGridStep] = useState(10)
+    const [showGrid, setShowGrid] = useState(true)
+    const [panMode, setPanMode] = useState(false)
+    const [confirmRectangle, setConfirmRectangle] = useState(false)
+    const [aspect, setAspect] = useState(640 / 420)
+    const panRef = useRef<{ id: number; x: number; y: number; view: DrawingViewBox; scale: number } | null>(null)
+    const visibleView = fitAspect(view, aspect)
+    const initialView = fitAspect(fitDrawingView(initialItem?.geometry ?? rectangleGeometry(kind === 'surfaces' ? 1000 : 100, kind === 'surfaces' ? 600 : 60)), aspect)
+    useEffect(() => {
+        const svg = svgRef.current
+        if (!svg) return
+        const observer = new ResizeObserver(([entry]) => {
+            if (entry.contentRect.height > 0) setAspect(entry.contentRect.width / entry.contentRect.height)
+        })
+        observer.observe(svg)
+        return () => observer.disconnect()
+    }, [])
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
@@ -167,7 +212,28 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave }: Props) {
     }
 
     function addPoint(point: LibraryPoint) {
-        updateActive((points) => [...points, point])
+        // After the first three points, choose an edge rather than always appending
+        // after the last vertex. This includes the closing edge (last -> first).
+        const nextPoints = insertVertex(activePoints, point, (candidatePoints) => {
+            const candidateGeometry: LibraryGeometry =
+                activeRing < 0
+                    ? { ...geometry, exterior: { points: candidatePoints } }
+                    : {
+                          ...geometry,
+                          holes: geometry.holes.map((hole, index) =>
+                              index === activeRing ? { points: candidatePoints } : hole,
+                          ),
+                      }
+            return validatePolygonConstruction(candidateGeometry, allowHoles) === null
+        })
+
+        if (!nextPoints) {
+            setError(
+                'Не удалось вставить вершину без пересечений. Попробуйте точку ближе к нужному ребру.',
+            )
+            return
+        }
+        updateActive(() => nextPoints)
     }
 
     function pointFromPointer(event: PointerEvent<SVGSVGElement>): LibraryPoint | null {
@@ -178,14 +244,22 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave }: Props) {
     }
 
     function handleCanvasPointerDown(event: PointerEvent<SVGSVGElement>) {
-        if (saving || event.button !== 0 || dragRef.current) return
+        if (saving || dragRef.current) return
+        if (panMode || event.button === 1) {
+            event.preventDefault()
+            const bounds = event.currentTarget.getBoundingClientRect()
+            panRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, view: visibleView, scale: visibleView.width / bounds.width }
+            event.currentTarget.setPointerCapture(event.pointerId)
+            return
+        }
+        if (event.button !== 0) return
         if (mode === 'rectangle' && activeRing === -1) return
         const point = pointFromPointer(event)
         if (point) addPoint(point)
     }
 
     function startDragging(event: PointerEvent<SVGCircleElement>, ring: number, index: number) {
-        if (saving || event.button !== 0) return
+        if (panMode || saving || event.button !== 0) return
         event.preventDefault()
         event.stopPropagation() // A vertex is not a new point.
 
@@ -206,6 +280,11 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave }: Props) {
     }
 
     function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
+        const pan = panRef.current
+        if (pan && pan.id === event.pointerId) {
+            setView({ ...pan.view, x: pan.view.x - (event.clientX - pan.x) * pan.scale, y: pan.view.y - (event.clientY - pan.y) * pan.scale })
+            return
+        }
         const drag = dragRef.current
         if (!drag || drag.pointerId !== event.pointerId) return
         const point = pointFromPointer(event)
@@ -214,7 +293,11 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave }: Props) {
     }
 
     function stopDragging(event: PointerEvent<SVGSVGElement>) {
-        if (dragRef.current?.pointerId !== event.pointerId) return
+        if (panRef.current?.id === event.pointerId) panRef.current = null
+        if (dragRef.current?.pointerId !== event.pointerId) {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+            return
+        }
         dragRef.current = null
         if (event.currentTarget.hasPointerCapture(event.pointerId)) {
             event.currentTarget.releasePointerCapture(event.pointerId)
@@ -258,6 +341,10 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave }: Props) {
             UseRectangleAsPoints()
             return
         }
+        setConfirmRectangle(true)
+    }
+
+    function applyRectangle() {
         setMode('rectangle')
         setActiveRing(-1)
         setView(
@@ -358,7 +445,7 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave }: Props) {
                 if (saving) event.preventDefault()
             }}
             onKeyDown={(event) => {
-                if (event.key === 'Escape' && !saving) {
+                if (event.key === 'Escape' && !saving && !confirmRectangle) {
                     event.preventDefault()
                     dialogRef.current?.close()
                 }
@@ -368,7 +455,9 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave }: Props) {
                 <header className="geometry-dialog-heading">
                     <div>
                         <h2 id="geometry-dialog-title">
-                            {allowHoles ? 'Новая поверхность' : 'Новое лекало'}
+                            {initialItem
+                                ? allowHoles ? 'Редактирование поверхности' : 'Редактирование лекала'
+                                : allowHoles ? 'Новая поверхность' : 'Новое лекало'}
                         </h2>
                         <p>
                             Контур можно построить точками, задать размерами или импортировать из
@@ -514,8 +603,9 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave }: Props) {
                             </p>
                         ) : (
                             <p className="geometry-help">
-                                Добавляйте точки кликами или по X/Y. Тяните любую вершину мышью.
-                                Пересечения и выход отверстий за границу блокируются сразу.
+                                Добавляйте точки кликами или по X/Y, перетаскивайте вершины.
+                                После замыкания новая точка вставляется в ближайшее допустимое ребро.
+                                Номера точек показывают порядок обхода контура.
                             </p>
                         )}
                         {(mode === 'points' || activeRing >= 0) && (
@@ -626,10 +716,20 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave }: Props) {
                         Уместить в поле
                     </button>
                 </div>
+                <div className="geometry-mode" role="group" aria-label="Вид и сетка">
+                    <button type="button" onClick={() => setView(zoomView(visibleView, 0.8))}>+</button>
+                    <span>Масштаб {Math.round(initialView.width / visibleView.width * 100)}%</span>
+                    <button type="button" onClick={() => setView(zoomView(visibleView, 1.25))}>−</button>
+                    <button type="button" onClick={() => setView(initialView)}>100%</button>
+                    <button type="button" aria-pressed={panMode} onClick={() => setPanMode(!panMode)}>Перемещение поля</button>
+                    <label><input type="checkbox" checked={showGrid} onChange={(event) => setShowGrid(event.target.checked)} /> Сетка</label>
+                    <label>Шаг сетки <input type="number" min="0.01" step="any" value={gridStep}
+                        onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value > 0) setGridStep(value) }} /></label>
+                </div>
                 <svg
                     ref={svgRef}
                     className={`geometry-preview ${mode === 'points' || activeRing >= 0 ? 'geometry-preview-clickable' : ''}`}
-                    viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
+                    viewBox={`${visibleView.x} ${visibleView.y} ${visibleView.width} ${visibleView.height}`}
                     preserveAspectRatio="xMidYMid meet"
                     role="img"
                     aria-label="Предпросмотр многоугольника. В режиме точек нажмите для добавления вершины."
@@ -639,36 +739,16 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave }: Props) {
                     onPointerCancel={stopDragging}
                     onLostPointerCapture={() => {
                         dragRef.current = null
+                        panRef.current = null
                     }}
                 >
-                    <rect
-                        x={view.x}
-                        y={view.y}
-                        width={view.width}
-                        height={view.height}
-                        fill="transparent"
-                    />
-                    {Array.from({ length: 11 }, (_, i) => (
-                        <g
-                            key={i}
-                            stroke="currentColor"
-                            strokeOpacity="0.10"
-                            strokeWidth={view.width / 1000}
-                        >
-                            <line
-                                x1={view.x + (view.width * i) / 10}
-                                y1={view.y}
-                                x2={view.x + (view.width * i) / 10}
-                                y2={view.y + view.height}
-                            />
-                            <line
-                                x1={view.x}
-                                y1={view.y + (view.height * i) / 10}
-                                x2={view.x + view.width}
-                                y2={view.y + (view.height * i) / 10}
-                            />
-                        </g>
-                    ))}
+                    <defs>
+                        <pattern id={gridId} width={gridStep} height={gridStep} patternUnits="userSpaceOnUse">
+                            <path d={`M ${gridStep} 0 H 0 V ${gridStep}`} fill="none" stroke="currentColor" strokeOpacity="0.15" strokeWidth={visibleView.width / 1200} />
+                        </pattern>
+                    </defs>
+                    <rect x={visibleView.x} y={visibleView.y} width={visibleView.width} height={visibleView.height}
+                        fill={showGrid ? `url(#${gridId})` : 'transparent'} />
                     {areaPath && (
                         <path d={areaPath} fill="#e9434b" fillOpacity="0.18" fillRule="evenodd" />
                     )}
@@ -707,6 +787,17 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave }: Props) {
                                         stroke="white"
                                         strokeWidth={view.width / 650}
                                     />
+                                    {index - 1 === activeRing && (
+                                        <text
+                                            x={p.x + view.width / 65}
+                                            y={p.y - view.width / 80}
+                                            fontSize={view.width / 75}
+                                            fill="currentColor"
+                                            pointerEvents="none"
+                                        >
+                                            {i + 1}
+                                        </text>
+                                    )}
                                 </g>
                             ))}
                         </g>
@@ -736,10 +827,14 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave }: Props) {
                         className="geometry-primary"
                         disabled={saving || !name.trim() || !!validationError}
                     >
-                        {saving ? 'Сохраняем…' : 'Создать'}
+                        {saving ? 'Сохраняем…' : initialItem ? 'Сохранить изменения' : 'Создать'}
                     </button>
                 </footer>
             </form>
+            {confirmRectangle && <ConfirmDialog title="Заменить внешний контур?" confirmLabel="Заменить"
+                onClose={() => setConfirmRectangle(false)} onConfirm={async () => applyRectangle()}>
+                <p>Текущий внешний контур будет заменён прямоугольником с указанными размерами.</p>
+            </ConfirmDialog>}
         </dialog>
     )
 }

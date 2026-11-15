@@ -159,3 +159,31 @@
     flex-wrap: wrap;
     gap: 10px;
 }
+
+.library-item-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.library-item-actions .library-button {
+    padding: 7px 10px;
+    font-size: 12px;
+}
+
+.library-button-danger {
+    color: var(--color-accent);
+}
+
+.library-action-error {
+    margin: 0 0 18px;
+    color: var(--color-accent);
+}
+
+@media (max-width: 650px) {
+    .library-item { align-items: stretch; flex-direction: column; }
+    .library-item-actions { justify-content: flex-start; }
+}

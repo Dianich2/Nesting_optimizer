@@ -9,10 +9,12 @@ import (
 	"server_nesting_optimizer/internal/geometry"
 	patternusecase "server_nesting_optimizer/internal/usecase/pattern"
 	projectusecase "server_nesting_optimizer/internal/usecase/project"
+	projecttransaction "server_nesting_optimizer/internal/usecase/project_transaction"
 	"server_nesting_optimizer/pkg/apperror"
 )
 
 type CreateProjectPatternUseCase struct {
+	Transactions       projecttransaction.Executor
 	projectPatternRepo ProjectPatternRepository
 	projectRepo        projectusecase.ProjectRepository
 	patternRepo        patternusecase.PatternRepository
@@ -34,6 +36,15 @@ func NewCreateProjectPatternUseCase(
 }
 
 func (uc *CreateProjectPatternUseCase) Execute(
+	ctx context.Context,
+	input CreateProjectPatternInput,
+) (CreateProjectPatternOutput, error) {
+	return projecttransaction.Run(ctx, uc.Transactions, input.ProjectID, input.UserID, func(ctx context.Context) (CreateProjectPatternOutput, error) {
+		return uc.execute(ctx, input)
+	})
+}
+
+func (uc *CreateProjectPatternUseCase) execute(
 	ctx context.Context,
 	input CreateProjectPatternInput,
 ) (CreateProjectPatternOutput, error) {

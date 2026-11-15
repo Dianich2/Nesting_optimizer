@@ -6,10 +6,12 @@ import (
 	domaingeometry "server_nesting_optimizer/internal/domain/geometry"
 	domainprojectsurface "server_nesting_optimizer/internal/domain/project_surface"
 	"server_nesting_optimizer/internal/geometry"
+	projecttransaction "server_nesting_optimizer/internal/usecase/project_transaction"
 	"server_nesting_optimizer/pkg/apperror"
 )
 
 type UpdateProjectSurfaceUseCase struct {
+	Transactions   projecttransaction.Executor
 	repo           ProjectSurfaceRepository
 	geometryEngine geometry.Engine
 }
@@ -25,6 +27,15 @@ func NewUpdateProjectSurfaceUseCase(
 }
 
 func (uc *UpdateProjectSurfaceUseCase) Execute(
+	ctx context.Context,
+	input UpdateProjectSurfaceInput,
+) (UpdateProjectSurfaceOutput, error) {
+	return projecttransaction.Run(ctx, uc.Transactions, input.ProjectID, input.UserID, func(ctx context.Context) (UpdateProjectSurfaceOutput, error) {
+		return uc.execute(ctx, input)
+	})
+}
+
+func (uc *UpdateProjectSurfaceUseCase) execute(
 	ctx context.Context,
 	input UpdateProjectSurfaceInput,
 ) (UpdateProjectSurfaceOutput, error) {
@@ -58,7 +69,7 @@ func (uc *UpdateProjectSurfaceUseCase) Execute(
 
 	var scaledGeometry *domaingeometry.Polygon
 
-	if input.Scale != nil {
+	if input.Scale != nil || input.Geometry != nil {
 		hasPlacements, err := uc.repo.HasActivePlacements(
 			ctx,
 			input.ProjectSurfaceID,
@@ -78,7 +89,13 @@ func (uc *UpdateProjectSurfaceUseCase) Execute(
 			)
 		}
 
-		scaled, err := uc.geometryEngine.Scale(projectSurface.Geometry, *input.Scale)
+		var scaled domaingeometry.Polygon
+		if input.Geometry != nil {
+			scaled, err = uc.geometryEngine.Normalize(*input.Geometry)
+		} else {
+			scaled, err = uc.geometryEngine.Scale(projectSurface.Geometry, *input.Scale)
+		}
+
 		if err != nil {
 			if errors.Is(err, geometry.ErrInvalidScale) {
 				return UpdateProjectSurfaceOutput{}, apperror.Validation(

@@ -31,6 +31,10 @@ func (nuow *NestingUnitOfWork) WithinTransaction(
 	ctx context.Context,
 	fn func(repositories nestingusecase.TransactionRepositories) error,
 ) error {
+	if tx, ok := ctx.Value(projectTransactionKey{}).(*sqlx.Tx); ok {
+		return fn(nestingusecase.TransactionRepositories{Placements: NewPlacementRepository(tx, nuow.geometryCodec), NestingRuns: NewNestingRunRepository(tx)})
+	}
+
 	tx, err := nuow.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)

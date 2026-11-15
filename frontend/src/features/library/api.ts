@@ -30,3 +30,25 @@ export function createLibraryItem(
         body: JSON.stringify(data),
     })
 }
+
+/** Both resources use the same PATCH payload: name and/or geometry. */
+export function updateLibraryItem(
+    request: AuthorizedRequest,
+    kind: LibraryKind,
+    id: number,
+    data: CreateLibraryItemRequest,
+): Promise<LibraryItem> {
+    return request<LibraryItem>(`/${kind}/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+    })
+}
+
+/** The Go backend soft-deletes library resources and returns HTTP 204. */
+export function deleteLibraryItem(
+    request: AuthorizedRequest,
+    kind: LibraryKind,
+    id: number,
+): Promise<void> {
+    return request<void>(`/${kind}/${id}`, { method: 'DELETE' })
+}

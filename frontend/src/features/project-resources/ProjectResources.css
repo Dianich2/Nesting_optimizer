@@ -17,6 +17,7 @@
 
 .project-resource-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
@@ -67,6 +68,7 @@
 
 .project-resource-item {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 14px;

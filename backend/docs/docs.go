@@ -3359,6 +3359,7 @@ const docTemplate = `{
         "dto.UpdateProjectPatternRequest": {
             "type": "object",
             "properties": {
+                "geometry": {"$ref": "#/definitions/dto.PolygonGeometry"},
                 "name": {
                     "type": "string"
                 },
@@ -3430,6 +3431,7 @@ const docTemplate = `{
         "dto.UpdateProjectSurfaceRequest": {
             "type": "object",
             "properties": {
+                "geometry": {"$ref": "#/definitions/dto.PolygonGeometry"},
                 "name": {
                     "type": "string"
                 },

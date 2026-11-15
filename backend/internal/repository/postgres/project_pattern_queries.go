@@ -126,13 +126,13 @@ const updateProjectPatternQuery = `
 		AND pp.deleted_at IS NULL
 		AND p.deleted_at IS NULL
 	RETURNING
-		id,
-		project_id,
-		source_pattern_id,
-		name,
-		ST_AsBinary(geometry) AS geometry,
-		created_at,
-		updated_at
+		pp.id,
+		pp.project_id,
+		pp.source_pattern_id,
+		pp.name,
+		ST_AsBinary(pp.geometry) AS geometry,
+		pp.created_at,
+		pp.updated_at
 `
 
 const softDeleteProjectPatternQuery = `

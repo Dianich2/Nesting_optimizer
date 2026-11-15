@@ -70,6 +70,7 @@ type ProjectSurfaceListResult struct {
 }
 
 type UpdateProjectSurfaceInput struct {
+	Geometry         *geometry.Polygon
 	UserID           int64
 	ProjectSurfaceID int64
 	ProjectID        int64

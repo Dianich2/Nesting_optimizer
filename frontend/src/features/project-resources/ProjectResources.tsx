@@ -1,3 +1,8 @@
+import { Link } from 'react-router'
+import { ConfirmDialog } from '../../components/dialogs/ConfirmDialog'
+import { CreateLibraryItemDialog } from '../library/CreateLibraryItemDialog'
+import { LibraryPicker } from './LibraryPicker'
+import { updateProjectResource, deleteProjectResource } from './api'
 import { useEffect, useState } from 'react'
 
 import { useAuth } from '../auth/useAuth'
@@ -23,6 +28,9 @@ interface ResourceListProps {
 function ResourceList({ projectId, kind, title, emptyMessage }: ResourceListProps) {
     const { authorizedRequest } = useAuth()
 
+    const [picker, setPicker] = useState(false)
+    const [editing, setEditing] = useState<ProjectResource | null>(null)
+    const [deleting, setDeleting] = useState<ProjectResource | null>(null)
     const [page, setPage] = useState(1)
     const [reloadKey, setReloadKey] = useState(0)
 
@@ -46,7 +54,8 @@ function ResourceList({ projectId, kind, title, emptyMessage }: ResourceListProp
                         : await listProjectPatterns(authorizedRequest, projectId, page, PAGE_SIZE)
 
                 if (active) {
-                    setData(result)
+                    if (page > 1 && result.items.length === 0) setPage(page - 1)
+                    else setData(result)
                 }
             } catch (caughtError) {
                 if (active) {
@@ -70,6 +79,7 @@ function ResourceList({ projectId, kind, title, emptyMessage }: ResourceListProp
         <section className="project-resource-panel">
             <header className="project-resource-header">
                 <h3>{title}</h3>
+                <button type="button" className="projects-button" onClick={() => setPicker(true)}>Добавить из библиотеки</button>
 
                 {data && <span className="project-resource-count">{data.total}</span>}
             </header>
@@ -99,7 +109,10 @@ function ResourceList({ projectId, kind, title, emptyMessage }: ResourceListProp
                             <li key={item.id} className="project-resource-item">
                                 <span className="project-resource-name">{item.name}</span>
 
-                                <span className="project-resource-id">#{item.id}</span>
+                                <span className="project-resource-id">Экземпляр №{item.id}</span>
+                                {kind === 'surfaces' && <Link to={`/projects/${projectId}/surfaces/${item.id}/nesting`}>Открыть раскрой</Link>}
+                                <button type="button" className="projects-button" onClick={() => setEditing(item)}>Редактировать</button>
+                                <button type="button" className="projects-button" onClick={() => setDeleting(item)}>Удалить</button>
                             </li>
                         ))}
                     </ul>
@@ -134,6 +147,23 @@ function ResourceList({ projectId, kind, title, emptyMessage }: ResourceListProp
                     )}
                 </>
             ) : null}
+            {picker && <LibraryPicker projectId={projectId} kind={kind} onClose={() => setPicker(false)}
+                onAdded={() => setReloadKey((value) => value + 1)} />}
+            {editing && <CreateLibraryItemDialog kind={kind} initialItem={editing}
+                onClose={() => setEditing(null)} onSave={async (data) => {
+                    const geometryChanged = JSON.stringify(data.geometry) !== JSON.stringify(editing.geometry)
+                    await updateProjectResource(authorizedRequest, projectId, kind, editing.id,
+                        { name: data.name, ...(geometryChanged ? { geometry: data.geometry } : {}) })
+                    setReloadKey((value) => value + 1)
+                }} />}
+            {deleting && <ConfirmDialog title="Удалить экземпляр из проекта?" onClose={() => setDeleting(null)}
+                onConfirm={async () => {
+                    await deleteProjectResource(authorizedRequest, projectId, kind, deleting.id)
+                    setReloadKey((value) => value + 1)
+                }}>
+                <p>Удалить «{deleting.name}», экземпляр №{deleting.id}?</p>
+                <p>Сначала удалите все размещения, использующие этот экземпляр. Библиотечный оригинал и остальные экземпляры сохранятся.</p>
+            </ConfirmDialog>}
         </section>
     )
 }

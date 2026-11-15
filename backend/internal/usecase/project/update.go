@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	domainproject "server_nesting_optimizer/internal/domain/project"
+	projecttransaction "server_nesting_optimizer/internal/usecase/project_transaction"
 	"server_nesting_optimizer/pkg/apperror"
 )
 
 type UpdateProjectUseCase struct {
-	repo ProjectRepository
+	Transactions projecttransaction.Executor
+	repo         ProjectRepository
 }
 
 func NewUpdateProjectUseCase(
@@ -20,6 +22,15 @@ func NewUpdateProjectUseCase(
 }
 
 func (uc *UpdateProjectUseCase) Execute(
+	ctx context.Context,
+	input UpdateProjectInput,
+) (UpdateProjectOutput, error) {
+	return projecttransaction.Run(ctx, uc.Transactions, input.ProjectID, input.UserID, func(ctx context.Context) (UpdateProjectOutput, error) {
+		return uc.execute(ctx, input)
+	})
+}
+
+func (uc *UpdateProjectUseCase) execute(
 	ctx context.Context,
 	input UpdateProjectInput,
 ) (UpdateProjectOutput, error) {

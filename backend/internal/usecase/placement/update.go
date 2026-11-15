@@ -6,10 +6,12 @@ import (
 	domainplacement "server_nesting_optimizer/internal/domain/placement"
 	domainprojectsurface "server_nesting_optimizer/internal/domain/project_surface"
 	"server_nesting_optimizer/internal/geometry"
+	projecttransaction "server_nesting_optimizer/internal/usecase/project_transaction"
 	"server_nesting_optimizer/pkg/apperror"
 )
 
 type UpdatePlacementUseCase struct {
+	Transactions       projecttransaction.Executor
 	placementRepo      PlacementRepository
 	projectSurfaceRepo ProjectSurfaceRepository
 	geometryEngine     geometry.Engine
@@ -28,6 +30,15 @@ func NewUpdatePlacementUseCase(
 }
 
 func (uc *UpdatePlacementUseCase) Execute(
+	ctx context.Context,
+	input UpdatePlacementInput,
+) (UpdatePlacementOutput, error) {
+	return projecttransaction.Run(ctx, uc.Transactions, input.ProjectID, input.UserID, func(ctx context.Context) (UpdatePlacementOutput, error) {
+		return uc.execute(ctx, input)
+	})
+}
+
+func (uc *UpdatePlacementUseCase) execute(
 	ctx context.Context,
 	input UpdatePlacementInput,
 ) (UpdatePlacementOutput, error) {

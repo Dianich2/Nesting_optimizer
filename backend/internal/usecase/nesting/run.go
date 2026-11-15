@@ -11,11 +11,13 @@ import (
 	domainprojectsurface "server_nesting_optimizer/internal/domain/project_surface"
 	"server_nesting_optimizer/internal/geometry"
 	"server_nesting_optimizer/internal/nesting"
+	projecttransaction "server_nesting_optimizer/internal/usecase/project_transaction"
 	"server_nesting_optimizer/pkg/apperror"
 	"time"
 )
 
 type RunNestingUseCase struct {
+	Transactions             projecttransaction.Executor
 	projectSurfaceRepository ProjectSurfaceRepository
 	projectPatternRepository ProjectPatternRepository
 	placementRepository      PlacementRepository
@@ -48,6 +50,15 @@ type preparedPlacement struct {
 }
 
 func (uc *RunNestingUseCase) Execute(
+	ctx context.Context,
+	input RunNestingInput,
+) (RunNestingOutput, error) {
+	return projecttransaction.Run(ctx, uc.Transactions, input.ProjectID, input.UserID, func(ctx context.Context) (RunNestingOutput, error) {
+		return uc.execute(ctx, input)
+	})
+}
+
+func (uc *RunNestingUseCase) execute(
 	ctx context.Context,
 	input RunNestingInput,
 ) (RunNestingOutput, error) {

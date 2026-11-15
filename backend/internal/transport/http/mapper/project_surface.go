@@ -110,13 +110,18 @@ func ToUpdateProjectSurfaceInput(
 	projectID int64,
 	projectSurfaceID int64,
 ) projectsurfaceusecase.UpdateProjectSurfaceInput {
-	return projectsurfaceusecase.UpdateProjectSurfaceInput{
+	result := projectsurfaceusecase.UpdateProjectSurfaceInput{
 		UserID:           userID,
 		ProjectID:        projectID,
 		ProjectSurfaceID: projectSurfaceID,
 		Name:             req.Name,
 		Scale:            req.Scale,
 	}
+	if req.Geometry != nil {
+		geometry := toDomainPolygon(*req.Geometry)
+		result.Geometry = &geometry
+	}
+	return result
 }
 
 func ToUpdateProjectSurfaceResponse(

@@ -45,8 +45,9 @@ type ListProjectPatternsResponse struct {
 }
 
 type UpdateProjectPatternRequest struct {
-	Name  *string  `json:"name"`
-	Scale *float64 `json:"scale"`
+	Geometry *PolygonGeometry `json:"geometry"`
+	Name     *string          `json:"name"`
+	Scale    *float64         `json:"scale"`
 }
 
 type UpdateProjectPatternResponse struct {

@@ -110,13 +110,18 @@ func ToUpdateProjectPatternInput(
 	projectID int64,
 	projectPatternID int64,
 ) projectpatternusecase.UpdateProjectPatternInput {
-	return projectpatternusecase.UpdateProjectPatternInput{
+	result := projectpatternusecase.UpdateProjectPatternInput{
 		UserID:           userID,
 		ProjectID:        projectID,
 		ProjectPatternID: projectPatternID,
 		Name:             req.Name,
 		Scale:            req.Scale,
 	}
+	if req.Geometry != nil {
+		geometry := toDomainPolygon(*req.Geometry)
+		result.Geometry = &geometry
+	}
+	return result
 }
 
 func ToUpdateProjectPatternResponse(

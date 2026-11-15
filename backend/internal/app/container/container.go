@@ -78,27 +78,29 @@ func New(
 	sfEngine := simplefeatures.NewEngine()
 	nestingUnitOfWork := postgres.NewNestingUnitOfWork(db, sfCodec)
 
-	userRepo := postgres.NewUserRepository(db)
-	sessionRepo := postgres.NewSessionRepository(db)
-	projectRepo := postgres.NewProjectRepository(db)
+	scopedDB := &postgres.ScopedDB{DB: db}
+
+	userRepo := postgres.NewUserRepository(scopedDB)
+	sessionRepo := postgres.NewSessionRepository(scopedDB)
+	projectRepo := postgres.NewProjectRepository(scopedDB)
 	surfaceRepo := postgres.NewSurfaceRepository(
-		db,
+		scopedDB,
 		sfCodec,
 	)
 	projectSurfaceRepo := postgres.NewProjectSurfaceRepository(
-		db,
+		scopedDB,
 		sfCodec,
 	)
 	patternRepo := postgres.NewPatternRepository(
-		db,
+		scopedDB,
 		sfCodec,
 	)
 	projectPatternRepo := postgres.NewProjectPatternRepository(
-		db,
+		scopedDB,
 		sfCodec,
 	)
 	placementRepo := postgres.NewPlacementRepository(
-		db,
+		scopedDB,
 		sfCodec,
 	)
 
@@ -401,6 +403,19 @@ func New(
 		optimizerRegistry,
 		nestingUnitOfWork,
 	)
+
+	createProjectSurfaceUseCase.Transactions = scopedDB
+	updateProjectSurfaceUseCase.Transactions = scopedDB
+	deleteProjectSurfaceUseCase.Transactions = scopedDB
+	createProjectPatternUseCase.Transactions = scopedDB
+	updateProjectPatternUseCase.Transactions = scopedDB
+	deleteProjectPatternUseCase.Transactions = scopedDB
+	createPlacementUseCase.Transactions = scopedDB
+	updatePlacementUseCase.Transactions = scopedDB
+	deletePlacementUseCase.Transactions = scopedDB
+	updateProjectUseCase.Transactions = scopedDB
+	deleteProjectUseCase.Transactions = scopedDB
+	runNestingUseCase.Transactions = scopedDB
 
 	return &Container{
 		CreateUserUseCase:            createUserUseCase,

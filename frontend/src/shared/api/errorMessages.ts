@@ -2,6 +2,9 @@
 import { ApiError } from './http'
 
 const FIELD_NAMES: Record<string, string> = {
+    name: 'Название',
+    geometry: 'Геометрия',
+    scale: 'Масштаб геометрии',
     login: 'Логин',
     email: 'Электронная почта',
     password: 'Пароль',
@@ -56,6 +59,10 @@ export function getApiErrorMessage(
         }
 
         return 'Логин или электронная почта уже используются.'
+    }
+
+    if (error.status === 409 && /project (surface|pattern) is used by active placements/.test(error.message)) {
+        return 'Сначала удалите размещения, использующие этот экземпляр. Сейчас можно изменить только название.'
     }
 
     if (error.status === 400 && error.details.length > 0) {

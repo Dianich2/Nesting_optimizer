@@ -70,6 +70,7 @@ type ProjectPatternListResult struct {
 }
 
 type UpdateProjectPatternInput struct {
+	Geometry         *geometry.Polygon
 	UserID           int64
 	ProjectPatternID int64
 	ProjectID        int64

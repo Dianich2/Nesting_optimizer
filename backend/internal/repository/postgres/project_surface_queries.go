@@ -126,13 +126,13 @@ const updateProjectSurfaceQuery = `
 		AND ps.deleted_at IS NULL
 		AND p.deleted_at IS NULL
 	RETURNING
-		id,
-		project_id,
-		source_surface_id,
-		name,
-		ST_AsBinary(geometry) AS geometry,
-		created_at,
-		updated_at
+		ps.id,
+		ps.project_id,
+		ps.source_surface_id,
+		ps.name,
+		ST_AsBinary(ps.geometry) AS geometry,
+		ps.created_at,
+		ps.updated_at
 `
 
 const softDeleteProjectSurfaceQuery = `
