@@ -135,6 +135,9 @@ func (uc *CreateProjectSurfaceUseCase) execute(
 		input.UserID,
 	)
 	if err != nil {
+		if errors.Is(err, domainprojectsurface.ErrNotFound) {
+			return CreateProjectSurfaceOutput{}, apperror.NotFound("surface not found")
+		}
 		return CreateProjectSurfaceOutput{}, apperror.Internal(
 			"failed to create project surface",
 			err,

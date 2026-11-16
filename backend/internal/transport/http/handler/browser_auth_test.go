@@ -52,7 +52,7 @@ func TestBrowserAuthRejectsForeignOrigin(t *testing.T) {
 					} `json:"error"`
 				}
 				decodeErr := json.NewDecoder(resp.Body).Decode(&body)
-				resp.Body.Close()
+				_ = resp.Body.Close()
 
 				if decodeErr != nil {
 					t.Fatal(decodeErr)
@@ -79,7 +79,7 @@ func TestBrowserRefreshWithoutCookie(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status=%d, want 400", resp.StatusCode)
@@ -124,7 +124,7 @@ func TestBrowserRefreshCookieAttributes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 
 			cookies := resp.Cookies()
 			if len(cookies) != 1 {

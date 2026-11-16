@@ -41,7 +41,20 @@ func (uc *DeletePlacementUseCase) execute(
 		)
 	}
 
-	err := uc.repo.SoftDelete(
+	if input.ExpectedVersion != "" {
+		current, err := uc.repo.GetByIDWithPatternGeometry(ctx, input.UserID, input.ProjectID, input.PlacementID)
+		if errors.Is(err, domainplacement.ErrNotFound) {
+			return apperror.NotFound("placement not found")
+		}
+		if err != nil {
+			return apperror.Internal("read placement version", err)
+		}
+		if err = checkVersion(input.ExpectedVersion, current.Placement.UpdatedAt); err != nil {
+			return err
+		}
+	}
+
+	err := uc.repo.Delete(
 		ctx,
 		input.PlacementID,
 		input.ProjectID,
@@ -55,7 +68,7 @@ func (uc *DeletePlacementUseCase) execute(
 		}
 
 		return apperror.Internal(
-			"failed to soft delete placement",
+			"failed to delete placement",
 			err,
 		)
 	}

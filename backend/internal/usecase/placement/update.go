@@ -73,6 +73,10 @@ func (uc *UpdatePlacementUseCase) execute(
 		)
 	}
 
+	if err := checkVersion(input.ExpectedVersion, placement.Placement.UpdatedAt); err != nil {
+		return UpdatePlacementOutput{}, err
+	}
+
 	if input.X != nil {
 		placement.Placement.X = *input.X
 	}
@@ -129,9 +133,7 @@ func (uc *UpdatePlacementUseCase) execute(
 	}
 
 	if !isCoveredBy {
-		return UpdatePlacementOutput{}, apperror.Conflict(
-			"placement is outside project surface",
-		)
+		return UpdatePlacementOutput{}, coverageConflict(uc.geometryEngine, transformedGeometry, projectSurface.Geometry)
 	}
 
 	existingPlacements, err := uc.placementRepo.ListForCollisionCheckExcluding(
@@ -174,9 +176,7 @@ func (uc *UpdatePlacementUseCase) execute(
 		}
 
 		if intersects {
-			return UpdatePlacementOutput{}, apperror.Conflict(
-				"placement overlaps another placement",
-			)
+			return UpdatePlacementOutput{}, placementConflict("placement_overlap", "placement overlaps another placement")
 		}
 	}
 

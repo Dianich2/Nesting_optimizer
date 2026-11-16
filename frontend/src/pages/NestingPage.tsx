@@ -1,9 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { confirmReplay, recordPlacement } from '../features/nesting/placementHistory'
+import type { PlacementHistory, PlacementPose } from '../features/nesting/placementHistory'
+import { NestingHistory } from '../features/nesting/NestingHistory'
+import { downloadLayout, exportLayoutSVG } from '../features/nesting/exportLayout'
+import { readPendingNesting, runNesting } from '../features/nesting/runNesting'
+import type { PendingNesting } from '../features/nesting/runNesting'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router'
 import { useAuth } from '../features/auth/useAuth'
 import { getApiErrorMessage } from '../shared/api/errorMessages'
 import type { ProjectSurface, ProjectPattern } from '../features/project-resources/types'
-import { allProjectPatterns } from '../features/nesting/api'
+import { allProjectPatterns, allProjectSurfaces } from '../features/nesting/api'
 import type { Placement, NestingRequest, NestingResult } from '../features/nesting/api'
 import { NestingCanvas } from '../features/nesting/NestingCanvas'
 import { PlacementProperties } from '../features/nesting/PlacementProperties'
@@ -40,11 +46,19 @@ export function NestingPage() {
 
 function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: number }) {
     const { authorizedRequest } = useAuth()
+    const navigate = useNavigate()
     const base = `/projects/${projectId}/surfaces/${surfaceId}`
+    const storageKey = `nesting.pending:${base}`
+    const [operation, setOperation] = useState(() => readPendingNesting(storageKey))
+    const [surfaceList, setSurfaceList] = useState<ProjectSurface[]>([])
+    const [projectName, setProjectName] = useState('')
     const [surface, setSurface] = useState<ProjectSurface | null>(null)
     const [patterns, setPatterns] = useState<ProjectPattern[]>([])
+    const [history, setHistory] = useState<PlacementHistory>({ undo: [], redo: [] })
     const [placements, setPlacements] = useState<Placement[]>([])
     const [error, setError] = useState<string | null>(null)
+    const [syncError, setSyncError] = useState<string | null>(null)
+    const [refreshRequired, setRefreshRequired] = useState(false)
     const [reload, setReload] = useState(0)
     const [busy, setBusy] = useState(false)
     const pending = useRef(false)
@@ -57,6 +71,7 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
     const [rotations, setRotations] = useState('0, 90, 180, 270')
     const [keepExisting, setKeepExisting] = useState(true)
     const [replacement, setReplacement] = useState<NestingRequest | null>(null)
+    const [historyRevision, setHistoryRevision] = useState(0)
     const [result, setResult] = useState<NestingResult | null>(null)
     const [resultAlgorithm, setResultAlgorithm] = useState('')
     useEffect(() => {
@@ -66,15 +81,23 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
             setBusy(true)
             setError(null)
             try {
-                const [loadedSurface, loadedPatterns, loadedPlacements] = await Promise.all([
-                    authorizedRequest<ProjectSurface>(base),
-                    allProjectPatterns(authorizedRequest, projectId),
-                    authorizedRequest<{ items: Placement[] }>(`${base}/placements`),
-                ])
+                const [loadedSurface, loadedPatterns, loadedPlacements, loadedSurfaces, project] =
+                    await Promise.all([
+                        authorizedRequest<ProjectSurface>(base),
+                        allProjectPatterns(authorizedRequest, projectId),
+                        authorizedRequest<{ items: Placement[] }>(`${base}/placements`),
+                        allProjectSurfaces(authorizedRequest, projectId),
+                        authorizedRequest<{ name: string }>(`/projects/${projectId}`),
+                    ])
                 if (active) {
                     setSurface(loadedSurface)
+                    setSurfaceList(loadedSurfaces)
+                    setProjectName(project.name)
                     setPatterns(loadedPatterns)
                     setPlacements(loadedPlacements.items)
+                    setHistory({ undo: [], redo: [] })
+                    setSyncError(null)
+                    setRefreshRequired(false)
                 }
             } catch (caught) {
                 if (active) setError(getApiErrorMessage(caught))
@@ -106,45 +129,172 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
             setBusy(false)
         }
     }
+    function requestCreate(pose: PlacementPose) {
+        return authorizedRequest<Placement>(`${base}/placements`, {
+            method: 'POST',
+            body: JSON.stringify(pose),
+        })
+    }
+    function requestPatch(item: Placement, { x, y, rotation }: PlacementPose) {
+        return authorizedRequest<Placement>(`/projects/${projectId}/placements/${item.id}`, {
+            method: 'PATCH',
+            headers: { 'X-Placement-Version': item.updated_at },
+            body: JSON.stringify({ x, y, rotation }),
+        })
+    }
+    function requestDelete(item: Placement) {
+        return authorizedRequest<void>(`/projects/${projectId}/placements/${item.id}`, {
+            method: 'DELETE',
+            headers: { 'X-Placement-Version': item.updated_at },
+        })
+    }
+    function poseOf(item: Placement): PlacementPose {
+        const { project_pattern_id, x, y, rotation } = item
+        return { project_pattern_id, x, y, rotation }
+    }
     async function add(x: number, y: number) {
         if (!patternId) return
         await mutate(async () => {
-            const item = await authorizedRequest<Placement>(`${base}/placements`, {
-                method: 'POST',
-                body: JSON.stringify({ project_pattern_id: patternId, x, y, rotation: 0 }),
-            })
+            const item = await requestCreate({ project_pattern_id: patternId, x, y, rotation: 0 })
             setPlacements((items) => [...items, item])
+            setHistory((value) =>
+                recordPlacement(value, { id: item.id, before: null, after: poseOf(item) }),
+            )
             setSelected(item.id)
             setAdding(false)
         })
     }
     async function update(id: number, x: number, y: number, rotation?: number) {
+        const previous = placements.find((item) => item.id === id)
+        if (!previous) return
+        const target = { ...poseOf(previous), x, y, rotation: rotation ?? previous.rotation }
+        if (
+            target.x === previous.x &&
+            target.y === previous.y &&
+            target.rotation === previous.rotation
+        )
+            return
         await mutate(async () => {
-            const item = await authorizedRequest<Placement>(
-                `/projects/${projectId}/placements/${id}`,
-                {
-                    method: 'PATCH',
-                    body: JSON.stringify({ x, y, rotation }),
-                },
-            )
+            const item = await requestPatch(previous, target)
             setPlacements((items) => items.map((current) => (current.id === id ? item : current)))
+            setHistory((value) =>
+                recordPlacement(value, { id, before: poseOf(previous), after: poseOf(item) }),
+            )
         })
     }
-    async function run(request: NestingRequest, rethrow = false) {
+    async function replay(direction: 'undo' | 'redo') {
+        const change = history[direction].at(-1)
+        if (!change) return
         await mutate(async () => {
-            const response = await authorizedRequest<NestingResult>(`${base}/nesting`, {
-                method: 'POST',
-                body: JSON.stringify(request),
+            const previous = direction === 'undo' ? change.after : change.before
+            const target = direction === 'undo' ? change.before : change.after
+            const item = placements.find((placement) => placement.id === change.id)
+            if (
+                previous &&
+                (!item ||
+                    previous.x !== item.x ||
+                    previous.y !== item.y ||
+                    previous.rotation !== item.rotation)
+            ) {
+                setError('Раскладка изменилась. Обновите размещения перед продолжением.')
+                return
+            }
+            if (item && !target) {
+                await requestDelete(item)
+                setPlacements((items) => items.filter((placement) => placement.id !== item.id))
+                setSelected(null)
+                setHistory((value) => confirmReplay(value, direction, item.id))
+            } else if (target) {
+                const saved = item ? await requestPatch(item, target) : await requestCreate(target)
+                setPlacements((items) =>
+                    item
+                        ? items.map((placement) => (placement.id === item.id ? saved : placement))
+                        : [...items, saved],
+                )
+                setSelected(saved.id)
+                setHistory((value) => confirmReplay(value, direction, saved.id))
+            }
+        })
+    }
+    async function run(request: NestingRequest, rethrow = false, retry?: PendingNesting) {
+        await mutate(async () => {
+            if ((refreshRequired || operation) && !retry) return
+            const current = retry ?? { key: crypto.randomUUID(), request }
+            sessionStorage.setItem(storageKey, JSON.stringify(current))
+            setOperation(current)
+            const clearOperation = () => {
+                sessionStorage.removeItem(storageKey)
+                setOperation(null)
+            }
+            const status = await runNesting(
+                authorizedRequest,
+                base,
+                request,
+                (response) => {
+                    setResult(response)
+                    setHistory({ undo: [], redo: [] })
+                    setHistoryRevision((value) => value + 1)
+                    setResultAlgorithm(request.algorithm)
+                    setSelected(null)
+                    if (!retry)
+                        setPlacements((items) =>
+                            Array.from(
+                                new Map(
+                                    [
+                                        ...(request.keep_existing ? items : []),
+                                        ...response.placements,
+                                    ].map((item) => [item.id, item]),
+                                ).values(),
+                            ),
+                        )
+                },
+                setPlacements,
+                current.key,
+            ).catch((caught) => {
+                clearOperation()
+                throw caught
             })
-            setResult(response)
-            setResultAlgorithm(request.algorithm)
-            setPlacements((items) =>
-                request.keep_existing ? [...items, ...response.placements] : response.placements,
+            if (status !== 'unknown') clearOperation()
+            if (status === 'synchronized') {
+                setSyncError(null)
+                return
+            }
+            setRefreshRequired(true)
+            setReplacement(null)
+            setSyncError(
+                status === 'confirmed'
+                    ? 'Раскрой сохранён. Не удалось загрузить полный список размещений.'
+                    : 'Связь с сервером прервалась. Проверьте статус или повторите тот же запуск с сохранённым ключом.',
             )
-            const saved = await authorizedRequest<{ items: Placement[] }>(`${base}/placements`)
-            setPlacements(saved.items)
-            setSelected(null)
         }, rethrow)
+    }
+    async function checkOperation(current: PendingNesting) {
+        await mutate(async () => {
+            const status = await authorizedRequest<{
+                status: 'unknown' | 'running' | 'completed' | 'failed'
+                result?: NestingResult
+            }>(`${base}/nesting/operations/${current.key}`)
+            if (status.status === 'completed' && status.result) {
+                setResult(status.result)
+                setHistoryRevision((value) => value + 1)
+                setResultAlgorithm(current.request.algorithm)
+                setSelected(null)
+                sessionStorage.removeItem(storageKey)
+                setOperation(null)
+                setReload((value) => value + 1)
+            } else if (status.status === 'failed') {
+                sessionStorage.removeItem(storageKey)
+                setOperation(null)
+                setRefreshRequired(false)
+                setSyncError('Сервер отклонил запуск. Раскладка сохранена в прежнем состоянии.')
+            } else {
+                setSyncError(
+                    status.status === 'running'
+                        ? 'Сервер выполняет этот запуск.'
+                        : 'Сохранённый результат пока отсутствует. Можно безопасно повторить этот запуск.',
+                )
+            }
+        })
     }
     function prepareRun() {
         const angles = rotations.split(',').map((value) => Number(value.trim()))
@@ -171,16 +321,114 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
         if (!keepExisting) setReplacement(request)
         else void run(request)
     }
+    function exportSaved(format: 'svg' | 'json') {
+        if (!surface) return
+        void mutate(async () => {
+            const [savedSurface, saved, project] = await Promise.all([
+                authorizedRequest<ProjectSurface>(base),
+                authorizedRequest<{ items: Placement[] }>(`${base}/placements`),
+                authorizedRequest<{ id: number; name: string }>(`/projects/${projectId}`),
+            ])
+            const report = {
+                project: { id: project.id, name: project.name },
+                surface: savedSurface,
+                placements: saved.items,
+                metrics: layoutMetrics(savedSurface.geometry, saved.items),
+                patterns: patterns
+                    .filter((pattern) =>
+                        saved.items.some((item) => item.project_pattern_id === pattern.id),
+                    )
+                    .map(({ id, name }) => ({ id, name })),
+            }
+            const data =
+                format === 'svg'
+                    ? exportLayoutSVG(savedSurface.geometry, saved.items)
+                    : JSON.stringify(report, null, 2)
+            downloadLayout(
+                `nesting-${projectId}-${surfaceId}.${format}`,
+                data,
+                format === 'svg' ? 'image/svg+xml' : 'application/json',
+            )
+        })
+    }
     const selectedPlacement = placements.find((item) => item.id === selected)
-    const metrics = surface ? layoutMetrics(surface.geometry, placements) : null
+    const metrics = useMemo(
+        () => (surface ? layoutMetrics(surface.geometry, placements) : null),
+        [surface, placements],
+    )
     return (
         <section className="nesting-page">
             <header>
                 <Link to={`/projects/${projectId}/editor`}>← Состав проекта</Link>
+                {projectName && <p>{projectName}</p>}
+                {surfaceList.length > 1 && (
+                    <label>
+                        Поверхность{' '}
+                        <select
+                            value={surfaceId}
+                            disabled={busy}
+                            onChange={(event) => {
+                                navigate(
+                                    `/projects/${projectId}/surfaces/${Number(event.target.value)}/nesting`,
+                                )
+                            }}
+                        >
+                            {surfaceList.map(({ id, name }) => (
+                                <option key={id} value={id}>
+                                    {name} · №{id}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                )}
                 <h1>
                     {surface?.name ?? 'Раскрой'} · экземпляр №{surfaceId}
                 </h1>
+                {surface && (
+                    <div className="nesting-tools">
+                        <button
+                            disabled={busy || !history.undo.length}
+                            onClick={() => void replay('undo')}
+                        >
+                            Отменить действие
+                        </button>
+                        <button
+                            disabled={busy || !history.redo.length}
+                            onClick={() => void replay('redo')}
+                        >
+                            Повторить действие
+                        </button>
+                        <button disabled={busy} onClick={() => exportSaved('svg')}>
+                            Экспорт SVG
+                        </button>
+                        <button disabled={busy} onClick={() => exportSaved('json')}>
+                            Экспорт отчёта JSON
+                        </button>
+                    </div>
+                )}
             </header>
+            {operation && (
+                <div role="status">
+                    <p>Ожидается подтверждение запуска раскроя.</p>
+                    <button disabled={busy} onClick={() => void checkOperation(operation)}>
+                        Проверить статус
+                    </button>
+                    <button
+                        disabled={busy}
+                        onClick={() => void run(operation.request, false, operation)}
+                    >
+                        Повторить тот же запуск
+                    </button>
+                </div>
+            )}
+            {syncError && (
+                <div role="status">
+                    <p>{syncError}</p>
+                    <button disabled={busy} onClick={() => setReload((value) => value + 1)}>
+                        Загрузить размещения
+                    </button>
+                </div>
+            )}
             {error && (
                 <div role="alert">
                     <p>{error}</p>
@@ -254,7 +502,7 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
                         adding={adding}
                         onSelect={setSelected}
                         onAdd={(x, y) => void add(x, y)}
-                        onMove={(id, x, y) => void update(id, x, y)}
+                        onMove={(id, x, y, rotation) => void update(id, x, y, rotation)}
                     />
                     <aside>
                         {selectedPlacement && (
@@ -300,13 +548,22 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
                             />{' '}
                             Сохранить существующие размещения
                         </label>
-                        <button disabled={busy || !patterns.length} onClick={prepareRun}>
+                        <button
+                            disabled={busy || refreshRequired || !!operation || !patterns.length}
+                            onClick={prepareRun}
+                        >
                             Запустить раскрой
                         </button>
                         {metrics && (
                             <section>
                                 <h2>Текущая раскладка</h2>
-                                <p>Площадь поверхности {format(metrics.surfaceArea)}</p>
+                                <p>Доступная площадь {format(metrics.surfaceArea)}</p>
+                                {metrics.holesArea > 0 && (
+                                    <p>
+                                        Внешний контур {format(metrics.outerArea)} · отверстия{' '}
+                                        {format(metrics.holesArea)}
+                                    </p>
+                                )}
                                 <p>Занято {format(metrics.placedArea)}</p>
                                 <p>Свободно {format(metrics.freeArea)}</p>
                                 <p>
@@ -354,9 +611,13 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
                     onClose={() => setDeleting(false)}
                     onConfirm={() =>
                         mutate(async () => {
-                            await authorizedRequest<void>(
-                                `/projects/${projectId}/placements/${selectedPlacement.id}`,
-                                { method: 'DELETE' },
+                            await requestDelete(selectedPlacement)
+                            setHistory((value) =>
+                                recordPlacement(value, {
+                                    id: selectedPlacement.id,
+                                    before: poseOf(selectedPlacement),
+                                    after: null,
+                                }),
                             )
                             setPlacements((items) =>
                                 items.filter((item) => item.id !== selectedPlacement.id),
@@ -380,6 +641,14 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
                         Размещения на поверхности №{surfaceId} будут заменены результатом алгоритма.
                     </p>
                 </ConfirmDialog>
+            )}
+            {surface && (
+                <NestingHistory
+                    request={authorizedRequest}
+                    base={base}
+                    labels={algorithms}
+                    revision={historyRevision}
+                />
             )}
         </section>
     )

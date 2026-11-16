@@ -31,7 +31,7 @@ func (uc *DeleteSurfaceUseCase) Execute(
 		)
 	}
 
-	err := uc.repo.SoftDelete(
+	err := uc.repo.Delete(
 		ctx,
 		input.SurfaceID,
 		input.UserID,
@@ -44,7 +44,7 @@ func (uc *DeleteSurfaceUseCase) Execute(
 		}
 
 		return apperror.Internal(
-			"failed to soft delete surface",
+			"failed to delete surface",
 			err,
 		)
 	}

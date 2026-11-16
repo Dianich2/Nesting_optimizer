@@ -12,15 +12,13 @@ const createPatternQuery = `
 		ST_GeomFromWKB($3)
 	FROM users u
 	WHERE u.id = $1
-	  AND u.deleted_at IS NULL
 	RETURNING
 		id,
 		user_id,
 		name,
 		ST_AsBinary(geometry) AS geometry,
 		created_at,
-		updated_at,
-		deleted_at
+		updated_at
 `
 
 const getPatternByIDQuery = `
@@ -30,12 +28,10 @@ const getPatternByIDQuery = `
 		name,
 		ST_AsBinary(geometry) AS geometry,
 		created_at,
-		updated_at,
-		deleted_at
+		updated_at
 	FROM patterns
 	WHERE id = $1
 	  AND user_id = $2
-	  AND deleted_at IS NULL
 `
 
 const listPatternsQuery = `
@@ -50,7 +46,6 @@ const listPatternsQuery = `
 			COUNT(*) OVER() AS total
 		FROM patterns
 		WHERE user_id = $1
-			AND deleted_at IS NULL
 	),
 	paged AS (
 		SELECT 
@@ -92,23 +87,17 @@ const updatePatternQuery = `
 		updated_at = NOW()
 	WHERE id = $1
 	  AND user_id = $2
-	  AND deleted_at IS NULL
 	RETURNING
 		id,
 		user_id,
 		name,
 		ST_AsBinary(geometry) AS geometry,
 		created_at,
-		updated_at,
-		deleted_at
+		updated_at
 `
 
-const softDeletePatternQuery = `
-	UPDATE patterns
-	SET
-		deleted_at = NOW(),
-		updated_at = NOW()
+const deletePatternQuery = `
+	DELETE FROM patterns
 	WHERE id = $1
 		AND user_id = $2
-		AND deleted_at IS NULL
 `

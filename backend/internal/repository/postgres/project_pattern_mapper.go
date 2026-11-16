@@ -24,7 +24,6 @@ func (r *ProjectPatternRepository) projectPatternRowToDomain(
 		Geometry:        polygon,
 		CreatedAt:       row.CreatedAt,
 		UpdatedAt:       row.UpdatedAt,
-		DeletedAt:       nil,
 	}, nil
 }
 
@@ -47,7 +46,6 @@ func (r *ProjectPatternRepository) projectPatternListRowToDomain(
 		Geometry:        polygon,
 		CreatedAt:       row.CreatedAt.Time,
 		UpdatedAt:       row.UpdatedAt.Time,
-		DeletedAt:       nil,
 	}
 
 	return projectPattern, nil

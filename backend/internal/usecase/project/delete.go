@@ -41,7 +41,7 @@ func (uc *DeleteProjectUseCase) execute(
 		)
 	}
 
-	err := uc.repo.SoftDelete(
+	err := uc.repo.Delete(
 		ctx,
 		input.ProjectID,
 		input.UserID,
@@ -54,7 +54,7 @@ func (uc *DeleteProjectUseCase) execute(
 		}
 
 		return apperror.Internal(
-			"failed to soft delete project",
+			"failed to delete project",
 			err,
 		)
 	}

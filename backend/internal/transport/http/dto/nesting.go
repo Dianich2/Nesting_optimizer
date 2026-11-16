@@ -46,3 +46,26 @@ type RunNestingResponse struct {
 	Unplaced   []RunNestingUnplacedPatternResponse `json:"unplaced"`
 	Metrics    RunNestingMetricsResponse           `json:"metrics"`
 }
+
+type NestingHistoryItem struct {
+	ID             int64     `json:"id"`
+	Algorithm      string    `json:"algorithm"`
+	KeepExisting   bool      `json:"keep_existing"`
+	RequestedCount int       `json:"requested_count"`
+	PlacedCount    int       `json:"placed_count"`
+	SurfaceArea    float64   `json:"surface_area"`
+	PlacedArea     float64   `json:"placed_area"`
+	Utilization    float64   `json:"utilization"`
+	DurationMS     int64     `json:"duration_ms"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+type NestingHistoryResponse struct {
+	Items   []NestingHistoryItem `json:"items"`
+	HasNext bool                 `json:"has_next"`
+}
+
+type NestingOperationResponse struct {
+	Status string              `json:"status"`
+	Result *RunNestingResponse `json:"result,omitempty"`
+}

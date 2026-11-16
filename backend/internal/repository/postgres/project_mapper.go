@@ -14,7 +14,6 @@ func (r *ProjectRepository) projectListRowToDomain(
 		Description: row.Description.String,
 		CreatedAt:   row.CreatedAt.Time,
 		UpdatedAt:   row.UpdatedAt.Time,
-		DeletedAt:   nil,
 	}
 
 	return project

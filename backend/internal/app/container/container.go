@@ -416,6 +416,8 @@ func New(
 	updateProjectUseCase.Transactions = scopedDB
 	deleteProjectUseCase.Transactions = scopedDB
 	runNestingUseCase.Transactions = scopedDB
+	runNestingUseCase.History = postgres.NewNestingRunRepository(scopedDB)
+	runNestingUseCase.Operations = postgres.NewNestingOperationRepository(scopedDB)
 
 	return &Container{
 		CreateUserUseCase:            createUserUseCase,

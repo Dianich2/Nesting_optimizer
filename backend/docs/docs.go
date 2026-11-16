@@ -309,7 +309,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Delete Pattern",
+                "description": "Permanently delete the library pattern. Project copies and their placements are preserved.",
                 "summary": "Delete Pattern",
                 "parameters": [
                     {
@@ -584,7 +584,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Delete Project",
+                "description": "Permanently delete the project, its project resources, placements and nesting runs.",
                 "summary": "Delete Project",
                 "parameters": [
                     {
@@ -892,7 +892,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Delete Project Pattern",
+                "description": "Permanently delete an unused project pattern. Returns 409 while placements reference it.",
                 "summary": "Delete Project Pattern",
                 "parameters": [
                     {
@@ -1080,7 +1080,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Delete Placement",
+                "description": "Permanently delete the selected placement. Project resources and nesting history are preserved.",
                 "summary": "Delete Placement",
                 "parameters": [
                     {
@@ -1096,6 +1096,12 @@ const docTemplate = `{
                         "name": "placement_id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Placement updated_at for optimistic concurrency",
+                        "name": "X-Placement-Version",
+                        "in": "header"
                     }
                 ],
                 "responses": {
@@ -1116,6 +1122,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httperror.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/httperror.ErrorResponse"
                         }
@@ -1156,6 +1168,12 @@ const docTemplate = `{
                         "name": "placement_id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Placement updated_at for optimistic concurrency",
+                        "name": "X-Placement-Version",
+                        "in": "header"
                     },
                     {
                         "description": "Placement",
@@ -1408,7 +1426,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Delete Project Surface",
+                "description": "Permanently delete an unused project surface and its nesting history. Returns 409 while placements exist.",
                 "summary": "Delete Project Surface",
                 "parameters": [
                     {
@@ -1560,6 +1578,12 @@ const docTemplate = `{
                         "required": true
                     },
                     {
+                        "type": "string",
+                        "description": "UUID for safe retry",
+                        "name": "Idempotency-Key",
+                        "in": "header"
+                    },
+                    {
                         "description": "Nesting Params",
                         "name": "nestingParams",
                         "in": "body",
@@ -1594,8 +1618,119 @@ const docTemplate = `{
                             "$ref": "#/definitions/httperror.ErrorResponse"
                         }
                     },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/httperror.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httperror.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/projects/{project_id}/surfaces/{project_surface_id}/nesting/history": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "List saved nesting runs",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Project ID",
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Project surface ID",
+                        "name": "project_surface_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.NestingHistoryResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httperror.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/projects/{project_id}/surfaces/{project_surface_id}/nesting/operations/{operation_key}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Read nesting operation status",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Project ID",
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Project surface ID",
+                        "name": "project_surface_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Idempotency UUID",
+                        "name": "operation_key",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.NestingOperationResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/httperror.ErrorResponse"
                         }
@@ -1911,7 +2046,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Delete Surface",
+                "description": "Permanently delete the library surface. Project copies and their placements are preserved.",
                 "summary": "Delete Surface",
                 "parameters": [
                     {
@@ -2172,7 +2307,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "DeleteCurrentUser",
+                "description": "Permanently delete the account and owned data, including sessions, projects and library resources. Requires the current password.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3095,6 +3230,66 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.NestingHistoryItem": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "duration_ms": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "keep_existing": {
+                    "type": "boolean"
+                },
+                "placed_area": {
+                    "type": "number"
+                },
+                "placed_count": {
+                    "type": "integer"
+                },
+                "requested_count": {
+                    "type": "integer"
+                },
+                "surface_area": {
+                    "type": "number"
+                },
+                "utilization": {
+                    "type": "number"
+                }
+            }
+        },
+        "dto.NestingHistoryResponse": {
+            "type": "object",
+            "properties": {
+                "has_next": {
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.NestingHistoryItem"
+                    }
+                }
+            }
+        },
+        "dto.NestingOperationResponse": {
+            "type": "object",
+            "properties": {
+                "result": {
+                    "$ref": "#/definitions/dto.RunNestingResponse"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.PolygonGeometry": {
             "type": "object",
             "properties": {
@@ -3194,6 +3389,9 @@ const docTemplate = `{
         "dto.RunNestingRequest": {
             "type": "object",
             "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
                 "allowed_rotations": {
                     "type": "array",
                     "items": {
@@ -3359,7 +3557,9 @@ const docTemplate = `{
         "dto.UpdateProjectPatternRequest": {
             "type": "object",
             "properties": {
-                "geometry": {"$ref": "#/definitions/dto.PolygonGeometry"},
+                "geometry": {
+                    "$ref": "#/definitions/dto.PolygonGeometry"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -3431,7 +3631,9 @@ const docTemplate = `{
         "dto.UpdateProjectSurfaceRequest": {
             "type": "object",
             "properties": {
-                "geometry": {"$ref": "#/definitions/dto.PolygonGeometry"},
+                "geometry": {
+                    "$ref": "#/definitions/dto.PolygonGeometry"
+                },
                 "name": {
                     "type": "string"
                 },

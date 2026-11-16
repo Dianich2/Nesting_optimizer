@@ -31,7 +31,7 @@ func (uc *DeletePatternUseCase) Execute(
 		)
 	}
 
-	err := uc.repo.SoftDelete(
+	err := uc.repo.Delete(
 		ctx,
 		input.PatternID,
 		input.UserID,
@@ -44,7 +44,7 @@ func (uc *DeletePatternUseCase) Execute(
 		}
 
 		return apperror.Internal(
-			"failed to soft delete pattern",
+			"failed to delete pattern",
 			err,
 		)
 	}

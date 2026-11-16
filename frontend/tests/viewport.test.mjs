@@ -10,8 +10,12 @@ test('fitting a wide container preserves center and includes original bounds', (
 })
 
 test('fitting a tall container preserves proportions', () => {
-    assert.deepEqual(fitAspect({ x: 0, y: 0, width: 100, height: 50 }, 0.5),
-        { x: 0, y: -75, width: 100, height: 200 })
+    assert.deepEqual(fitAspect({ x: 0, y: 0, width: 100, height: 50 }, 0.5), {
+        x: 0,
+        y: -75,
+        width: 100,
+        height: 200,
+    })
 })
 
 test('zoom keeps the anchor at the same relative screen position', () => {
@@ -25,6 +29,7 @@ test('zoom keeps the anchor at the same relative screen position', () => {
 
 test('invalid and extreme zoom leave the view usable', () => {
     const source = { x: 0, y: 0, width: 100, height: 50 }
-    for (const factor of [0, -1, Infinity, NaN, 1e20]) assert.deepEqual(zoomView(source, factor), source)
+    for (const factor of [0, -1, Infinity, NaN, 1e20])
+        assert.deepEqual(zoomView(source, factor), source)
     assert.deepEqual(fitAspect(source, 0), source)
 })

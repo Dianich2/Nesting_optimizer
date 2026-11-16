@@ -12,15 +12,13 @@ const createSurfaceQuery = `
 		ST_GeomFromWKB($3)
 	FROM users u
 	WHERE u.id = $1
-	  AND u.deleted_at IS NULL
 	RETURNING
 		id,
 		user_id,
 		name,
 		ST_AsBinary(geometry) AS geometry,
 		created_at,
-		updated_at,
-		deleted_at
+		updated_at
 `
 
 const getSurfaceByIDQuery = `
@@ -30,12 +28,10 @@ const getSurfaceByIDQuery = `
 		name,
 		ST_AsBinary(geometry) AS geometry,
 		created_at,
-		updated_at,
-		deleted_at
+		updated_at
 	FROM surfaces
 	WHERE id = $1
 	  AND user_id = $2
-	  AND deleted_at IS NULL
 `
 
 const listSurfacesQuery = `
@@ -50,7 +46,6 @@ const listSurfacesQuery = `
 			COUNT(*) OVER() AS total
 		FROM surfaces
 		WHERE user_id = $1
-			AND deleted_at IS NULL
 	),
 	paged AS (
 		SELECT 
@@ -92,23 +87,17 @@ const updateSurfaceQuery = `
 		updated_at = NOW()
 	WHERE id = $1
 	  AND user_id = $2
-	  AND deleted_at IS NULL
 	RETURNING
 		id,
 		user_id,
 		name,
 		ST_AsBinary(geometry) AS geometry,
 		created_at,
-		updated_at,
-		deleted_at
+		updated_at
 `
 
-const softDeleteSurfaceQuery = `
-	UPDATE surfaces
-	SET
-		deleted_at = NOW(),
-		updated_at = NOW()
+const deleteSurfaceQuery = `
+	DELETE FROM surfaces
 	WHERE id = $1
 		AND user_id = $2
-		AND deleted_at IS NULL
 `

@@ -18,14 +18,11 @@ const createPlacementQuery = `
 	JOIN project_patterns pp
 	    ON pp.id = $3
 	    AND pp.project_id = $1
-	    AND pp.deleted_at IS NULL
 	JOIN projects p
 	    ON p.id = $1
 	    AND p.user_id = $7
-	    AND p.deleted_at IS NULL
 	WHERE ps.id = $2
 	    AND ps.project_id = $1
-	    AND ps.deleted_at IS NULL
 	RETURNING
 		id,
 		project_surface_id,
@@ -55,10 +52,6 @@ const listPlacementsForCollisionCheckQuery = `
 	WHERE pl.project_surface_id = $1
 		AND ps.project_id = $2
 		AND p.user_id = $3
-		AND pl.deleted_at IS NULL
-		AND ps.deleted_at IS NULL
-		AND pp.deleted_at IS NULL
-		AND p.deleted_at IS NULL
 `
 
 const getPlacementByIDQuery = `
@@ -83,10 +76,6 @@ const getPlacementByIDQuery = `
 	WHERE pl.id = $1
 	    AND p.id = $2
 	    AND p.user_id = $3
-	    AND pl.deleted_at IS NULL
-	    AND ps.deleted_at IS NULL
-	    AND pp.deleted_at IS NULL
-	    AND p.deleted_at IS NULL
 `
 
 const listPlacementsQuery = `
@@ -111,10 +100,6 @@ const listPlacementsQuery = `
 	WHERE pl.project_surface_id = $1
 	    AND p.id = $2
 	    AND p.user_id = $3
-	    AND pl.deleted_at IS NULL
-	    AND ps.deleted_at IS NULL
-	    AND pp.deleted_at IS NULL
-	    AND p.deleted_at IS NULL
 	ORDER BY pl.created_at ASC, pl.id ASC
 `
 
@@ -124,7 +109,7 @@ const updatePlacementQuery = `
 	    x = $4,
 	    y = $5,
 	    rotation = $6,
-	    updated_at = NOW()
+	    updated_at = GREATEST(clock_timestamp(), pl.updated_at + INTERVAL '1 microsecond')
 	FROM project_surfaces ps,
 	     project_patterns pp,
 	     projects p
@@ -135,10 +120,6 @@ const updatePlacementQuery = `
 	    AND pp.project_id = $2
 	    AND p.id = $2
 	    AND p.user_id = $3
-	    AND pl.deleted_at IS NULL
-	    AND ps.deleted_at IS NULL
-	    AND pp.deleted_at IS NULL
-	    AND p.deleted_at IS NULL
 	RETURNING
 		pl.id,
 	    pl.project_surface_id,
@@ -173,18 +154,11 @@ const listPlacementsForCollisionCheckExcludingQuery = `
 		AND p.id = $2
 		AND p.user_id = $3
 		AND pl.id <> $4
-		AND pl.deleted_at IS NULL
-		AND ps.deleted_at IS NULL
-		AND pp.deleted_at IS NULL
-		AND p.deleted_at IS NULL
 `
 
-const softDeletePlacementQuery = `
-	UPDATE placements pl
-	SET
-		deleted_at = NOW(),
-		updated_at = NOW()
-	FROM project_surfaces ps,
+const deletePlacementQuery = `
+	DELETE FROM placements pl
+	USING project_surfaces ps,
 	     project_patterns pp,
 	     projects p
 	WHERE pl.id = $1
@@ -194,10 +168,6 @@ const softDeletePlacementQuery = `
 		AND pp.project_id = $2
 		AND p.id = $2
 		AND p.user_id = $3
-		AND pl.deleted_at IS NULL
-		AND ps.deleted_at IS NULL
-		AND pp.deleted_at IS NULL
-		AND p.deleted_at IS NULL
 `
 
 const deletePlacementsQuery = `
@@ -209,6 +179,4 @@ const deletePlacementsQuery = `
 	  AND ps.id = $1
 	  AND ps.project_id = $2
 	  AND p.user_id = $3
-	  AND ps.deleted_at IS NULL
-	  AND p.deleted_at IS NULL
 `

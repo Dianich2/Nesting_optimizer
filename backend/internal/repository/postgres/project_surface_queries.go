@@ -16,10 +16,9 @@ const createProjectSurfaceQuery = `
 	JOIN surfaces s
 		ON s.id = $3
 		AND s.user_id = $1
-		AND s.deleted_at IS NULL
 	WHERE p.id = $2
 		AND p.user_id = $1
-		AND p.deleted_at IS NULL
+	FOR KEY SHARE OF s
 	RETURNING
 		id,
 		project_id,
@@ -45,8 +44,6 @@ const getProjectSurfaceByIDQuery = `
 	WHERE ps.id = $1
 		AND ps.project_id = $2
 		AND p.user_id = $3
-		AND ps.deleted_at IS NULL
-		AND p.deleted_at IS NULL
 `
 
 const listProjectSurfacesQuery = `
@@ -55,7 +52,6 @@ const listProjectSurfacesQuery = `
 		FROM projects
 		WHERE id = $1
 			AND user_id = $2
-			AND deleted_at IS NULL
 	),
 	filtered AS (
 		SELECT
@@ -70,7 +66,6 @@ const listProjectSurfacesQuery = `
 		FROM project_surfaces ps
 		INNER JOIN accessible_project p
 		    ON p.id = ps.project_id
-		WHERE ps.deleted_at IS NULL
 	),
 	paged AS (
 		SELECT 
@@ -123,8 +118,6 @@ const updateProjectSurfaceQuery = `
 		AND ps.project_id = $2
 		AND p.id = ps.project_id
 		AND p.user_id = $3
-		AND ps.deleted_at IS NULL
-		AND p.deleted_at IS NULL
 	RETURNING
 		ps.id,
 		ps.project_id,
@@ -135,18 +128,13 @@ const updateProjectSurfaceQuery = `
 		ps.updated_at
 `
 
-const softDeleteProjectSurfaceQuery = `
-	UPDATE project_surfaces ps
-	SET 
-		deleted_at = NOW(),
-		updated_at = NOW()
-	FROM projects p
+const deleteProjectSurfaceQuery = `
+	DELETE FROM project_surfaces ps
+	USING projects p
 	WHERE ps.id = $1
 		AND ps.project_id = $2
 		AND p.id = ps.project_id
 		AND p.user_id = $3
-		AND ps.deleted_at IS NULL
-		AND p.deleted_at IS NULL
 `
 
 const hasActivePlacementsByProjectSurfaceIDQuery = `
@@ -163,9 +151,5 @@ const hasActivePlacementsByProjectSurfaceIDQuery = `
 		WHERE ps.id = $1
 			AND ps.project_id = $2
 			AND p.user_id = $3
-			AND pl.deleted_at IS NULL
-			AND ps.deleted_at IS NULL
-			AND pp.deleted_at IS NULL
-			AND p.deleted_at IS NULL
 	)
 `

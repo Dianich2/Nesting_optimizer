@@ -30,13 +30,12 @@ func NewSurfaceRepository(
 var _ surfaceusecase.SurfaceRepository = (*SurfaceRepository)(nil)
 
 type SurfaceRow struct {
-	ID        int64        `db:"id"`
-	UserID    int64        `db:"user_id"`
-	Name      string       `db:"name"`
-	Geometry  []byte       `db:"geometry"`
-	CreatedAt time.Time    `db:"created_at"`
-	UpdatedAt time.Time    `db:"updated_at"`
-	DeletedAt sql.NullTime `db:"deleted_at"`
+	ID        int64     `db:"id"`
+	UserID    int64     `db:"user_id"`
+	Name      string    `db:"name"`
+	Geometry  []byte    `db:"geometry"`
+	CreatedAt time.Time `db:"created_at"`
+	UpdatedAt time.Time `db:"updated_at"`
 }
 
 func (r *SurfaceRepository) Create(
@@ -237,7 +236,7 @@ func (r *SurfaceRepository) Update(
 	return surface, nil
 }
 
-func (r *SurfaceRepository) SoftDelete(
+func (r *SurfaceRepository) Delete(
 	ctx context.Context,
 	surfaceID int64,
 	userID int64,
@@ -245,17 +244,17 @@ func (r *SurfaceRepository) SoftDelete(
 	affected, err := execAffected(
 		ctx,
 		r.db,
-		softDeleteSurfaceQuery,
+		deleteSurfaceQuery,
 		surfaceID,
 		userID,
 	)
 	if err != nil {
-		return fmt.Errorf("soft delete surface: %w", err)
+		return fmt.Errorf("delete surface: %w", err)
 	}
 
 	if affected == 0 {
 		return fmt.Errorf(
-			"soft delete surface: %w",
+			"delete surface: %w",
 			domainsurface.ErrNotFound,
 		)
 	}

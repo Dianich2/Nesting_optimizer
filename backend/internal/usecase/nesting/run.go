@@ -17,6 +17,8 @@ import (
 )
 
 type RunNestingUseCase struct {
+	History                  HistoryRepository
+	Operations               OperationRepository
 	Transactions             projecttransaction.Executor
 	projectSurfaceRepository ProjectSurfaceRepository
 	projectPatternRepository ProjectPatternRepository
@@ -53,6 +55,41 @@ func (uc *RunNestingUseCase) Execute(
 	ctx context.Context,
 	input RunNestingInput,
 ) (RunNestingOutput, error) {
+	return uc.ExecuteWithKey(ctx, input, "")
+}
+
+func (uc *RunNestingUseCase) ExecuteWithKey(ctx context.Context, input RunNestingInput, rawKey string) (RunNestingOutput, error) {
+	if rawKey != "" {
+		key, err := parseOperationKey(rawKey)
+		if err != nil {
+			return RunNestingOutput{}, err
+		}
+		if details := input.Validate(); len(details) > 0 {
+			return RunNestingOutput{}, apperror.Validation("validation failed", details...)
+		}
+		hash, err := fingerprint(input)
+		if err != nil {
+			return RunNestingOutput{}, apperror.Internal("encode nesting parameters", err)
+		}
+		if uc.Operations == nil || uc.Transactions == nil {
+			return RunNestingOutput{}, apperror.Internal("nesting operations unavailable", nil)
+		}
+		operation, err := projecttransaction.Run(ctx, uc.Transactions, input.ProjectID, input.UserID, func(ctx context.Context) (OperationStatus, error) {
+			return uc.runOperation(ctx, input, key, hash[:])
+		})
+		if err != nil {
+			return RunNestingOutput{}, err
+		}
+		if failure := operation.Failure; failure != nil {
+			return RunNestingOutput{}, &apperror.AppError{Code: failure.Code, Message: failure.Message, Details: failure.Details}
+		}
+		if operation.Result == nil {
+			return RunNestingOutput{}, apperror.Internal("missing nesting operation result", nil)
+		}
+		return *operation.Result, nil
+
+	}
+
 	return projecttransaction.Run(ctx, uc.Transactions, input.ProjectID, input.UserID, func(ctx context.Context) (RunNestingOutput, error) {
 		return uc.execute(ctx, input)
 	})
@@ -254,44 +291,9 @@ func (uc *RunNestingUseCase) execute(
 		Duration: duration,
 	}
 
-	preparedPlacements := make([]preparedPlacement, 0, len(result.Placements))
-	for _, resPlacement := range result.Placements {
-		projectPattern, ok := foundIDs[resPlacement.PatternID]
-		if !ok {
-			return RunNestingOutput{}, apperror.Internal(
-				"optimizer returned unknown project pattern",
-				fmt.Errorf(
-					"optimizer returned unknown project pattern: %d",
-					resPlacement.PatternID,
-				),
-			)
-		}
-
-		transformedGeometry, err := uc.geometryEngine.Transform(
-			projectPattern.Geometry,
-			resPlacement.X,
-			resPlacement.Y,
-			resPlacement.Rotation,
-		)
-		if err != nil {
-			return RunNestingOutput{}, apperror.Internal(
-				"failed to transform pattern geometry",
-				err,
-			)
-		}
-
-		prepPlacement := domainplacement.Placement{
-			ProjectSurfaceID: input.ProjectSurfaceID,
-			ProjectPatternID: resPlacement.PatternID,
-			X:                resPlacement.X,
-			Y:                resPlacement.Y,
-			Rotation:         resPlacement.Rotation,
-		}
-
-		preparedPlacements = append(preparedPlacements, preparedPlacement{
-			Placement: prepPlacement,
-			Geometry:  transformedGeometry,
-		})
+	preparedPlacements, err := validateResult(ctx, uc.geometryEngine, input.ProjectSurfaceID, problem, result)
+	if err != nil {
+		return RunNestingOutput{}, apperror.Internal("optimizer returned an invalid layout", err)
 	}
 
 	savedPlacements := make([]domainplacement.Placement, 0, len(result.Placements))

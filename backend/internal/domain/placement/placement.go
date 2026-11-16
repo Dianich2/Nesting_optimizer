@@ -14,7 +14,6 @@ type Placement struct {
 	Rotation         float64
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
-	DeletedAt        *time.Time
 }
 
 type CollisionPlacement struct {

@@ -63,6 +63,9 @@ func (r *ProjectSurfaceRepository) Create(
 		input.Name,
 		encoded,
 	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domainprojectsurface.ProjectSurface{}, domainprojectsurface.ErrNotFound
+		}
 		return domainprojectsurface.ProjectSurface{}, fmt.Errorf(
 			"create project surface: %w",
 			err,
@@ -247,7 +250,7 @@ func (r *ProjectSurfaceRepository) Update(
 	return projectSurface, nil
 }
 
-func (r *ProjectSurfaceRepository) SoftDelete(
+func (r *ProjectSurfaceRepository) Delete(
 	ctx context.Context,
 	projectSurfaceID int64,
 	projectID int64,
@@ -256,18 +259,18 @@ func (r *ProjectSurfaceRepository) SoftDelete(
 	affected, err := execAffected(
 		ctx,
 		r.db,
-		softDeleteProjectSurfaceQuery,
+		deleteProjectSurfaceQuery,
 		projectSurfaceID,
 		projectID,
 		userID,
 	)
 	if err != nil {
-		return fmt.Errorf("soft delete project surface: %w", err)
+		return fmt.Errorf("delete project surface: %w", err)
 	}
 
 	if affected == 0 {
 		return fmt.Errorf(
-			"soft delete project surface: %w",
+			"delete project surface: %w",
 			domainprojectsurface.ErrNotFound,
 		)
 	}

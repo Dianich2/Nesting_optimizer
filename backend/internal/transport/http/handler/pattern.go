@@ -225,7 +225,7 @@ func (h *PatternHandler) Update(c fiber.Ctx) error {
 
 // godoc: DeletePattern godoc
 // @Summary Delete Pattern
-// @Description Delete Pattern
+// @Description Permanently delete the library pattern. Project copies and their placements are preserved.
 // @Param id path int true "Pattern ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} httperror.ErrorResponse

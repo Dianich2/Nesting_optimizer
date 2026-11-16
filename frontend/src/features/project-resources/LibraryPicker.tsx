@@ -18,6 +18,7 @@ export function LibraryPicker({ projectId, kind, onClose, onAdded }: Props) {
     const { authorizedRequest } = useAuth()
     const dialog = useRef<HTMLDialogElement>(null)
     const pending = useRef(false)
+    const mounted = useRef(false)
     const [page, setPage] = useState(1)
     const [data, setData] = useState<LibraryListResponse | null>(null)
     const [error, setError] = useState<string | null>(null)
@@ -26,13 +27,20 @@ export function LibraryPicker({ projectId, kind, onClose, onAdded }: Props) {
     const [scale, setScale] = useState('1')
     const [message, setMessage] = useState('')
     useEffect(() => {
-        dialog.current?.showModal()
+        mounted.current = true
+        if (dialog.current && !dialog.current.open) dialog.current.showModal()
+        return () => {
+            mounted.current = false
+        }
     }, [])
     useEffect(() => {
         let active = true
         listLibraryItems(authorizedRequest, kind, page, 20)
             .then((result) => {
-                if (active) setData(result)
+                if (active) {
+                    setData(result)
+                    setError(null)
+                }
             })
             .catch((caught) => {
                 if (active) setError(getApiErrorMessage(caught))
@@ -51,16 +59,19 @@ export function LibraryPicker({ projectId, kind, onClose, onAdded }: Props) {
         }
         pending.current = true
         setBusy(true)
+        setMessage('')
         setError(null)
         try {
             const item = await createProjectResource(authorizedRequest, projectId, kind, id, value)
+            if (!mounted.current) return
             setMessage(`Добавлен экземпляр «${name}» №${item.id}. Можно добавить ещё один.`)
             onAdded()
         } catch (caught) {
+            if (!mounted.current) return
             setError(getApiErrorMessage(caught))
         } finally {
             pending.current = false
-            setBusy(false)
+            if (mounted.current) setBusy(false)
         }
     }
     return (
@@ -92,7 +103,16 @@ export function LibraryPicker({ projectId, kind, onClose, onAdded }: Props) {
                 {error && (
                     <div role="alert">
                         <p>{error}</p>
-                        <button type="button" disabled={busy} onClick={() => setReload(reload + 1)}>
+                        <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                                setData(null)
+                                setError(null)
+                                setMessage('')
+                                setReload(reload + 1)
+                            }}
+                        >
                             Повторить загрузку
                         </button>
                     </div>

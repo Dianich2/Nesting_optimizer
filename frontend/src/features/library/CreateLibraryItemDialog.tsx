@@ -1,3 +1,4 @@
+import { useWheelZoom } from '../../shared/geometry/useWheelZoom'
 import { ConfirmDialog } from '../../components/dialogs/ConfirmDialog'
 import { fitAspect, zoomView } from '../../shared/geometry/viewport'
 import { useEffect, useId, useRef, useState } from 'react'
@@ -129,6 +130,7 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
     const panRef = useRef<{ id: number; x: number; y: number; view: DrawingViewBox; scale: number } | null>(null)
     const visibleView = fitAspect(view, aspect)
     const initialView = fitAspect(fitDrawingView(initialItem?.geometry ?? rectangleGeometry(kind === 'surfaces' ? 1000 : 100, kind === 'surfaces' ? 600 : 60)), aspect)
+    useWheelZoom(svgRef, visibleView, setView, () => !dragRef.current && !panRef.current)
     useEffect(() => {
         const svg = svgRef.current
         if (!svg) return
@@ -244,7 +246,7 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
     }
 
     function handleCanvasPointerDown(event: PointerEvent<SVGSVGElement>) {
-        if (saving || dragRef.current) return
+        if (saving || !event.isPrimary || dragRef.current || panRef.current) return
         if (panMode || event.button === 1) {
             event.preventDefault()
             const bounds = event.currentTarget.getBoundingClientRect()
@@ -259,7 +261,7 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
     }
 
     function startDragging(event: PointerEvent<SVGCircleElement>, ring: number, index: number) {
-        if (panMode || saving || event.button !== 0) return
+        if (panMode || saving || !event.isPrimary || dragRef.current || panRef.current || event.button !== 0) return
         event.preventDefault()
         event.stopPropagation() // A vertex is not a new point.
 
@@ -737,9 +739,9 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
                     onPointerMove={handlePointerMove}
                     onPointerUp={stopDragging}
                     onPointerCancel={stopDragging}
-                    onLostPointerCapture={() => {
-                        dragRef.current = null
-                        panRef.current = null
+                    onLostPointerCapture={(event) => {
+                        if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null
+                        if (panRef.current?.id === event.pointerId) panRef.current = null
                     }}
                 >
                     <defs>

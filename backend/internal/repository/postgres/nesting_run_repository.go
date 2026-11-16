@@ -81,3 +81,23 @@ func nestingRunRowToDomain(
 		CreatedAt:        row.CreatedAt,
 	}
 }
+
+func (r *NestingRunRepository) List(ctx context.Context, userID, projectID, surfaceID int64, limit, offset int) ([]nestingrun.NestingRun, error) {
+	rows := make([]NestingRunRow, 0)
+	err := r.db.SelectContext(ctx, &rows, `
+ SELECT n.id,n.project_surface_id,n.algorithm,n.keep_existing,n.requested_count,n.placed_count,
+        n.surface_area,n.placed_area,n.utilization,n.duration_ms,n.created_at
+ FROM nesting_runs n
+ JOIN project_surfaces s ON s.id=n.project_surface_id
+ JOIN projects p ON p.id=s.project_id
+ WHERE p.user_id=$1 AND p.id=$2 AND s.id=$3
+ ORDER BY n.created_at DESC, n.id DESC LIMIT $4 OFFSET $5`, userID, projectID, surfaceID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]nestingrun.NestingRun, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, nestingRunRowToDomain(row))
+	}
+	return result, nil
+}

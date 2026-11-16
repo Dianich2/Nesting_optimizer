@@ -226,7 +226,7 @@ func (h *ProjectHandler) Update(c fiber.Ctx) error {
 
 // godoc: DeleteProject godoc
 // @Summary Delete Project
-// @Description Delete Project
+// @Description Permanently delete the project, its project resources, placements and nesting runs.
 // @Param id path int true "Project ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} httperror.ErrorResponse

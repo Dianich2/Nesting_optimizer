@@ -90,3 +90,20 @@
         max-height: none;
     }
 }
+
+.nesting-history {
+    margin-block: 20px;
+}
+.nesting-history-scroll {
+    overflow-x: auto;
+}
+.nesting-history table {
+    border-collapse: collapse;
+    width: 100%;
+}
+.nesting-history th,
+.nesting-history td {
+    padding: 8px;
+    text-align: start;
+    border-bottom: 1px solid var(--color-border);
+}

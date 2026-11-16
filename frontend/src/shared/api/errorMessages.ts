@@ -1,4 +1,3 @@
-
 import { ApiError } from './http'
 
 const FIELD_NAMES: Record<string, string> = {
@@ -61,9 +60,33 @@ export function getApiErrorMessage(
         return 'Логин или электронная почта уже используются.'
     }
 
-    if (error.status === 409 && /project (surface|pattern) is used by active placements/.test(error.message)) {
+    if (
+        error.status === 409 &&
+        /project (surface|pattern) is used by active placements/.test(error.message)
+    ) {
         return 'Сначала удалите размещения, использующие этот экземпляр. Сейчас можно изменить только название.'
     }
+
+    const placementReason = error.details.find(({ field }) => field === 'placement')?.code
+    switch (placementReason) {
+        case 'placement_version_conflict':
+            return 'Размещение изменилось после загрузки. Обновите раскладку.'
+        case 'placement_in_hole':
+            return 'Лекало попадает в отверстие поверхности.'
+        case 'placement_outside_surface':
+            return 'Лекало выходит за границу поверхности.'
+        case 'placement_overlap':
+            return 'Лекало пересекает другое размещение.'
+    }
+
+    if (error.status === 404) {
+        if (error.message === 'project pattern not found')
+            return 'Лекало проекта недоступно или удалено.'
+        if (error.message === 'project surface not found')
+            return 'Поверхность проекта недоступна или удалена.'
+        if (error.message === 'project not found') return 'Проект недоступен или удалён.'
+    }
+    if (error.status === 503) return 'Сервер временно занят. Попробуйте позже.'
 
     if (error.status === 400 && error.details.length > 0) {
         return error.details

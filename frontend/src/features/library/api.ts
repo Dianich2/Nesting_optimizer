@@ -44,7 +44,6 @@ export function updateLibraryItem(
     })
 }
 
-/** The Go backend soft-deletes library resources and returns HTTP 204. */
 export function deleteLibraryItem(
     request: AuthorizedRequest,
     kind: LibraryKind,

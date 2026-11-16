@@ -12,7 +12,7 @@ export function DeleteProjectDialog({ project, onClose, onDelete }: DeleteProjec
         <ConfirmDialog title="Удалить проект?" confirmLabel="Удалить проект"
             onClose={onClose} onConfirm={onDelete}>
             <p>Вы собираетесь удалить проект <strong>«{project.name}»</strong>.</p>
-            <p>Проект исчезнет из списка, а доступ к его данным через обычный интерфейс будет закрыт.</p>
+            <p>Проект, его экземпляры, размещения и история раскроя будут удалены без возможности восстановления.</p>
         </ConfirmDialog>
     )
 }

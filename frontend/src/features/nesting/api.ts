@@ -1,5 +1,10 @@
 import type { AuthContextValue } from '../auth/AuthContext'
-import type { PolygonGeometry, ProjectPattern, PaginatedResponse } from '../project-resources/types'
+import type {
+    PolygonGeometry,
+    ProjectPattern,
+    ProjectSurface,
+    PaginatedResponse,
+} from '../project-resources/types'
 
 export interface Placement {
     id: number
@@ -9,6 +14,7 @@ export interface Placement {
     y: number
     rotation: number
     geometry: PolygonGeometry
+    updated_at: string
 }
 export interface NestingRequest {
     algorithm: string
@@ -42,5 +48,19 @@ export async function allProjectPatterns(
         result.push(...response.items)
         if (page >= response.total_pages) return result
         page++
+    }
+}
+
+export async function allProjectSurfaces(
+    request: Request,
+    projectId: number,
+): Promise<ProjectSurface[]> {
+    const result: ProjectSurface[] = []
+    for (let page = 1; ; page++) {
+        const response = await request<PaginatedResponse<ProjectSurface>>(
+            `/projects/${projectId}/surfaces?page=${page}&page_size=100`,
+        )
+        result.push(...response.items)
+        if (page >= response.total_pages) return result
     }
 }

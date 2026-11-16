@@ -168,7 +168,7 @@ func (r *ProjectRepository) Update(
 	return project, nil
 }
 
-func (r *ProjectRepository) SoftDelete(
+func (r *ProjectRepository) Delete(
 	ctx context.Context,
 	projectID int64,
 	userID int64,
@@ -176,17 +176,17 @@ func (r *ProjectRepository) SoftDelete(
 	affected, err := execAffected(
 		ctx,
 		r.db,
-		softDeleteProjectQuery,
+		deleteProjectQuery,
 		projectID,
 		userID,
 	)
 	if err != nil {
-		return fmt.Errorf("soft delete project: %w", err)
+		return fmt.Errorf("delete project: %w", err)
 	}
 
 	if affected == 0 {
 		return fmt.Errorf(
-			"soft delete project: %w",
+			"delete project: %w",
 			domainproject.ErrNotFound,
 		)
 	}

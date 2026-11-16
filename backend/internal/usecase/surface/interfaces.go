@@ -33,7 +33,7 @@ type SurfaceRepository interface {
 		geometry *domaingeometry.Polygon,
 	) (domainsurface.Surface, error)
 
-	SoftDelete(
+	Delete(
 		ctx context.Context,
 		surfaceID int64,
 		userID int64,

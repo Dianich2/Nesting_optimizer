@@ -305,7 +305,7 @@ func (h *UserHandler) ChangePassword(c fiber.Ctx) error {
 
 // godoc: DeleteCurrentUser godoc
 // @Summary DeleteCurrentUser
-// @Description DeleteCurrentUser
+// @Description Permanently delete the account and owned data, including sessions, projects and library resources. Requires the current password.
 // @Accept json
 // @Param password body dto.DeleteCurrentUserRequest true "Delete Current User"
 // @Success 204 "No Content"

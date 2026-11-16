@@ -527,6 +527,45 @@ definitions:
       refresh_token:
         type: string
     type: object
+  dto.NestingHistoryItem:
+    properties:
+      algorithm:
+        type: string
+      created_at:
+        type: string
+      duration_ms:
+        type: integer
+      id:
+        type: integer
+      keep_existing:
+        type: boolean
+      placed_area:
+        type: number
+      placed_count:
+        type: integer
+      requested_count:
+        type: integer
+      surface_area:
+        type: number
+      utilization:
+        type: number
+    type: object
+  dto.NestingHistoryResponse:
+    properties:
+      has_next:
+        type: boolean
+      items:
+        items:
+          $ref: '#/definitions/dto.NestingHistoryItem'
+        type: array
+    type: object
+  dto.NestingOperationResponse:
+    properties:
+      result:
+        $ref: '#/definitions/dto.RunNestingResponse'
+      status:
+        type: string
+    type: object
   dto.PolygonGeometry:
     properties:
       exterior:
@@ -591,6 +630,8 @@ definitions:
     type: object
   dto.RunNestingRequest:
     properties:
+      algorithm:
+        type: string
       allowed_rotations:
         items:
           type: number
@@ -964,7 +1005,8 @@ paths:
       summary: Create Pattern
   /api/v1/patterns/{id}:
     delete:
-      description: Delete Pattern
+      description: Permanently delete the library pattern. Project copies and their
+        placements are preserved.
       parameters:
       - description: Pattern ID
         in: path
@@ -1140,7 +1182,8 @@ paths:
       summary: Create Project
   /api/v1/projects/{id}:
     delete:
-      description: Delete Project
+      description: Permanently delete the project, its project resources, placements
+        and nesting runs.
       parameters:
       - description: Project ID
         in: path
@@ -1334,7 +1377,8 @@ paths:
       summary: Create ProjectPattern
   /api/v1/projects/{project_id}/patterns/{id}:
     delete:
-      description: Delete Project Pattern
+      description: Permanently delete an unused project pattern. Returns 409 while
+        placements reference it.
       parameters:
       - description: Project ID
         in: path
@@ -1456,7 +1500,8 @@ paths:
       summary: Update Project Pattern
   /api/v1/projects/{project_id}/placements/{placement_id}:
     delete:
-      description: Delete Placement
+      description: Permanently delete the selected placement. Project resources and
+        nesting history are preserved.
       parameters:
       - description: Project ID
         in: path
@@ -1468,6 +1513,10 @@ paths:
         name: placement_id
         required: true
         type: integer
+      - description: Placement updated_at for optimistic concurrency
+        in: header
+        name: X-Placement-Version
+        type: string
       responses:
         "204":
           description: No Content
@@ -1481,6 +1530,10 @@ paths:
             $ref: '#/definitions/httperror.ErrorResponse'
         "404":
           description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "409":
+          description: Conflict
           schema:
             $ref: '#/definitions/httperror.ErrorResponse'
         "500":
@@ -1544,6 +1597,10 @@ paths:
         name: placement_id
         required: true
         type: integer
+      - description: Placement updated_at for optimistic concurrency
+        in: header
+        name: X-Placement-Version
+        type: string
       - description: Placement
         in: body
         name: placement
@@ -1669,7 +1726,8 @@ paths:
       summary: Create ProjectSurface
   /api/v1/projects/{project_id}/surfaces/{id}:
     delete:
-      description: Delete Project Surface
+      description: Permanently delete an unused project surface and its nesting history.
+        Returns 409 while placements exist.
       parameters:
       - description: Project ID
         in: path
@@ -1805,6 +1863,10 @@ paths:
         name: project_surface_id
         required: true
         type: integer
+      - description: UUID for safe retry
+        in: header
+        name: Idempotency-Key
+        type: string
       - description: Nesting Params
         in: body
         name: nestingParams
@@ -1830,6 +1892,10 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/httperror.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
@@ -1837,6 +1903,73 @@ paths:
       security:
       - BearerAuth: []
       summary: Run automatic nesting
+  /api/v1/projects/{project_id}/surfaces/{project_surface_id}/nesting/history:
+    get:
+      parameters:
+      - description: Project ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      - description: Project surface ID
+        in: path
+        name: project_surface_id
+        required: true
+        type: integer
+      - description: Page
+        in: query
+        name: page
+        type: integer
+      - description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.NestingHistoryResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List saved nesting runs
+  /api/v1/projects/{project_id}/surfaces/{project_surface_id}/nesting/operations/{operation_key}:
+    get:
+      parameters:
+      - description: Project ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      - description: Project surface ID
+        in: path
+        name: project_surface_id
+        required: true
+        type: integer
+      - description: Idempotency UUID
+        in: path
+        name: operation_key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.NestingOperationResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Read nesting operation status
   /api/v1/projects/{project_id}/surfaces/{project_surface_id}/placements:
     get:
       description: List Placements
@@ -1999,7 +2132,8 @@ paths:
       summary: Create Surface
   /api/v1/surfaces/{id}:
     delete:
-      description: Delete Surface
+      description: Permanently delete the library surface. Project copies and their
+        placements are preserved.
       parameters:
       - description: Surface ID
         in: path
@@ -2202,7 +2336,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: DeleteCurrentUser
+      description: Permanently delete the account and owned data, including sessions,
+        projects and library resources. Requires the current password.
       parameters:
       - description: Delete Current User
         in: body

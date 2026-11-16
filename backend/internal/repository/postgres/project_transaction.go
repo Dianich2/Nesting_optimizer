@@ -35,7 +35,14 @@ func (s *ScopedDB) WithinProject(ctx context.Context, projectID, userID int64, f
 	}
 	defer func() { _ = tx.Rollback() }()
 	var id int64
-	err = tx.GetContext(ctx, &id, "SELECT id FROM projects WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL FOR UPDATE", projectID, userID)
+	err = tx.GetContext(ctx, &id, "SELECT id FROM users WHERE id = $1 FOR KEY SHARE", userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return apperror.NotFound("project not found")
+	}
+	if err != nil {
+		return apperror.Internal("lock project owner", err)
+	}
+	err = tx.GetContext(ctx, &id, "SELECT id FROM projects WHERE id = $1 AND user_id = $2 FOR UPDATE", projectID, userID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return apperror.NotFound("project not found")
 	}

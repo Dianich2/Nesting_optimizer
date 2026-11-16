@@ -49,7 +49,7 @@ type UserRepository interface {
 		newPasswordHash string,
 	) error
 
-	SoftDelete(
+	Delete(
 		ctx context.Context,
 		userID int64,
 		expectedPasswordHash string,

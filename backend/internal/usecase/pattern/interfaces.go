@@ -33,7 +33,7 @@ type PatternRepository interface {
 		geometry *domaingeometry.Polygon,
 	) (domainpattern.Pattern, error)
 
-	SoftDelete(
+	Delete(
 		ctx context.Context,
 		patternID int64,
 		userID int64,

@@ -256,7 +256,7 @@ func (h *ProjectPatternHandler) Update(c fiber.Ctx) error {
 
 // godoc: DeleteProjectPattern godoc
 // @Summary Delete Project Pattern
-// @Description Delete Project Pattern
+// @Description Permanently delete an unused project pattern. Returns 409 while placements reference it.
 // @Param project_id path int true "Project ID"
 // @Param id path int true "Project Pattern ID"
 // @Success 204 "No Content"

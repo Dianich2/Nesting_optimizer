@@ -1,10 +1,18 @@
+import { useWheelZoom } from '../../shared/geometry/useWheelZoom'
 import { useEffect, useId, useRef, useState } from 'react'
 import type { PointerEvent } from 'react'
 import type { PolygonGeometry } from '../project-resources/types'
 import type { Placement } from './api'
 import { polygonPath } from './geometry'
 import { fitDrawingView } from '../library/geometryDraft'
-import { fitAspect, zoomView } from '../../shared/geometry/viewport'
+import {
+    angleAround,
+    fitAspect,
+    normalizeAngle,
+    screenToWorld,
+    snapCoordinate,
+    zoomView,
+} from '../../shared/geometry/viewport'
 import type { Viewport } from '../../shared/geometry/viewport'
 
 interface Props {
@@ -15,7 +23,7 @@ interface Props {
     adding: boolean
     onSelect: (id: number | null) => void
     onAdd: (x: number, y: number) => void
-    onMove: (id: number, x: number, y: number) => void
+    onMove: (id: number, x: number, y: number, rotation?: number) => void
 }
 export function NestingCanvas({
     surface,
@@ -33,17 +41,30 @@ export function NestingCanvas({
     const [aspect, setAspect] = useState(1)
     const [pan, setPan] = useState(false)
     const [grid, setGrid] = useState(true)
+    const [snap, setSnap] = useState(false)
     const [step, setStep] = useState(10)
-    const [preview, setPreview] = useState<{ id: number; dx: number; dy: number } | null>(null)
+    const [preview, setPreview] = useState<{
+        id: number
+        dx?: number
+        dy?: number
+        rotation?: number
+    } | null>(null)
     const drag = useRef<{
         pointer: number
         x: number
         y: number
         view: Viewport
         item?: Placement
+        initialAngle?: number
         scale: number
     } | null>(null)
     const visible = fitAspect(view, aspect)
+    useWheelZoom(svg, visible, setView, () => !drag.current && !busy)
+    const selection = placements.find((item) => item.id === selected)
+    const fit = fitAspect(fitDrawingView(surface), aspect)
+    function snapped(x: number, y: number) {
+        return { x: snapCoordinate(x, step, snap), y: snapCoordinate(y, step, snap) }
+    }
     useEffect(() => {
         const element = svg.current
         if (!element) return
@@ -55,7 +76,7 @@ export function NestingCanvas({
         return () => observer.disconnect()
     }, [])
     function start(event: PointerEvent<SVGSVGElement>) {
-        if (busy || event.button > 1) return
+        if (busy || drag.current || !event.isPrimary || event.button > 1) return
         if (pan || event.button === 1) {
             event.preventDefault()
             drag.current = {
@@ -69,31 +90,53 @@ export function NestingCanvas({
             return
         }
         if (adding) {
-            const matrix = event.currentTarget.getScreenCTM()
-            if (!matrix) return
-            const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(
-                matrix.inverse(),
-            )
-            onAdd(point.x, point.y)
+            const point = screenToWorld(event.currentTarget, event.clientX, event.clientY)
+            if (!point) return
+            const position = snapped(point.x, point.y)
+            onAdd(position.x, position.y)
         } else onSelect(null)
+    }
+    function rotationAt(event: PointerEvent<SVGSVGElement>, item: Placement, original: number) {
+        const point = screenToWorld(event.currentTarget, event.clientX, event.clientY)
+        if (!point) return item.rotation
+        const angle = item.rotation + angleAround(item, point) - original
+        return normalizeAngle(event.shiftKey ? Math.round(angle / 15) * 15 : angle)
     }
     function move(event: PointerEvent<SVGSVGElement>) {
         const current = drag.current
         if (!current || current.pointer !== event.pointerId) return
         const dx = (event.clientX - current.x) * current.scale
         const dy = (event.clientY - current.y) * current.scale
-        if (current.item) setPreview({ id: current.item.id, dx, dy })
-        else setView({ ...current.view, x: current.view.x - dx, y: current.view.y - dy })
+        if (current.item && current.initialAngle !== undefined) {
+            setPreview({
+                id: current.item.id,
+                rotation: rotationAt(event, current.item, current.initialAngle),
+            })
+        } else if (current.item) {
+            const target = snapped(current.item.x + dx, current.item.y + dy)
+            setPreview({
+                id: current.item.id,
+                dx: target.x - current.item.x,
+                dy: target.y - current.item.y,
+            })
+        } else setView({ ...current.view, x: current.view.x - dx, y: current.view.y - dy })
     }
     function stop(event: PointerEvent<SVGSVGElement>, cancelled = false) {
         const current = drag.current
+        if (!current || current.pointer !== event.pointerId) return
         drag.current = null
         setPreview(null)
         if (current?.item && !cancelled) {
             const dx = (event.clientX - current.x) * current.scale
             const dy = (event.clientY - current.y) * current.scale
-            if (dx !== 0 || dy !== 0)
-                onMove(current.item.id, current.item.x + dx, current.item.y + dy)
+            if (current.initialAngle !== undefined) {
+                const rotation = rotationAt(event, current.item, current.initialAngle)
+                if (rotation !== current.item.rotation)
+                    onMove(current.item.id, current.item.x, current.item.y, rotation)
+            } else if (dx !== 0 || dy !== 0) {
+                const target = snapped(current.item.x + dx, current.item.y + dy)
+                onMove(current.item.id, target.x, target.y)
+            }
         }
         if (event.currentTarget.hasPointerCapture(event.pointerId))
             event.currentTarget.releasePointerCapture(event.pointerId)
@@ -107,6 +150,9 @@ export function NestingCanvas({
                 <button type="button" onClick={() => setView(zoomView(visible, 1.25))}>
                     −
                 </button>
+                <output aria-label="Масштаб полотна">
+                    {Math.round((fit.width / visible.width) * 100)}%
+                </output>
                 <button type="button" onClick={() => setView(fitDrawingView(surface))}>
                     Уместить поверхность
                 </button>
@@ -121,6 +167,15 @@ export function NestingCanvas({
                     />
                     Сетка
                 </label>
+                <label>
+                    <input
+                        type="checkbox"
+                        checked={snap}
+                        onChange={(event) => setSnap(event.target.checked)}
+                    />
+                    Привязка к сетке
+                </label>
+                {preview?.rotation !== undefined && <output>{preview.rotation.toFixed(1)}°</output>}
                 <label>
                     Шаг{' '}
                     <input
@@ -143,7 +198,8 @@ export function NestingCanvas({
                 onPointerMove={move}
                 onPointerUp={(event) => stop(event)}
                 onPointerCancel={(event) => stop(event, true)}
-                onLostPointerCapture={() => {
+                onLostPointerCapture={(event) => {
+                    if (drag.current?.pointer !== event.pointerId) return
                     drag.current = null
                     setPreview(null)
                 }}
@@ -180,7 +236,9 @@ export function NestingCanvas({
                         d={polygonPath(item.geometry)}
                         transform={
                             preview?.id === item.id
-                                ? `translate(${preview.dx} ${preview.dy})`
+                                ? preview.rotation !== undefined
+                                    ? `rotate(${preview.rotation - item.rotation} ${item.x} ${item.y})`
+                                    : `translate(${preview.dx} ${preview.dy})`
                                 : undefined
                         }
                         fill={selected === item.id ? '#e9434b' : '#60a5fa'}
@@ -200,7 +258,14 @@ export function NestingCanvas({
                         onPointerDown={(event) => {
                             if (pan || event.button === 1 || adding) return
                             event.stopPropagation()
-                            if (busy || event.button !== 0 || !svg.current) return
+                            if (
+                                busy ||
+                                drag.current ||
+                                !event.isPrimary ||
+                                event.button !== 0 ||
+                                !svg.current
+                            )
+                                return
                             onSelect(item.id)
                             drag.current = {
                                 pointer: event.pointerId,
@@ -214,6 +279,42 @@ export function NestingCanvas({
                         }}
                     />
                 ))}
+                {selection && !pan && !adding && (
+                    <circle
+                        cx={selection.x}
+                        cy={selection.y - visible.width / 20}
+                        r={visible.width / 95}
+                        fill="#e9434b"
+                        stroke="white"
+                        strokeWidth={visible.width / 600}
+                        aria-label="Ручка поворота"
+                        onPointerDown={(event) => {
+                            event.stopPropagation()
+                            if (
+                                busy ||
+                                drag.current ||
+                                !event.isPrimary ||
+                                event.button !== 0 ||
+                                !svg.current
+                            )
+                                return
+                            const point = screenToWorld(svg.current, event.clientX, event.clientY)
+                            if (!point) return
+                            drag.current = {
+                                pointer: event.pointerId,
+                                x: event.clientX,
+                                y: event.clientY,
+                                view: visible,
+                                item: selection,
+                                scale: visible.width / svg.current.getBoundingClientRect().width,
+                                initialAngle: angleAround(selection, point),
+                            }
+                            svg.current.setPointerCapture(event.pointerId)
+                        }}
+                    >
+                        <title>Перетащите для поворота. Shift привязывает к шагу 15°.</title>
+                    </circle>
+                )}
             </svg>
         </div>
     )

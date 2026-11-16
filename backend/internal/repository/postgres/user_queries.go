@@ -44,11 +44,9 @@ const getByIdentifierQuery = `
 		first_name, 
 		last_name, 
 		created_at, 
-		updated_at, 
-		deleted_at
+		updated_at
 	FROM users
 	WHERE (login = $1 OR email = $1)
-		AND deleted_at IS NULL
 	LIMIT 1
 `
 
@@ -61,11 +59,9 @@ const getByIDQuery = `
 		last_name, 
 		password_hash,
 		created_at, 
-		updated_at, 
-		deleted_at
+		updated_at
 	FROM users
 	WHERE id = $1
-		AND deleted_at IS NULL
 `
 
 const updateProfileQuery = `
@@ -75,7 +71,6 @@ const updateProfileQuery = `
 		last_name = COALESCE($2, last_name),
 		updated_at = NOW()
 	WHERE id = $3
-		AND deleted_at IS NULL
 	RETURNING
 		id, 
 		login, 
@@ -83,8 +78,7 @@ const updateProfileQuery = `
 		first_name, 
 		last_name, 
 		created_at, 
-		updated_at, 
-		deleted_at
+		updated_at
 `
 
 const updatePasswordQuery = `
@@ -95,15 +89,10 @@ const updatePasswordQuery = `
 	WHERE 
 		password_hash = $2
 			AND id = $3
-			AND deleted_at IS NULL
 `
 
-const softDeleteUserQuery = `
-	UPDATE users
-	SET
-		deleted_at = NOW(),
-		updated_at = NOW()
+const deleteUserQuery = `
+	DELETE FROM users
 	WHERE id = $1
 		AND password_hash = $2
-		AND deleted_at IS NULL
 `

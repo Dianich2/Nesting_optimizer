@@ -67,6 +67,9 @@ func (r *ProjectPatternRepository) Create(
 		input.Name,
 		encoded,
 	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domainprojectpattern.ProjectPattern{}, domainprojectpattern.ErrNotFound
+		}
 		return domainprojectpattern.ProjectPattern{}, fmt.Errorf(
 			"create project pattern: %w",
 			err,
@@ -251,7 +254,7 @@ func (r *ProjectPatternRepository) Update(
 	return projectPattern, nil
 }
 
-func (r *ProjectPatternRepository) SoftDelete(
+func (r *ProjectPatternRepository) Delete(
 	ctx context.Context,
 	projectPatternID int64,
 	projectID int64,
@@ -260,18 +263,18 @@ func (r *ProjectPatternRepository) SoftDelete(
 	affected, err := execAffected(
 		ctx,
 		r.db,
-		softDeleteProjectPatternQuery,
+		deleteProjectPatternQuery,
 		projectPatternID,
 		projectID,
 		userID,
 	)
 	if err != nil {
-		return fmt.Errorf("soft delete project pattern: %w", err)
+		return fmt.Errorf("delete project pattern: %w", err)
 	}
 
 	if affected == 0 {
 		return fmt.Errorf(
-			"soft delete project pattern: %w",
+			"delete project pattern: %w",
 			domainprojectpattern.ErrNotFound,
 		)
 	}

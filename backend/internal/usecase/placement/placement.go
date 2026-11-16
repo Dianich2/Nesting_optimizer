@@ -74,9 +74,10 @@ type ListPlacementsItem struct {
 }
 
 type UpdatePlacementInput struct {
-	UserID      int64
-	ProjectID   int64
-	PlacementID int64
+	ExpectedVersion string
+	UserID          int64
+	ProjectID       int64
+	PlacementID     int64
 
 	X        *float64
 	Y        *float64
@@ -96,7 +97,8 @@ type UpdatePlacementOutput struct {
 }
 
 type DeletePlacementInput struct {
-	PlacementID int64
-	ProjectID   int64
-	UserID      int64
+	ExpectedVersion string
+	PlacementID     int64
+	ProjectID       int64
+	UserID          int64
 }

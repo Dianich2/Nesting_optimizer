@@ -199,7 +199,7 @@ func (r *UserRepository) ChangePassword(
 	return nil
 }
 
-func (r *UserRepository) SoftDelete(
+func (r *UserRepository) Delete(
 	ctx context.Context,
 	userID int64,
 	expectedPasswordHash string,
@@ -207,17 +207,17 @@ func (r *UserRepository) SoftDelete(
 	affected, err := execAffected(
 		ctx,
 		r.db,
-		softDeleteUserQuery,
+		deleteUserQuery,
 		userID,
 		expectedPasswordHash,
 	)
 	if err != nil {
-		return fmt.Errorf("soft delete user: %w", err)
+		return fmt.Errorf("delete user: %w", err)
 	}
 
 	if affected == 0 {
 		return fmt.Errorf(
-			"soft delete user: %w",
+			"delete user: %w",
 			domainuser.ErrUserChanged,
 		)
 	}

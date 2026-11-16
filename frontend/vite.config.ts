@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8082',
+        target: process.env.NESTING_API_TARGET ?? 'http://127.0.0.1:8082',
         changeOrigin: true,
       },
     },

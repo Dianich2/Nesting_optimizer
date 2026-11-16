@@ -98,4 +98,6 @@ func registerNestingRoutes(
 	nestingHandler *handler.NestingHandler,
 ) {
 	api.Post("/projects/:project_id/surfaces/:project_surface_id/nesting", nestingHandler.Run)
+	api.Get("/projects/:project_id/surfaces/:project_surface_id/nesting/operations/:operation_key", nestingHandler.GetOperation)
+	api.Get("/projects/:project_id/surfaces/:project_surface_id/nesting/history", nestingHandler.History)
 }

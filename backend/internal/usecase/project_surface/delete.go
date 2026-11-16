@@ -49,7 +49,7 @@ func (uc *DeleteProjectSurfaceUseCase) execute(
 		return apperror.Conflict("project surface is used by active placements")
 	}
 
-	err := uc.repo.SoftDelete(
+	err := uc.repo.Delete(
 		ctx,
 		input.ProjectSurfaceID,
 		input.ProjectID,
@@ -63,7 +63,7 @@ func (uc *DeleteProjectSurfaceUseCase) execute(
 		}
 
 		return apperror.Internal(
-			"failed to soft delete project surface",
+			"failed to delete project surface",
 			err,
 		)
 	}

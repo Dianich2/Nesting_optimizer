@@ -135,6 +135,9 @@ func (uc *CreateProjectPatternUseCase) execute(
 		input.UserID,
 	)
 	if err != nil {
+		if errors.Is(err, domainprojectpattern.ErrNotFound) {
+			return CreateProjectPatternOutput{}, apperror.NotFound("pattern not found")
+		}
 		return CreateProjectPatternOutput{}, apperror.Internal(
 			"failed to create project pattern",
 			err,

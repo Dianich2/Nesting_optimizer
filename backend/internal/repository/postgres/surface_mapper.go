@@ -23,7 +23,6 @@ func (r *SurfaceRepository) surfaceRowToDomain(
 		Geometry:  polygon,
 		CreatedAt: row.CreatedAt,
 		UpdatedAt: row.UpdatedAt,
-		DeletedAt: nullTimeToPtr(row.DeletedAt),
 	}, nil
 }
 
@@ -45,7 +44,6 @@ func (r *SurfaceRepository) surfaceListRowToDomain(
 		Geometry:  polygon,
 		CreatedAt: row.CreatedAt.Time,
 		UpdatedAt: row.UpdatedAt.Time,
-		DeletedAt: nil,
 	}
 
 	return surface, nil

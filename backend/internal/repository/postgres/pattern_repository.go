@@ -30,13 +30,12 @@ func NewPatternRepository(
 var _ patternusecase.PatternRepository = (*PatternRepository)(nil)
 
 type PatternRow struct {
-	ID        int64        `db:"id"`
-	UserID    int64        `db:"user_id"`
-	Name      string       `db:"name"`
-	Geometry  []byte       `db:"geometry"`
-	CreatedAt time.Time    `db:"created_at"`
-	UpdatedAt time.Time    `db:"updated_at"`
-	DeletedAt sql.NullTime `db:"deleted_at"`
+	ID        int64     `db:"id"`
+	UserID    int64     `db:"user_id"`
+	Name      string    `db:"name"`
+	Geometry  []byte    `db:"geometry"`
+	CreatedAt time.Time `db:"created_at"`
+	UpdatedAt time.Time `db:"updated_at"`
 }
 
 func (r *PatternRepository) Create(
@@ -237,7 +236,7 @@ func (r *PatternRepository) Update(
 	return pattern, nil
 }
 
-func (r *PatternRepository) SoftDelete(
+func (r *PatternRepository) Delete(
 	ctx context.Context,
 	patternID int64,
 	userID int64,
@@ -245,17 +244,17 @@ func (r *PatternRepository) SoftDelete(
 	affected, err := execAffected(
 		ctx,
 		r.db,
-		softDeletePatternQuery,
+		deletePatternQuery,
 		patternID,
 		userID,
 	)
 	if err != nil {
-		return fmt.Errorf("soft delete pattern: %w", err)
+		return fmt.Errorf("delete pattern: %w", err)
 	}
 
 	if affected == 0 {
 		return fmt.Errorf(
-			"soft delete pattern: %w",
+			"delete pattern: %w",
 			domainpattern.ErrNotFound,
 		)
 	}

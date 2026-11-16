@@ -37,6 +37,5 @@ func placementRowToDomain(
 		Rotation:         row.Rotation,
 		CreatedAt:        row.CreatedAt,
 		UpdatedAt:        row.UpdatedAt,
-		DeletedAt:        nil,
 	}
 }

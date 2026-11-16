@@ -226,7 +226,7 @@ func (h *SurfaceHandler) Update(c fiber.Ctx) error {
 
 // godoc: DeleteSurface godoc
 // @Summary Delete Surface
-// @Description Delete Surface
+// @Description Permanently delete the library surface. Project copies and their placements are preserved.
 // @Param id path int true "Surface ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} httperror.ErrorResponse

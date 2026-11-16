@@ -32,7 +32,7 @@ type ProjectRepository interface {
 		description *string,
 	) (domainproject.Project, error)
 
-	SoftDelete(
+	Delete(
 		ctx context.Context,
 		projectID int64,
 		userID int64,

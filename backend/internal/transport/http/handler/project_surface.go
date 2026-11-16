@@ -256,7 +256,7 @@ func (h *ProjectSurfaceHandler) Update(c fiber.Ctx) error {
 
 // godoc: DeleteProjectSurface godoc
 // @Summary Delete Project Surface
-// @Description Delete Project Surface
+// @Description Permanently delete an unused project surface and its nesting history. Returns 409 while placements exist.
 // @Param project_id path int true "Project ID"
 // @Param id path int true "Project Surface ID"
 // @Success 204 "No Content"

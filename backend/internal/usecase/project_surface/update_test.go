@@ -34,7 +34,7 @@ func (r *resourceStub) Update(_ context.Context, _, _, _ int64, name *string, ge
 	}
 	return r.item, nil
 }
-func (r *resourceStub) SoftDelete(context.Context, int64, int64, int64) error {
+func (r *resourceStub) Delete(context.Context, int64, int64, int64) error {
 	r.deletes++
 	return nil
 }

@@ -13,5 +13,4 @@ type ProjectSurface struct {
 	Geometry        geometry.Polygon
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
-	DeletedAt       *time.Time
 }

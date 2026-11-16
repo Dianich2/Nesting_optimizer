@@ -9,7 +9,6 @@ const createProjectQuery = `
 	SELECT $1, $2, $3
 	FROM users u
 	WHERE u.id = $1
-		AND u.deleted_at IS NULL
 	RETURNING 
 		id, 
 		user_id,
@@ -26,12 +25,10 @@ const getProjectByIDQuery = `
 		name,
 		description,
 		created_at,
-		updated_at,
-		deleted_at
+		updated_at
 	FROM projects
 	WHERE id = $1 
 		AND user_id = $2
-		AND deleted_at IS NULL
 `
 
 const listProjectsQuery = `
@@ -46,7 +43,6 @@ const listProjectsQuery = `
 			COUNT(*) OVER() AS total
 		FROM projects
 		WHERE user_id = $1
-			AND deleted_at IS NULL
 	),
 	paged AS (
 		SELECT 
@@ -88,7 +84,6 @@ const updateProjectQuery = `
 		updated_at = NOW()
 	WHERE id = $3
 		AND user_id = $4
-		AND deleted_at IS NULL
 	RETURNING 
 		id, 
 		user_id,
@@ -98,12 +93,8 @@ const updateProjectQuery = `
 		updated_at
 `
 
-const softDeleteProjectQuery = `
-	UPDATE projects
-	SET
-		deleted_at = NOW(),
-		updated_at = NOW()
+const deleteProjectQuery = `
+	DELETE FROM projects
 	WHERE id = $1
 		AND user_id = $2
-		AND deleted_at IS NULL
 `

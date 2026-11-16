@@ -16,10 +16,9 @@ const createProjectPatternQuery = `
 	JOIN patterns pa
 		ON pa.id = $3
 		AND pa.user_id = $1
-		AND pa.deleted_at IS NULL
 	WHERE p.id = $2
 		AND p.user_id = $1
-		AND p.deleted_at IS NULL
+	FOR KEY SHARE OF pa
 	RETURNING
 		id,
 		project_id,
@@ -45,8 +44,6 @@ const getProjectPatternByIDQuery = `
 	WHERE pp.id = $1
 		AND pp.project_id = $2
 		AND p.user_id = $3
-		AND pp.deleted_at IS NULL
-		AND p.deleted_at IS NULL
 `
 
 const listProjectPatternsQuery = `
@@ -55,7 +52,6 @@ const listProjectPatternsQuery = `
 		FROM projects
 		WHERE id = $1
 			AND user_id = $2
-			AND deleted_at IS NULL
 	),
 	filtered AS (
 		SELECT
@@ -70,7 +66,6 @@ const listProjectPatternsQuery = `
 		FROM project_patterns pp
 		INNER JOIN accessible_project p
 		    ON p.id = pp.project_id
-		WHERE pp.deleted_at IS NULL
 	),
 	paged AS (
 		SELECT 
@@ -123,8 +118,6 @@ const updateProjectPatternQuery = `
 		AND pp.project_id = $2
 		AND p.id = pp.project_id
 		AND p.user_id = $3
-		AND pp.deleted_at IS NULL
-		AND p.deleted_at IS NULL
 	RETURNING
 		pp.id,
 		pp.project_id,
@@ -135,18 +128,13 @@ const updateProjectPatternQuery = `
 		pp.updated_at
 `
 
-const softDeleteProjectPatternQuery = `
-	UPDATE project_patterns pp
-	SET 
-		deleted_at = NOW(),
-		updated_at = NOW()
-	FROM projects p
+const deleteProjectPatternQuery = `
+	DELETE FROM project_patterns pp
+	USING projects p
 	WHERE pp.id = $1
 		AND pp.project_id = $2
 		AND p.id = pp.project_id
 		AND p.user_id = $3
-		AND pp.deleted_at IS NULL
-		AND p.deleted_at IS NULL
 `
 
 const hasActivePlacementsByProjectPatternIDQuery = `
@@ -163,10 +151,6 @@ const hasActivePlacementsByProjectPatternIDQuery = `
 		WHERE pp.id = $1
 			AND pp.project_id = $2
 			AND p.user_id = $3
-			AND pl.deleted_at IS NULL
-			AND pp.deleted_at IS NULL
-			AND ps.deleted_at IS NULL
-			AND p.deleted_at IS NULL
 	)
 `
 
@@ -185,6 +169,4 @@ const getProjectPatternsByIDsQuery = `
 	WHERE pp.id = ANY($1::BIGINT[])
 		AND pp.project_id = $2
 		AND p.user_id = $3
-		AND pp.deleted_at IS NULL
-		AND p.deleted_at IS NULL
 `

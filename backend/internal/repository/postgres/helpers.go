@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"time"
 
 	"github.com/lib/pq"
 )
@@ -40,18 +39,6 @@ func execAffected(
 	}
 
 	return affected, nil
-}
-
-func nullTimeToPtr(
-	value sql.NullTime,
-) *time.Time {
-	var time *time.Time
-	if value.Valid {
-		t := value.Time
-		time = &t
-	}
-
-	return time
 }
 
 func nullInt64ToPtr(

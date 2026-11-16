@@ -37,7 +37,7 @@ type ProjectPatternRepository interface {
 		geometry *domaingeometry.Polygon,
 	) (domainprojectpattern.ProjectPattern, error)
 
-	SoftDelete(
+	Delete(
 		ctx context.Context,
 		projectPatternID int64,
 		projectID int64,

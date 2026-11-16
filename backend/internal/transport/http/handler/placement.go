@@ -206,6 +206,7 @@ func (h *PlacementHandler) ListPlacements(c fiber.Ctx) error {
 // @Produce json
 // @Param project_id path int true "Project ID"
 // @Param placement_id path int true "Placement ID"
+// @Param X-Placement-Version header string false "Placement updated_at for optimistic concurrency"
 // @Param placement body dto.UpdatePlacementRequest true "Placement"
 // @Success 200 {object} dto.UpdatePlacementResponse
 // @Failure 400 {object} httperror.ErrorResponse
@@ -245,6 +246,7 @@ func (h *PlacementHandler) Update(c fiber.Ctx) error {
 		placementID,
 	)
 
+	inputUpdatePlacementUseCase.ExpectedVersion = c.Get("X-Placement-Version")
 	outputUpdatePlacementUseCase, err := h.updatePlacementUseCase.Execute(
 		c.Context(),
 		inputUpdatePlacementUseCase,
@@ -263,13 +265,15 @@ func (h *PlacementHandler) Update(c fiber.Ctx) error {
 
 // godoc: DeletePlacement godoc
 // @Summary Delete Placement
-// @Description Delete Placement
+// @Description Permanently delete the selected placement. Project resources and nesting history are preserved.
 // @Param project_id path int true "Project ID"
 // @Param placement_id path int true "Placement ID"
+// @Param X-Placement-Version header string false "Placement updated_at for optimistic concurrency"
 // @Success 204 "No Content"
 // @Failure 400 {object} httperror.ErrorResponse
 // @Failure 401 {object} httperror.ErrorResponse
 // @Failure 404 {object} httperror.ErrorResponse
+// @Failure 409 {object} httperror.ErrorResponse
 // @Failure 500 {object} httperror.ErrorResponse
 // @Resource Placements
 // @Security BearerAuth
@@ -296,6 +300,7 @@ func (h *PlacementHandler) Delete(c fiber.Ctx) error {
 		placementID,
 	)
 
+	inputDeletePlacementUseCase.ExpectedVersion = c.Get("X-Placement-Version")
 	err = h.deletePlacementUseCase.Execute(
 		c.Context(),
 		inputDeletePlacementUseCase,

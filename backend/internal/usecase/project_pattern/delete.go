@@ -49,7 +49,7 @@ func (uc *DeleteProjectPatternUseCase) execute(
 		return apperror.Conflict("project pattern is used by active placements")
 	}
 
-	err := uc.repo.SoftDelete(
+	err := uc.repo.Delete(
 		ctx,
 		input.ProjectPatternID,
 		input.ProjectID,
@@ -63,7 +63,7 @@ func (uc *DeleteProjectPatternUseCase) execute(
 		}
 
 		return apperror.Internal(
-			"failed to soft delete project pattern",
+			"failed to delete project pattern",
 			err,
 		)
 	}

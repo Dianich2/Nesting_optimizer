@@ -130,9 +130,7 @@ func (uc *CreatePlacementUseCase) execute(
 	}
 
 	if !isCoveredBy {
-		return CreatePlacementOutput{}, apperror.Conflict(
-			"placement is outside project surface",
-		)
+		return CreatePlacementOutput{}, coverageConflict(uc.geometryEngine, transformedGeometry, projectSurface.Geometry)
 	}
 
 	existingPlacements, err := uc.placementRepo.ListForCollisionCheck(
@@ -174,9 +172,7 @@ func (uc *CreatePlacementUseCase) execute(
 		}
 
 		if intersects {
-			return CreatePlacementOutput{}, apperror.Conflict(
-				"placement overlaps another placement",
-			)
+			return CreatePlacementOutput{}, placementConflict("placement_overlap", "placement overlaps another placement")
 		}
 	}
 

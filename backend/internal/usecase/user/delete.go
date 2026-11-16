@@ -67,22 +67,7 @@ func (uc *DeleteCurrentUserUseCase) Execute(
 	err = uc.uow.WithinTransaction(
 		ctx,
 		func(repositories TransactionRepositories) error {
-			if err := repositories.Users.SoftDelete(
-				ctx,
-				userID,
-				user.PasswordHash,
-			); err != nil {
-				return err
-			}
-
-			if err := repositories.Sessions.DeleteByUserID(
-				ctx,
-				userID,
-			); err != nil {
-				return err
-			}
-
-			return nil
+			return repositories.Users.Delete(ctx, userID, user.PasswordHash)
 		},
 	)
 
