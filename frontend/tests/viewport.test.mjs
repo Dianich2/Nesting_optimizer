@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { fitAspect, zoomView } from '../src/shared/geometry/viewport.ts'
+import { fitAspect, resizeView, zoomView } from '../src/shared/geometry/viewport.ts'
 
 test('fitting a wide container preserves center and includes original bounds', () => {
     const source = { x: -10, y: 20, width: 100, height: 100 }
@@ -32,4 +32,13 @@ test('invalid and extreme zoom leave the view usable', () => {
     for (const factor of [0, -1, Infinity, NaN, 1e20])
         assert.deepEqual(zoomView(source, factor), source)
     assert.deepEqual(fitAspect(source, 0), source)
+})
+
+test('resizing the workspace keeps its center and vertical zoom', () => {
+    const original = { x: -120, y: 35, width: 800, height: 600 }
+    const wider = resizeView(original, 2)
+    assert.equal(wider.x + wider.width / 2, original.x + original.width / 2)
+    assert.equal(wider.y + wider.height / 2, original.y + original.height / 2)
+    assert.equal(wider.height, original.height)
+    assert.deepEqual(resizeView(wider, original.width / original.height), original)
 })

@@ -124,7 +124,7 @@ function LibrarySection({
                                         </span>
                                     </div>
                                     <div className="library-item-actions">
-                                        <span className="library-item-id">#{item.id}</span>
+                                        <span className="library-item-id">№ {item.id}</span>
                                         <button
                                             type="button"
                                             className="library-button"

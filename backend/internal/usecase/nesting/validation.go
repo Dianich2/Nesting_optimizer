@@ -5,6 +5,9 @@ import (
 	"server_nesting_optimizer/pkg/apperror"
 )
 
+const maxNestingInstances = 500
+const maxNestingRotations = 36
+
 func (input *RunNestingInput) Validate() []apperror.FieldError {
 	var errors []apperror.FieldError
 
@@ -38,7 +41,16 @@ func (input *RunNestingInput) Validate() []apperror.FieldError {
 
 	seenPatternIDs := make(map[int64]struct{})
 
+	remaining := maxNestingInstances
 	for _, pattern := range input.Patterns {
+		if pattern.Quantity > remaining {
+			errors = append(errors, apperror.NewFieldError("quantity", apperror.FieldCodeInvalid, "a nesting run supports at most 500 instances"))
+			break
+		}
+		if pattern.Quantity > 0 {
+			remaining -= pattern.Quantity
+		}
+
 		errors = append(errors, validation.ValidateID(pattern.ProjectPatternID, "project_pattern_id")...)
 		errors = append(errors, validation.ValidateQuantity(pattern.Quantity)...)
 
@@ -68,6 +80,9 @@ func (input *RunNestingInput) Validate() []apperror.FieldError {
 		))
 	}
 
+	if len(input.AllowedRotations) > maxNestingRotations {
+		return append(errors, apperror.NewFieldError("allowed_rotations", apperror.FieldCodeInvalid, "a nesting run supports at most 36 rotations"))
+	}
 	for _, rotation := range input.AllowedRotations {
 		errors = append(errors, validation.ValidateRotation(rotation)...)
 	}

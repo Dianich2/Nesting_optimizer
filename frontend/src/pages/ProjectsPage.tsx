@@ -208,7 +208,7 @@ export function ProjectsPage() {
 
                                     <div className="project-card-top">
                                         <span className="project-card-label">
-                                            Проект #{project.id}
+                                            Проект № {project.id}
                                         </span>
 
                                         <div className="project-card-actions">

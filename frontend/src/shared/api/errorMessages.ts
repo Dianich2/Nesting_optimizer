@@ -44,6 +44,11 @@ export function getApiErrorMessage(
         return 'Не удалось связаться с сервером. Проверьте подключение.'
     }
 
+    if (error.code === 'nesting_cancelled') return 'Расчёт отменён. Сохранённая раскладка не изменилась.'
+    if (error.code === 'nesting_timeout') return 'Расчёт превысил лимит времени. Попробуйте меньше деталей или более быстрый алгоритм.'
+    if (error.code === 'nesting_not_running') return 'Сервер ещё не начал расчёт или уже завершил его.'
+    if (error.details.some((detail) => detail.field === 'quantity' && detail.message.includes('500'))) return 'За один запуск можно разместить не более 500 деталей.'
+    if (error.details.some((detail) => detail.field === 'allowed_rotations' && detail.message.includes('36'))) return 'Укажите не более 36 допустимых углов.'
     if (context === 'login' && error.status === 401) {
         return 'Неверный логин, электронная почта или пароль.'
     }

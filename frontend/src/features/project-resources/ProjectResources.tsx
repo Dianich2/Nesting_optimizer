@@ -79,7 +79,9 @@ function ResourceList({ projectId, kind, title, emptyMessage }: ResourceListProp
         <section className="project-resource-panel">
             <header className="project-resource-header">
                 <h3>{title}</h3>
-                <button type="button" className="projects-button" onClick={() => setPicker(true)}>Добавить из библиотеки</button>
+                <button type="button" className="projects-button" onClick={() => setPicker(true)}>
+                    Добавить из библиотеки
+                </button>
 
                 {data && <span className="project-resource-count">{data.total}</span>}
             </header>
@@ -107,12 +109,36 @@ function ResourceList({ projectId, kind, title, emptyMessage }: ResourceListProp
                     <ul className="project-resource-list">
                         {data.items.map((item) => (
                             <li key={item.id} className="project-resource-item">
-                                <span className="project-resource-name">{item.name}</span>
-
-                                <span className="project-resource-id">Экземпляр №{item.id}</span>
-                                {kind === 'surfaces' && <Link to={`/projects/${projectId}/surfaces/${item.id}/nesting`}>Открыть раскрой</Link>}
-                                <button type="button" className="projects-button" onClick={() => setEditing(item)}>Редактировать</button>
-                                <button type="button" className="projects-button" onClick={() => setDeleting(item)}>Удалить</button>
+                                <div className="project-resource-details">
+                                    <span className="project-resource-name">{item.name}</span>
+                                    <span className="project-resource-id">
+                                        Экземпляр № {item.id}
+                                    </span>
+                                </div>
+                                <div className="project-resource-actions">
+                                    {kind === 'surfaces' && (
+                                        <Link
+                                            className="project-resource-open"
+                                            to={`/projects/${projectId}/surfaces/${item.id}/nesting`}
+                                        >
+                                            Открыть раскрой <span aria-hidden="true">→</span>
+                                        </Link>
+                                    )}
+                                    <button
+                                        type="button"
+                                        className="projects-button"
+                                        onClick={() => setEditing(item)}
+                                    >
+                                        Редактировать
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="projects-button"
+                                        onClick={() => setDeleting(item)}
+                                    >
+                                        Удалить
+                                    </button>
+                                </div>
                             </li>
                         ))}
                     </ul>
@@ -147,23 +173,54 @@ function ResourceList({ projectId, kind, title, emptyMessage }: ResourceListProp
                     )}
                 </>
             ) : null}
-            {picker && <LibraryPicker projectId={projectId} kind={kind} onClose={() => setPicker(false)}
-                onAdded={() => setReloadKey((value) => value + 1)} />}
-            {editing && <CreateLibraryItemDialog kind={kind} initialItem={editing}
-                onClose={() => setEditing(null)} onSave={async (data) => {
-                    const geometryChanged = JSON.stringify(data.geometry) !== JSON.stringify(editing.geometry)
-                    await updateProjectResource(authorizedRequest, projectId, kind, editing.id,
-                        { name: data.name, ...(geometryChanged ? { geometry: data.geometry } : {}) })
-                    setReloadKey((value) => value + 1)
-                }} />}
-            {deleting && <ConfirmDialog title="Удалить экземпляр из проекта?" onClose={() => setDeleting(null)}
-                onConfirm={async () => {
-                    await deleteProjectResource(authorizedRequest, projectId, kind, deleting.id)
-                    setReloadKey((value) => value + 1)
-                }}>
-                <p>Удалить «{deleting.name}», экземпляр №{deleting.id}?</p>
-                <p>Сначала удалите все размещения, использующие этот экземпляр. Библиотечный оригинал и остальные экземпляры сохранятся.</p>
-            </ConfirmDialog>}
+            {picker && (
+                <LibraryPicker
+                    projectId={projectId}
+                    kind={kind}
+                    onClose={() => setPicker(false)}
+                    onAdded={() => setReloadKey((value) => value + 1)}
+                />
+            )}
+            {editing && (
+                <CreateLibraryItemDialog
+                    kind={kind}
+                    initialItem={editing}
+                    onClose={() => setEditing(null)}
+                    onSave={async (data) => {
+                        const geometryChanged =
+                            JSON.stringify(data.geometry) !== JSON.stringify(editing.geometry)
+                        await updateProjectResource(
+                            authorizedRequest,
+                            projectId,
+                            kind,
+                            editing.id,
+                            {
+                                name: data.name,
+                                ...(geometryChanged ? { geometry: data.geometry } : {}),
+                            },
+                        )
+                        setReloadKey((value) => value + 1)
+                    }}
+                />
+            )}
+            {deleting && (
+                <ConfirmDialog
+                    title="Удалить экземпляр из проекта?"
+                    onClose={() => setDeleting(null)}
+                    onConfirm={async () => {
+                        await deleteProjectResource(authorizedRequest, projectId, kind, deleting.id)
+                        setReloadKey((value) => value + 1)
+                    }}
+                >
+                    <p>
+                        Удалить «{deleting.name}», экземпляр № {deleting.id}?
+                    </p>
+                    <p>
+                        Сначала удалите все размещения, использующие этот экземпляр. Библиотечный
+                        оригинал и остальные экземпляры сохранятся.
+                    </p>
+                </ConfirmDialog>
+            )}
         </section>
     )
 }

@@ -7,9 +7,13 @@ if (!process.env.NESTING_API_TARGET) {
 export default defineConfig({
     testDir: './e2e',
     timeout: 90_000,
+    expect: { timeout: 5_000 },
+
     use: {
         baseURL: 'http://localhost:5178',
         launchOptions: { executablePath: process.env.E2E_CHROME || undefined },
+        actionTimeout: 10_000,
+        trace: 'retain-on-failure',
         viewport: { width: 1440, height: 1000 },
     },
     webServer: {

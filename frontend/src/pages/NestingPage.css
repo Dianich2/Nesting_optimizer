@@ -1,98 +1,222 @@
-.nesting-workspace {
-    display: grid;
-    grid-template-columns: 210px minmax(300px, 1fr) 270px;
-    gap: 16px;
-    align-items: start;
+.app-shell:has(.nesting-page) {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 0;
 }
-.nesting-workspace aside {
-    min-width: 0;
-    max-height: 80vh;
-    overflow: auto;
-    padding: 12px;
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
+
+.app-shell:has(.nesting-page) .app-header {
+    flex: 0 0 auto;
+    min-height: 54px;
+    padding-block: 6px;
 }
-.nesting-workspace label {
-    display: block;
-    margin: 10px 0;
-}
-.nesting-workspace input:not([type='checkbox']),
-.nesting-workspace select {
+.app-content:has(.nesting-page) {
+    display: flex;
+    flex: 1 1 0;
     width: 100%;
-    box-sizing: border-box;
+    max-width: none;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
 }
-.nesting-workspace button {
-    padding: 7px 10px;
-    margin: 3px;
-    cursor: pointer;
-    color: inherit;
-    background: transparent;
+
+.nesting-page {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.nesting-page > header,
+.nesting-status,
+.nesting-page > [role='alert'],
+.nesting-page > [role='status'] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    padding: 6px 12px;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    overflow-wrap: anywhere;
+}
+.nesting-page > header {
+    flex: 0 0 auto;
+}
+.nesting-page > header :is(p, h1),
+.nesting-status p,
+.nesting-page > [role='alert'] p {
+    margin: 0;
+}
+.nesting-page > header h1 {
+    font-size: 17px;
+}
+.nesting-page > header p {
+    color: var(--color-text-muted);
+    font-size: 13px;
+}
+.nesting-page > header label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+.nesting-status {
+    font-size: 13px;
+    color: var(--color-text-muted);
+}
+
+.nesting-workspace {
+    position: relative;
+    display: flex;
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
+}
+
+.nesting-workspace aside {
+    flex: 0 0 clamp(190px, 19vw, 275px);
+    min-width: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 12px;
+    background: var(--color-surface);
+    overflow-wrap: anywhere;
+}
+
+.nesting-workspace aside:first-child {
+    border-inline-end: 1px solid var(--color-border);
+}
+.nesting-workspace aside:last-child {
+    border-inline-start: 1px solid var(--color-border);
+}
+.nesting-workspace aside label {
+    display: grid;
+    min-width: 0;
+    gap: 5px;
+    margin-block: 10px;
+}
+.nesting-workspace aside label:has(input[type='checkbox']) {
+    display: flex;
+    align-items: center;
+}
+.nesting-page :is(input:not([type='checkbox']), select) {
+    min-width: 0;
+    max-width: 100%;
+    padding: 5px 7px;
     border: 1px solid var(--color-border);
     border-radius: 6px;
+    background: var(--color-background);
+    color: var(--color-text);
 }
-.nesting-workspace button:disabled {
-    opacity: 0.5;
-    cursor: default;
+.nesting-workspace aside label :is(input:not([type='checkbox']), select) {
+    width: 100%;
 }
-.nesting-workspace button[aria-pressed='true'] {
-    border-color: #e9434b;
-}
-.nesting-workspace h2 {
-    font-size: 17px;
-    margin: 16px 0 10px;
-}
-.nesting-workspace h3 {
-    font-size: 15px;
-}
-.nesting-workspace p {
+.nesting-page button,
+.nesting-button {
+    min-height: 34px;
+    padding: 5px 9px;
+    color: var(--color-text);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
     font-size: 13px;
-    line-height: 1.5;
+}
+.nesting-page button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.nesting-page button:hover:not(:disabled) {
+    background: var(--color-surface-hover);
+}
+.nesting-page button[aria-pressed='true'] {
+    border-color: var(--color-accent);
+    background: var(--color-surface-hover);
+}
+.nesting-page button.nesting-primary {
+    background: var(--color-action);
+    color: #fff;
+    border-color: var(--color-action);
+}
+.nesting-page button.nesting-primary:hover:not(:disabled) {
+    background: var(--color-action-hover);
+}
+.nesting-page h2 {
+    font-size: 16px;
+    margin: 12px 0 8px;
+}
+.nesting-page h3 {
+    font-size: 14px;
+}
+.nesting-workspace p,
+.nesting-workspace aside label {
+    font-size: 13px;
+    line-height: 1.45;
 }
 .nesting-pattern {
-    padding: 8px 0;
+    display: grid;
+    align-items: start;
+    gap: 6px;
+    padding-block: 10px;
     border-bottom: 1px solid var(--color-border);
 }
-.nesting-canvas {
+.nesting-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+.nesting-quantities {
+    margin: 8px 0;
     min-width: 0;
+    padding: 0;
+    border: 0;
+}
+.nesting-quantities label {
+    grid-template-columns: minmax(0, 1fr) 70px;
+    align-items: center;
+}
+.nesting-quantities legend {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.nesting-canvas {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
 }
 .nesting-canvas svg {
     display: block;
+    flex: 1 1 0;
     width: 100%;
-    height: 70vh;
-    min-height: 400px;
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
+    min-height: 0;
     touch-action: none;
+    background: var(--color-background);
 }
 .nesting-tools {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 5px;
+    gap: 5px 7px;
+}
+.nesting-canvas > .nesting-tools {
+    padding: 5px 8px;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+}
+.nesting-tools label {
+    display: flex;
+    flex-wrap: nowrap;
+    font-size: 13px;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
 }
 .nesting-tools input[type='number'] {
-    width: 80px;
-}
-@media (max-width: 1100px) {
-    .nesting-workspace {
-        grid-template-columns: 180px minmax(0, 1fr);
-    }
-    .nesting-workspace > aside:last-child {
-        grid-column: 1 / -1;
-        max-height: none;
-    }
-}
-@media (max-width: 650px) {
-    .nesting-workspace {
-        grid-template-columns: 1fr;
-    }
-    .nesting-workspace aside {
-        max-height: none;
-    }
-}
-
-.nesting-history {
-    margin-block: 20px;
+    width: 65px;
 }
 .nesting-history-scroll {
     overflow-x: auto;
@@ -100,10 +224,86 @@
 .nesting-history table {
     border-collapse: collapse;
     width: 100%;
+    min-width: 680px;
+    overflow-wrap: normal;
 }
 .nesting-history th,
 .nesting-history td {
     padding: 8px;
     text-align: start;
+    white-space: nowrap;
     border-bottom: 1px solid var(--color-border);
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+    .nesting-workspace aside {
+        position: absolute;
+        inset-block: 0;
+        z-index: 1;
+        width: min(265px, calc(100% - 36px));
+    }
+    .nesting-workspace aside:first-child {
+        inset-inline-start: 0;
+    }
+    .nesting-workspace aside:last-child {
+        inset-inline-end: 0;
+    }
+}
+
+.nesting-menu {
+    position: relative;
+    font-size: 13px;
+}
+.nesting-menu summary {
+    cursor: pointer;
+    min-height: 34px;
+    padding: 7px 9px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+}
+.nesting-menu-content {
+    position: absolute;
+    inset-block-start: calc(100% + 5px);
+    inset-inline-end: 0;
+    z-index: 3;
+    display: grid;
+    gap: 10px;
+    width: max-content;
+    max-width: min(250px, 90vw);
+    padding: 12px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    box-shadow: 0 5px 20px rgb(0 0 0 / 14%);
+}
+
+@media (max-width: 700px) {
+    .nesting-page > header {
+        gap: 6px 10px;
+    }
+    .nesting-page > header > p,
+    .nesting-page > header > label > span,
+    .nesting-page > header:has(select) > h1 {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+    .nesting-page > header select {
+        max-width: 185px;
+    }
+    .nesting-page > header > .nesting-tools {
+        width: 100%;
+    }
 }

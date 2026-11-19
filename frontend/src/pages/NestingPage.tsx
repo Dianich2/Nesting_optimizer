@@ -2,7 +2,11 @@ import { confirmReplay, recordPlacement } from '../features/nesting/placementHis
 import type { PlacementHistory, PlacementPose } from '../features/nesting/placementHistory'
 import { NestingHistory } from '../features/nesting/NestingHistory'
 import { downloadLayout, exportLayoutSVG } from '../features/nesting/exportLayout'
-import { readPendingNesting, runNesting } from '../features/nesting/runNesting'
+import {
+    nestingRequestTimeout,
+    readPendingNesting,
+    runNesting,
+} from '../features/nesting/runNesting'
 import type { PendingNesting } from '../features/nesting/runNesting'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
@@ -61,6 +65,32 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
     const [refreshRequired, setRefreshRequired] = useState(false)
     const [reload, setReload] = useState(0)
     const [busy, setBusy] = useState(false)
+    const [execution, setExecution] = useState<{ key: string; preview: boolean } | null>(null)
+    const [cancelling, setCancelling] = useState(false)
+    const [proposal, setProposal] = useState<{
+        result: NestingResult
+        includeSaved: boolean
+    } | null>(null)
+    const [patternsOpen, setPatternsOpen] = useState(() => window.innerWidth > 700)
+    const [inspectorOpen, setInspectorOpen] = useState(() => window.innerWidth > 700)
+    useEffect(() => {
+        const compact = window.matchMedia('(max-width: 700px)')
+        const closePanels = () => {
+            if (compact.matches) {
+                setPatternsOpen(false)
+                setInspectorOpen(false)
+            }
+        }
+        compact.addEventListener('change', closePanels)
+        return () => compact.removeEventListener('change', closePanels)
+    }, [])
+    function openInspector(section: 'properties' | 'automatic' | 'history') {
+        if (window.matchMedia('(max-width: 700px)').matches) setPatternsOpen(false)
+        setInspectorOpen(true)
+        setPanel(section)
+    }
+    const [panel, setPanel] = useState<'properties' | 'automatic' | 'history'>('properties')
+
     const pending = useRef(false)
     const [selected, setSelected] = useState<number | null>(null)
     const [patternId, setPatternId] = useState<number | null>(null)
@@ -222,6 +252,8 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
             const current = retry ?? { key: crypto.randomUUID(), request }
             sessionStorage.setItem(storageKey, JSON.stringify(current))
             setOperation(current)
+            setProposal(null)
+            setExecution({ key: current.key, preview: false })
             const clearOperation = () => {
                 sessionStorage.removeItem(storageKey)
                 setOperation(null)
@@ -231,6 +263,7 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
                 base,
                 request,
                 (response) => {
+                    setExecution(null)
                     setResult(response)
                     setHistory({ undo: [], redo: [] })
                     setHistoryRevision((value) => value + 1)
@@ -250,10 +283,15 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
                 },
                 setPlacements,
                 current.key,
-            ).catch((caught) => {
-                clearOperation()
-                throw caught
-            })
+            )
+                .finally(() => {
+                    setExecution(null)
+                    setCancelling(false)
+                })
+                .catch((caught) => {
+                    clearOperation()
+                    throw caught
+                })
             if (status !== 'unknown') clearOperation()
             if (status === 'synchronized') {
                 setSyncError(null)
@@ -273,7 +311,9 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
             const status = await authorizedRequest<{
                 status: 'unknown' | 'running' | 'completed' | 'failed'
                 result?: NestingResult
-            }>(`${base}/nesting/operations/${current.key}`)
+            }>(`${base}/nesting/operations/${current.key}`, {
+                signal: AbortSignal.timeout(10_000),
+            })
             if (status.status === 'completed' && status.result) {
                 setResult(status.result)
                 setHistoryRevision((value) => value + 1)
@@ -296,7 +336,40 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
             }
         })
     }
-    function prepareRun() {
+    async function previewRun(request: NestingRequest) {
+        await mutate(async () => {
+            const key = crypto.randomUUID()
+            setProposal(null)
+            setExecution({ key, preview: true })
+            try {
+                const result = await authorizedRequest<NestingResult>(`${base}/nesting/preview`, {
+                    method: 'POST',
+                    signal: AbortSignal.timeout(nestingRequestTimeout),
+                    headers: { 'Idempotency-Key': key },
+                    body: JSON.stringify(request),
+                })
+                setProposal({ result, includeSaved: request.keep_existing })
+            } finally {
+                setExecution(null)
+                setCancelling(false)
+            }
+        })
+    }
+
+    async function cancelExecution() {
+        if (!execution || cancelling) return
+        setCancelling(true)
+        try {
+            await authorizedRequest<void>(`${base}/nesting/operations/${execution.key}`, {
+                method: 'DELETE',
+                signal: AbortSignal.timeout(10_000),
+            })
+        } catch (caught) {
+            setError(getApiErrorMessage(caught))
+            setCancelling(false)
+        }
+    }
+    function prepareRun(preview = false) {
         const angles = rotations.split(',').map((value) => Number(value.trim()))
         const requested = Object.entries(quantities)
             .filter(([, quantity]) => quantity > 0)
@@ -318,7 +391,8 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
             allowed_rotations: angles,
             keep_existing: keepExisting,
         }
-        if (!keepExisting) setReplacement(request)
+        if (preview) void previewRun(request)
+        else if (!keepExisting) setReplacement(request)
         else void run(request)
     }
     function exportSaved(format: 'svg' | 'json') {
@@ -351,19 +425,26 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
             )
         })
     }
+    const addingPattern = adding ? patterns.find((item) => item.id === patternId) : undefined
+    const editingDisabled = busy || !!proposal
     const selectedPlacement = placements.find((item) => item.id === selected)
     const metrics = useMemo(
         () => (surface ? layoutMetrics(surface.geometry, placements) : null),
         [surface, placements],
     )
     return (
-        <section className="nesting-page">
+        <section
+            className="nesting-page"
+            onKeyDown={(event) => {
+                if (event.key === 'Escape') setAdding(false)
+            }}
+        >
             <header>
                 <Link to={`/projects/${projectId}/editor`}>← Состав проекта</Link>
                 {projectName && <p>{projectName}</p>}
                 {surfaceList.length > 1 && (
                     <label>
-                        Поверхность{' '}
+                        <span>Поверхность</span>{' '}
                         <select
                             value={surfaceId}
                             disabled={busy}
@@ -387,27 +468,64 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
                 {surface && (
                     <div className="nesting-tools">
                         <button
-                            disabled={busy || !history.undo.length}
-                            onClick={() => void replay('undo')}
+                            aria-expanded={patternsOpen}
+                            onClick={() => {
+                                if (
+                                    !patternsOpen &&
+                                    window.matchMedia('(max-width: 700px)').matches
+                                )
+                                    setInspectorOpen(false)
+                                setPatternsOpen(!patternsOpen)
+                            }}
                         >
-                            Отменить действие
+                            Лекала
                         </button>
                         <button
-                            disabled={busy || !history.redo.length}
-                            onClick={() => void replay('redo')}
+                            aria-expanded={inspectorOpen}
+                            onClick={() => {
+                                if (inspectorOpen) setInspectorOpen(false)
+                                else openInspector(panel)
+                            }}
                         >
-                            Повторить действие
+                            Панель
                         </button>
-                        <button disabled={busy} onClick={() => exportSaved('svg')}>
-                            Экспорт SVG
+                        <button
+                            className="nesting-primary"
+                            aria-label="Автоматический раскрой"
+                            onClick={() => {
+                                openInspector('automatic')
+                                setAdding(false)
+                            }}
+                        >
+                            Автораскрой
                         </button>
-                        <button disabled={busy} onClick={() => exportSaved('json')}>
-                            Экспорт отчёта JSON
-                        </button>
+                        <details className="nesting-menu">
+                            <summary>Ещё</summary>
+                            <div className="nesting-menu-content">
+                                <button
+                                    disabled={editingDisabled || !history.undo.length}
+                                    onClick={() => void replay('undo')}
+                                >
+                                    Отменить действие
+                                </button>
+                                <button
+                                    disabled={editingDisabled || !history.redo.length}
+                                    onClick={() => void replay('redo')}
+                                >
+                                    Повторить действие
+                                </button>
+                                <button disabled={busy} onClick={() => exportSaved('svg')}>
+                                    Экспорт SVG
+                                </button>
+                                <button disabled={busy} onClick={() => exportSaved('json')}>
+                                    Экспорт отчёта JSON
+                                </button>
+                            </div>
+                        </details>
                     </div>
                 )}
             </header>
-            {operation && (
+            {operation && !execution && (
                 <div role="status">
                     <p>Ожидается подтверждение запуска раскроя.</p>
                     <button disabled={busy} onClick={() => void checkOperation(operation)}>
@@ -438,52 +556,81 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
                 </div>
             )}
             {!surface && !error && <p role="status">Загружаем рабочую поверхность…</p>}
-            {busy && <p role="status">Выполняется операция на сервере…</p>}
+            <div className="nesting-status">
+                {adding && (
+                    <button disabled={busy} onClick={() => setAdding(false)}>
+                        Отменить добавление
+                    </button>
+                )}
+                {execution ? (
+                    <>
+                        <span role="status">
+                            {cancelling
+                                ? 'Останавливаем расчёт…'
+                                : execution.preview
+                                  ? 'Расчёт предпросмотра…'
+                                  : 'Расчёт с сохранением…'}
+                        </span>
+                        <button
+                            className="nesting-button"
+                            disabled={cancelling}
+                            onClick={() => void cancelExecution()}
+                        >
+                            Отменить расчёт
+                        </button>
+                    </>
+                ) : proposal ? (
+                    <>
+                        <span role="status">
+                            Предпросмотр · размещено {proposal.result.metrics.placed_count} из{' '}
+                            {proposal.result.metrics.requested_count}. Сохранённая раскладка
+                            прежняя.
+                        </span>
+                        <button className="nesting-button" onClick={() => setProposal(null)}>
+                            Закрыть предпросмотр
+                        </button>
+                    </>
+                ) : (
+                    <span role="status">
+                        {busy
+                            ? 'Синхронизация с сервером…'
+                            : addingPattern
+                              ? `Щёлкните по поверхности, чтобы добавить «${addingPattern.name}»`
+                              : 'Ручные изменения сохраняются автоматически'}
+                    </span>
+                )}
+            </div>
             {surface && (
                 <div className="nesting-workspace">
-                    <aside>
+                    <aside hidden={!patternsOpen} aria-label="Лекала проекта">
                         <h2>Лекала проекта</h2>
                         {!patterns.length && <p>Добавьте лекала на странице проекта.</p>}
                         {patterns.map((item) => (
                             <div className="nesting-pattern" key={item.id}>
+                                <strong>{item.name}</strong>
                                 <button
-                                    disabled={busy}
-                                    aria-pressed={patternId === item.id}
-                                    onClick={() => setPatternId(item.id)}
+                                    className="nesting-button"
+                                    disabled={editingDisabled}
+                                    aria-pressed={adding && item.id === patternId}
+                                    onClick={() => {
+                                        setPatternId(item.id)
+                                        setAdding(true)
+                                        if (window.matchMedia('(max-width: 700px)').matches)
+                                            setPatternsOpen(false)
+                                        setSelected(null)
+                                        setError(null)
+                                    }}
                                 >
-                                    {item.name} · №{item.id}
+                                    Добавить на поверхность
+                                    <span className="visually-hidden"> · {item.name}</span>
                                 </button>
-                                <label>
-                                    Количество для алгоритма
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="1"
-                                        value={quantities[item.id] ?? 0}
-                                        disabled={busy}
-                                        onChange={(event) =>
-                                            setQuantities({
-                                                ...quantities,
-                                                [item.id]: Number(event.target.value),
-                                            })
-                                        }
-                                    />
-                                </label>
                             </div>
                         ))}
-                        <button
-                            disabled={busy || !patternId}
-                            aria-pressed={adding}
-                            onClick={() => setAdding(!adding)}
-                        >
-                            {adding ? 'Отменить добавление' : 'Разместить кликом'}
-                        </button>
-                        {adding && <p>Выберите положение центра лекала на поверхности.</p>}
                         <h3>Размещения</h3>
                         {placements.map((item) => (
                             <button
                                 key={item.id}
-                                disabled={busy}
+                                disabled={editingDisabled}
                                 aria-pressed={selected === item.id}
                                 onClick={() => {
                                     setSelected(item.id)
@@ -498,63 +645,150 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
                         surface={surface.geometry}
                         placements={placements}
                         selected={selected}
-                        busy={busy}
-                        adding={adding}
-                        onSelect={setSelected}
+                        busy={editingDisabled}
+                        adding={!!addingPattern}
+                        draftPattern={addingPattern?.geometry}
+                        proposedPlacements={proposal?.result.placements}
+                        showSaved={!proposal || proposal.includeSaved}
+                        onSelect={(id) => {
+                            setSelected(id)
+                            if (id !== null) setPanel('properties')
+                        }}
                         onAdd={(x, y) => void add(x, y)}
                         onMove={(id, x, y, rotation) => void update(id, x, y, rotation)}
                     />
-                    <aside>
-                        {selectedPlacement && (
+                    <aside hidden={!inspectorOpen} aria-label="Свойства раскроя">
+                        <nav className="nesting-tabs" aria-label="Панель раскроя">
+                            <button
+                                type="button"
+                                aria-pressed={panel === 'properties'}
+                                onClick={() => setPanel('properties')}
+                            >
+                                Свойства
+                            </button>
+                            <button
+                                type="button"
+                                aria-pressed={panel === 'automatic'}
+                                onClick={() => {
+                                    setPanel('automatic')
+                                    setAdding(false)
+                                }}
+                            >
+                                Автораскрой
+                            </button>
+                            <button
+                                type="button"
+                                aria-pressed={panel === 'history'}
+                                onClick={() => setPanel('history')}
+                            >
+                                История
+                            </button>
+                        </nav>
+                        {panel === 'properties' && !selectedPlacement && (
+                            <p>Выберите размещение на поверхности, чтобы изменить его положение.</p>
+                        )}
+                        {panel === 'properties' && selectedPlacement && (
                             <PlacementProperties
                                 key={`${selectedPlacement.id}:${selectedPlacement.x}:${selectedPlacement.y}:${selectedPlacement.rotation}`}
                                 placement={selectedPlacement}
-                                busy={busy}
+                                busy={editingDisabled}
                                 onSave={(x, y, angle) =>
                                     void update(selectedPlacement.id, x, y, angle)
                                 }
                                 onDelete={() => setDeleting(true)}
                             />
                         )}
-                        <h2>Автоматический раскрой</h2>
-                        <label>
-                            Алгоритм
-                            <select
-                                value={algorithm}
-                                disabled={busy}
-                                onChange={(event) => setAlgorithm(event.target.value)}
-                            >
-                                {Object.entries(algorithms).map(([value, label]) => (
-                                    <option key={value} value={value}>
-                                        {label}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                        <label>
-                            Углы через запятую
-                            <input
-                                value={rotations}
-                                disabled={busy}
-                                onChange={(event) => setRotations(event.target.value)}
+                        {panel === 'automatic' && (
+                            <section>
+                                <h2>Автоматический раскрой</h2>
+                                <fieldset className="nesting-quantities">
+                                    <legend>Количество лекал</legend>
+                                    {patterns.map((item) => (
+                                        <label key={item.id}>
+                                            {item.name}
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="500"
+                                                step="1"
+                                                value={quantities[item.id] ?? 0}
+                                                disabled={busy}
+                                                onChange={(event) =>
+                                                    setQuantities({
+                                                        ...quantities,
+                                                        [item.id]: Number(event.target.value),
+                                                    })
+                                                }
+                                            />
+                                        </label>
+                                    ))}
+                                </fieldset>
+                                <label>
+                                    Алгоритм
+                                    <select
+                                        value={algorithm}
+                                        disabled={busy}
+                                        onChange={(event) => setAlgorithm(event.target.value)}
+                                    >
+                                        {Object.entries(algorithms).map(([value, label]) => (
+                                            <option key={value} value={value}>
+                                                {label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <label>
+                                    Углы через запятую
+                                    <input
+                                        value={rotations}
+                                        disabled={busy}
+                                        onChange={(event) => setRotations(event.target.value)}
+                                    />
+                                </label>
+                                <label>
+                                    <input
+                                        type="checkbox"
+                                        checked={keepExisting}
+                                        disabled={busy}
+                                        onChange={(event) => setKeepExisting(event.target.checked)}
+                                    />{' '}
+                                    Учитывать сохранённые размещения
+                                </label>
+                                <button
+                                    disabled={busy || !patterns.length}
+                                    onClick={() => prepareRun(true)}
+                                >
+                                    Предпросмотр
+                                </button>
+                                <button
+                                    className="nesting-primary"
+                                    disabled={
+                                        busy || refreshRequired || !!operation || !patterns.length
+                                    }
+                                    onClick={() => prepareRun()}
+                                >
+                                    Рассчитать и сохранить
+                                </button>
+                                {proposal && (
+                                    <p>
+                                        Не размещено:{' '}
+                                        {proposal.result.metrics.requested_count -
+                                            proposal.result.metrics.placed_count}
+                                        . Сохранение выполняет новый расчёт с выбранными
+                                        параметрами.
+                                    </p>
+                                )}
+                            </section>
+                        )}
+                        {panel === 'history' && (
+                            <NestingHistory
+                                request={authorizedRequest}
+                                base={base}
+                                labels={algorithms}
+                                revision={historyRevision}
                             />
-                        </label>
-                        <label>
-                            <input
-                                type="checkbox"
-                                checked={keepExisting}
-                                disabled={busy}
-                                onChange={(event) => setKeepExisting(event.target.checked)}
-                            />{' '}
-                            Сохранить существующие размещения
-                        </label>
-                        <button
-                            disabled={busy || refreshRequired || !!operation || !patterns.length}
-                            onClick={prepareRun}
-                        >
-                            Запустить раскрой
-                        </button>
-                        {metrics && (
+                        )}
+                        {panel === 'properties' && metrics && (
                             <section>
                                 <h2>Текущая раскладка</h2>
                                 <p>Доступная площадь {format(metrics.surfaceArea)}</p>
@@ -635,20 +869,16 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
                     title="Заменить текущую раскладку?"
                     confirmLabel="Запустить с заменой"
                     onClose={() => setReplacement(null)}
-                    onConfirm={() => run(replacement, true)}
+                    onConfirm={async () => {
+                        const request = replacement
+                        setReplacement(null)
+                        await run(request)
+                    }}
                 >
                     <p>
                         Размещения на поверхности №{surfaceId} будут заменены результатом алгоритма.
                     </p>
                 </ConfirmDialog>
-            )}
-            {surface && (
-                <NestingHistory
-                    request={authorizedRequest}
-                    base={base}
-                    labels={algorithms}
-                    revision={historyRevision}
-                />
             )}
         </section>
     )

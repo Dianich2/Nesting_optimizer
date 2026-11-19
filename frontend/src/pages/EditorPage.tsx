@@ -111,7 +111,7 @@ export function EditorPage() {
                 <>
                     <header className="editor-heading">
                         <span className="editor-project-id">
-                            Проект #{project.id}
+                            Проект № {project.id}
                         </span>
 
                         <h1>{project.name}</h1>

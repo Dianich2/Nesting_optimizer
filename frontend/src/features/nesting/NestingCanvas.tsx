@@ -1,5 +1,5 @@
 import { useWheelZoom } from '../../shared/geometry/useWheelZoom'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { PointerEvent } from 'react'
 import type { PolygonGeometry } from '../project-resources/types'
 import type { Placement } from './api'
@@ -7,7 +7,7 @@ import { polygonPath } from './geometry'
 import { fitDrawingView } from '../library/geometryDraft'
 import {
     angleAround,
-    fitAspect,
+    resizeView,
     normalizeAngle,
     screenToWorld,
     snapCoordinate,
@@ -21,6 +21,9 @@ interface Props {
     selected: number | null
     busy: boolean
     adding: boolean
+    draftPattern?: PolygonGeometry
+    proposedPlacements?: Placement[]
+    showSaved: boolean
     onSelect: (id: number | null) => void
     onAdd: (x: number, y: number) => void
     onMove: (id: number, x: number, y: number, rotation?: number) => void
@@ -31,6 +34,9 @@ export function NestingCanvas({
     selected,
     busy,
     adding,
+    draftPattern,
+    proposedPlacements,
+    showSaved,
     onSelect,
     onAdd,
     onMove,
@@ -39,6 +45,18 @@ export function NestingCanvas({
     const gridId = useId()
     const [view, setView] = useState(() => fitDrawingView(surface))
     const [aspect, setAspect] = useState(1)
+    const fitted = useRef(false)
+    const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null)
+    const ghost = useMemo(() => {
+        if (!draftPattern?.exterior.points.length) return null
+        const xs = draftPattern.exterior.points.map((point) => point.x)
+        const ys = draftPattern.exterior.points.map((point) => point.y)
+        return {
+            path: polygonPath(draftPattern),
+            x: (Math.min(...xs) + Math.max(...xs)) / 2,
+            y: (Math.min(...ys) + Math.max(...ys)) / 2,
+        }
+    }, [draftPattern])
     const [pan, setPan] = useState(false)
     const [grid, setGrid] = useState(true)
     const [snap, setSnap] = useState(false)
@@ -58,10 +76,10 @@ export function NestingCanvas({
         initialAngle?: number
         scale: number
     } | null>(null)
-    const visible = fitAspect(view, aspect)
-    useWheelZoom(svg, visible, setView, () => !drag.current && !busy)
+    const visible = resizeView(view, aspect)
+    useWheelZoom(svg, visible, setView, () => !drag.current)
     const selection = placements.find((item) => item.id === selected)
-    const fit = fitAspect(fitDrawingView(surface), aspect)
+    const fit = fitDrawingView(surface, aspect)
     function snapped(x: number, y: number) {
         return { x: snapCoordinate(x, step, snap), y: snapCoordinate(y, step, snap) }
     }
@@ -69,14 +87,20 @@ export function NestingCanvas({
         const element = svg.current
         if (!element) return
         const observer = new ResizeObserver(([entry]) => {
-            if (entry.contentRect.height > 0)
-                setAspect(entry.contentRect.width / entry.contentRect.height)
+            const { width, height } = entry.contentRect
+            if (width <= 0 || height <= 0) return
+            const next = width / height
+            setAspect(next)
+            if (!fitted.current) {
+                fitted.current = true
+                setView(fitDrawingView(surface, next))
+            }
         })
         observer.observe(element)
         return () => observer.disconnect()
-    }, [])
+    }, [surface])
     function start(event: PointerEvent<SVGSVGElement>) {
-        if (busy || drag.current || !event.isPrimary || event.button > 1) return
+        if (drag.current || !event.isPrimary || event.button > 1) return
         if (pan || event.button === 1) {
             event.preventDefault()
             drag.current = {
@@ -89,6 +113,7 @@ export function NestingCanvas({
             event.currentTarget.setPointerCapture(event.pointerId)
             return
         }
+        if (busy) return
         if (adding) {
             const point = screenToWorld(event.currentTarget, event.clientX, event.clientY)
             if (!point) return
@@ -104,7 +129,14 @@ export function NestingCanvas({
     }
     function move(event: PointerEvent<SVGSVGElement>) {
         const current = drag.current
-        if (!current || current.pointer !== event.pointerId) return
+        if (!current) {
+            if (adding && !pan && !busy) {
+                const point = screenToWorld(event.currentTarget, event.clientX, event.clientY)
+                if (point) setCursor(snapped(point.x, point.y))
+            }
+            return
+        }
+        if (current.pointer !== event.pointerId) return
         const dx = (event.clientX - current.x) * current.scale
         const dy = (event.clientY - current.y) * current.scale
         if (current.item && current.initialAngle !== undefined) {
@@ -144,51 +176,66 @@ export function NestingCanvas({
     return (
         <div className="nesting-canvas">
             <div className="nesting-tools">
-                <button type="button" onClick={() => setView(zoomView(visible, 0.8))}>
+                <button
+                    type="button"
+                    aria-label="Приблизить"
+                    title="Приблизить"
+                    onClick={() => setView(zoomView(visible, 0.8))}
+                >
                     +
                 </button>
-                <button type="button" onClick={() => setView(zoomView(visible, 1.25))}>
+                <button
+                    type="button"
+                    aria-label="Отдалить"
+                    title="Отдалить"
+                    onClick={() => setView(zoomView(visible, 1.25))}
+                >
                     −
                 </button>
                 <output aria-label="Масштаб полотна">
                     {Math.round((fit.width / visible.width) * 100)}%
                 </output>
-                <button type="button" onClick={() => setView(fitDrawingView(surface))}>
+                <button type="button" onClick={() => setView(fitDrawingView(surface, aspect))}>
                     Уместить поверхность
                 </button>
                 <button type="button" aria-pressed={pan} onClick={() => setPan(!pan)}>
                     Перемещение поля
                 </button>
-                <label>
-                    <input
-                        type="checkbox"
-                        checked={grid}
-                        onChange={(event) => setGrid(event.target.checked)}
-                    />
-                    Сетка
-                </label>
-                <label>
-                    <input
-                        type="checkbox"
-                        checked={snap}
-                        onChange={(event) => setSnap(event.target.checked)}
-                    />
-                    Привязка к сетке
-                </label>
+                <details className="nesting-menu">
+                    <summary>Настройки сетки</summary>
+                    <div className="nesting-menu-content">
+                        <label>
+                            <input
+                                type="checkbox"
+                                checked={grid}
+                                onChange={(event) => setGrid(event.target.checked)}
+                            />
+                            Сетка
+                        </label>
+                        <label>
+                            <input
+                                type="checkbox"
+                                checked={snap}
+                                onChange={(event) => setSnap(event.target.checked)}
+                            />
+                            Привязка к сетке
+                        </label>
+                        <label>
+                            Шаг{' '}
+                            <input
+                                type="number"
+                                value={step}
+                                min="0.01"
+                                step="any"
+                                onChange={(event) => {
+                                    const value = Number(event.target.value)
+                                    if (Number.isFinite(value) && value > 0) setStep(value)
+                                }}
+                            />
+                        </label>
+                    </div>
+                </details>
                 {preview?.rotation !== undefined && <output>{preview.rotation.toFixed(1)}°</output>}
-                <label>
-                    Шаг{' '}
-                    <input
-                        type="number"
-                        value={step}
-                        min="0.01"
-                        step="any"
-                        onChange={(event) => {
-                            const value = Number(event.target.value)
-                            if (Number.isFinite(value) && value > 0) setStep(value)
-                        }}
-                    />
-                </label>
             </div>
             <svg
                 ref={svg}
@@ -196,6 +243,7 @@ export function NestingCanvas({
                 aria-label="Рабочая поверхность раскроя"
                 onPointerDown={start}
                 onPointerMove={move}
+                onPointerLeave={() => setCursor(null)}
                 onPointerUp={(event) => stop(event)}
                 onPointerCancel={(event) => stop(event, true)}
                 onLostPointerCapture={(event) => {
@@ -223,6 +271,7 @@ export function NestingCanvas({
                     fill={grid ? `url(#${gridId})` : 'transparent'}
                 />
                 <path
+                    className="nesting-surface-outline"
                     d={polygonPath(surface)}
                     fill="var(--color-bg-secondary, #64748b)"
                     fillOpacity="0.3"
@@ -230,56 +279,84 @@ export function NestingCanvas({
                     fillRule="evenodd"
                     strokeWidth={visible.width / 800}
                 />
-                {placements.map((item) => (
-                    <path
-                        key={item.id}
-                        d={polygonPath(item.geometry)}
-                        transform={
-                            preview?.id === item.id
-                                ? preview.rotation !== undefined
-                                    ? `rotate(${preview.rotation - item.rotation} ${item.x} ${item.y})`
-                                    : `translate(${preview.dx} ${preview.dy})`
-                                : undefined
-                        }
-                        fill={selected === item.id ? '#e9434b' : '#60a5fa'}
-                        fillOpacity="0.65"
-                        fillRule="evenodd"
-                        stroke={selected === item.id ? '#e9434b' : 'currentColor'}
-                        strokeWidth={visible.width / 600}
-                        tabIndex={busy ? -1 : 0}
-                        role="button"
-                        aria-label={`Размещение №${item.id}`}
-                        onKeyDown={(event) => {
-                            if (!busy && (event.key === 'Enter' || event.key === ' ')) {
-                                event.preventDefault()
+                {showSaved &&
+                    placements.map((item) => (
+                        <path
+                            key={item.id}
+                            d={polygonPath(item.geometry)}
+                            transform={
+                                preview?.id === item.id
+                                    ? preview.rotation !== undefined
+                                        ? `rotate(${preview.rotation - item.rotation} ${item.x} ${item.y})`
+                                        : `translate(${preview.dx} ${preview.dy})`
+                                    : undefined
+                            }
+                            fill={selected === item.id ? '#e9434b' : '#60a5fa'}
+                            fillOpacity="0.65"
+                            fillRule="evenodd"
+                            stroke={selected === item.id ? '#e9434b' : 'currentColor'}
+                            strokeWidth={visible.width / 600}
+                            tabIndex={busy ? -1 : 0}
+                            role="button"
+                            aria-label={`Размещение №${item.id}`}
+                            onKeyDown={(event) => {
+                                if (!busy && (event.key === 'Enter' || event.key === ' ')) {
+                                    event.preventDefault()
+                                    onSelect(item.id)
+                                }
+                            }}
+                            onPointerDown={(event) => {
+                                if (pan || event.button === 1 || adding) return
+                                event.stopPropagation()
+                                if (
+                                    busy ||
+                                    drag.current ||
+                                    !event.isPrimary ||
+                                    event.button !== 0 ||
+                                    !svg.current
+                                )
+                                    return
                                 onSelect(item.id)
-                            }
-                        }}
-                        onPointerDown={(event) => {
-                            if (pan || event.button === 1 || adding) return
-                            event.stopPropagation()
-                            if (
-                                busy ||
-                                drag.current ||
-                                !event.isPrimary ||
-                                event.button !== 0 ||
-                                !svg.current
-                            )
-                                return
-                            onSelect(item.id)
-                            drag.current = {
-                                pointer: event.pointerId,
-                                x: event.clientX,
-                                y: event.clientY,
-                                view: visible,
-                                item,
-                                scale: visible.width / svg.current.getBoundingClientRect().width,
-                            }
-                            svg.current.setPointerCapture(event.pointerId)
-                        }}
+                                drag.current = {
+                                    pointer: event.pointerId,
+                                    x: event.clientX,
+                                    y: event.clientY,
+                                    view: visible,
+                                    item,
+                                    scale:
+                                        visible.width / svg.current.getBoundingClientRect().width,
+                                }
+                                svg.current.setPointerCapture(event.pointerId)
+                            }}
+                        />
+                    ))}
+                {proposedPlacements?.map((item, index) => (
+                    <path
+                        key={index}
+                        d={polygonPath(item.geometry)}
+                        fill="#9e77ed"
+                        fillOpacity="0.42"
+                        fillRule="evenodd"
+                        stroke="#7b51bd"
+                        strokeWidth="2"
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="none"
                     />
                 ))}
-                {selection && !pan && !adding && (
+                {adding && !pan && !busy && ghost && cursor && (
+                    <path
+                        d={ghost.path}
+                        transform={`translate(${cursor.x - ghost.x} ${cursor.y - ghost.y})`}
+                        fill="#6da5ee"
+                        fillOpacity="0.35"
+                        stroke="#4089d6"
+                        strokeDasharray="4 3"
+                        strokeWidth="2"
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="none"
+                    />
+                )}
+                {showSaved && !busy && selection && !pan && !adding && (
                     <circle
                         cx={selection.x}
                         cy={selection.y - visible.width / 20}

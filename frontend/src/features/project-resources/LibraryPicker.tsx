@@ -126,7 +126,7 @@ export function LibraryPicker({ projectId, kind, onClose, onAdded }: Props) {
                             {data.items.map((item) => (
                                 <li key={item.id} className="project-resource-item">
                                     <span>
-                                        {item.name} · №{item.id}
+                                        {item.name} · № {item.id}
                                     </span>
                                     <button
                                         type="button"

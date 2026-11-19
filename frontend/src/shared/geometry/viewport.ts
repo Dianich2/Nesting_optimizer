@@ -53,3 +53,8 @@ export function angleAround(
 export function normalizeAngle(degrees: number): number {
     return ((degrees % 360) + 360) % 360
 }
+
+export function resizeView(view: Viewport, aspect: number): Viewport {
+    const width = view.height * aspect
+    return { ...view, x: view.x + (view.width - width) / 2, width }
+}

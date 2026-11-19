@@ -189,18 +189,18 @@ export function validatePolygonDraft(geometry: LibraryGeometry, allowHoles: bool
 
 export interface DrawingViewBox { x: number; y: number; width: number; height: number }
 
-export function fitDrawingView(geometry: LibraryGeometry): DrawingViewBox {
+export function fitDrawingView(geometry: LibraryGeometry, aspect = 640 / 420): DrawingViewBox {
     const points = [geometry.exterior, ...geometry.holes].flatMap(ring => ring.points)
         .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y))
-    if (points.length === 0) return { x: 0, y: 0, width: 1000, height: 650 }
+    if (points.length === 0) return { x: 0, y: 0, width: 650 * aspect, height: 650 }
     const minX = Math.min(...points.map(point => point.x))
     const minY = Math.min(...points.map(point => point.y))
     const maxX = Math.max(...points.map(point => point.x))
     const maxY = Math.max(...points.map(point => point.y))
     const w = Math.max(maxX - minX, 1)
     const h = Math.max(maxY - minY, 1)
-    const width = Math.max(w * 1.3, h * 1.3 * (640 / 420))
-    const height = width * (420 / 640)
+    const width = Math.max(w, h * aspect) / 0.88
+    const height = width / aspect
     return {
         x: minX + (maxX - minX) / 2 - width / 2,
         y: minY + (maxY - minY) / 2 - height / 2,

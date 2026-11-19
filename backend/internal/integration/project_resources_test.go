@@ -118,6 +118,7 @@ func TestProjectResourcesAPI(t *testing.T) {
 	app.Get("/projects/:project_id/surfaces/:project_surface_id/placements", pl.ListPlacements)
 	nh := handler.NewNestingHandler(deps.RunNestingUseCase)
 	app.Post("/projects/:project_id/surfaces/:project_surface_id/nesting", nh.Run)
+	app.Post("/projects/:project_id/surfaces/:project_surface_id/nesting/preview", nh.Preview)
 	app.Get("/projects/:project_id/surfaces/:project_surface_id/nesting/operations/:operation_key", nh.GetOperation)
 	app.Get("/projects/:project_id/surfaces/:project_surface_id/nesting/history", nh.History)
 	request := func(method, path, body string, operationKey ...string) (int, map[string]any) {
@@ -251,6 +252,59 @@ func TestProjectResourcesAPI(t *testing.T) {
 		t.Fatalf("invalid result created a run: %d, %v", runCount, err)
 	}
 
+	cancelOptimizer := waitingLayoutOptimizer{started: make(chan struct{}, 1)}
+	cancelRegistry, err := optimizer.NewOptimizerRegistry(map[optimizer.Algorithm]optimizer.Optimizer{
+		optimizer.BaselineAlgorithm: cancelOptimizer,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancelRun := nestingcase.NewRunNestingUseCase(
+		postgres.NewProjectSurfaceRepository(scopedDB, codec),
+		postgres.NewProjectPatternRepository(scopedDB, codec),
+		postgres.NewPlacementRepository(scopedDB, codec),
+		simplefeatures.NewEngine(), cancelRegistry, postgres.NewNestingUnitOfWork(scoped, codec),
+	)
+	cancelRun.Transactions = scopedDB
+	cancelRun.Operations = postgres.NewNestingOperationRepository(scopedDB)
+	cancelHandler := handler.NewNestingHandler(cancelRun)
+	cancelBase := "/cancel/projects/:project_id/surfaces/:project_surface_id/nesting"
+	app.Post(cancelBase, cancelHandler.Run)
+	app.Post(cancelBase+"/preview", cancelHandler.Preview)
+	app.Delete(cancelBase+"/operations/:operation_key", cancelHandler.Cancel)
+	body := fmt.Sprintf(`{"algorithm":"baseline","patterns":[{"project_pattern_id":%d,"quantity":1}],"allowed_rotations":[0],"keep_existing":false}`, ids["patterns"][0])
+	for i, suffix := range []string{"/preview", ""} {
+		key := fmt.Sprintf("d3faa873-370c-47ad-824a-5a3756c5767%d", i)
+		cancelPath := "/cancel" + surfacePath + "/nesting"
+		operationPath := cancelPath + "/operations/" + key
+		done := make(chan bool, 1)
+		go func() {
+			status, response := request("POST", cancelPath+suffix, body, key)
+			errorBody, _ := response["error"].(map[string]any)
+			done <- status == 409 && errorBody["code"] == "nesting_cancelled"
+		}()
+		select {
+		case <-cancelOptimizer.started:
+		case <-time.After(3 * time.Second):
+			t.Fatal("optimizer did not start")
+		}
+		must("DELETE", operationPath, "", 204)
+		select {
+		case cancelled := <-done:
+			if !cancelled {
+				t.Fatalf("execution %q did not return nesting_cancelled", suffix)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("optimizer did not stop after server cancellation")
+		}
+		if after := must("GET", surfacePath+"/placements", "", 200); !reflect.DeepEqual(after, restored) {
+			t.Fatalf("cancelled execution changed placements: %v", after)
+		}
+	}
+	if err := scoped.Get(&runCount, "SELECT count(*) FROM nesting_runs"); err != nil || runCount != 0 {
+		t.Fatalf("cancelled execution created history: %d, %v", runCount, err)
+	}
+
 	for _, path := range []string{surfacePath, patternPath} {
 		must("PATCH", path, `{"geometry":`+polygon(20)+`}`, 409)
 		must("PATCH", path, `{"scale":2}`, 409)
@@ -262,9 +316,24 @@ func TestProjectResourcesAPI(t *testing.T) {
 	holeGeometry := `{"exterior":{"points":[{"x":0,"y":0},{"x":100,"y":0},{"x":100,"y":100},{"x":0,"y":100}]},"holes":[{"points":[{"x":40,"y":40},{"x":40,"y":60},{"x":60,"y":60},{"x":60,"y":40}]}]}`
 	must("PATCH", surfacePath, `{"geometry":`+holeGeometry+`}`, 200)
 	must("POST", surfacePath+"/placements", fmt.Sprintf(`{"project_pattern_id":%d,"x":50,"y":50,"rotation":0}`, ids["patterns"][0]), 409)
-	for _, algorithm := range []string{"baseline", "nfp_greedy", "genetic", "simulated_annealing", "hybrid"} {
+	for expectedRuns, algorithm := range []string{"baseline", "nfp_greedy", "genetic", "simulated_annealing", "hybrid"} {
 		body := fmt.Sprintf(`{"algorithm":%q,"patterns":[{"project_pattern_id":%d,"quantity":2},{"project_pattern_id":%d,"quantity":1}],"allowed_rotations":[0,90],"keep_existing":false}`, algorithm, ids["patterns"][0], ids["patterns"][1])
+		before := must("GET", surfacePath+"/placements", "", 200)
+		previewStarted := time.Now()
+		preview := must("POST", surfacePath+"/nesting/preview", body, 200)
+		previewDuration := time.Since(previewStarted)
+		if len(preview["placements"].([]any)) == 0 {
+			t.Fatalf("%s preview returned no candidate placements", algorithm)
+		}
+		if after := must("GET", surfacePath+"/placements", "", 200); !reflect.DeepEqual(after, before) {
+			t.Fatalf("%s preview modified saved placements", algorithm)
+		}
+		if err := scoped.Get(&runCount, "SELECT count(*) FROM nesting_runs"); err != nil || runCount != expectedRuns {
+			t.Fatalf("%s preview wrote history: %d, %v", algorithm, runCount, err)
+		}
+		saveStarted := time.Now()
 		output := must("POST", surfacePath+"/nesting", body, 200)
+		t.Logf("%s preview=%s saved=%s", algorithm, previewDuration, time.Since(saveStarted))
 		metrics := output["metrics"].(map[string]any)
 		if metrics["surface_area"].(float64) != 9600 {
 			t.Fatal("surface area must subtract hole")
@@ -494,4 +563,14 @@ func (invalidLayoutOptimizer) Optimize(_ context.Context, problem optimizer.Prob
 	return optimizer.Result{
 		Placements: []optimizer.Placement{{PatternID: problem.Patterns[0].PatternID, X: -100, Y: 10}},
 	}, nil
+}
+
+type waitingLayoutOptimizer struct {
+	started chan struct{}
+}
+
+func (o waitingLayoutOptimizer) Optimize(ctx context.Context, _ optimizer.Problem) (optimizer.Result, error) {
+	o.started <- struct{}{}
+	<-ctx.Done()
+	return optimizer.Result{}, ctx.Err()
 }

@@ -1,6 +1,8 @@
 import { ApiError } from '../../shared/api/http.ts'
 import type { NestingRequest, NestingResult, Placement, Request } from './api'
 
+export const nestingRequestTimeout = 130_000
+
 export async function runNesting(
     request: Request,
     base: string,
@@ -13,6 +15,7 @@ export async function runNesting(
     try {
         result = await request<NestingResult>(`${base}/nesting`, {
             method: 'POST',
+            signal: AbortSignal.timeout(nestingRequestTimeout),
             headers: operationKey ? { 'Idempotency-Key': operationKey } : undefined,
             body: JSON.stringify(input),
         })
@@ -24,7 +27,9 @@ export async function runNesting(
     onConfirmed(result)
     let saved: { items: Placement[] }
     try {
-        saved = await request<{ items: Placement[] }>(`${base}/placements`)
+        saved = await request<{ items: Placement[] }>(`${base}/placements`, {
+            signal: AbortSignal.timeout(10_000),
+        })
     } catch {
         return 'confirmed'
     }

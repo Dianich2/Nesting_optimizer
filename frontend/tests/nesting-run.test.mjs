@@ -55,3 +55,40 @@ test('confirmed validation error is propagated', async () => {
     }
     await assert.rejects(runNesting(request, '/surface', {}, assert.fail, assert.fail), error)
 })
+
+test('a timed out calculation requires reconciliation and is sent once', async (t) => {
+    t.mock.method(AbortSignal, 'timeout', () =>
+        AbortSignal.abort(new DOMException('Request timed out', 'TimeoutError')),
+    )
+    let calls = 0
+    const request = async (_path, options) => {
+        calls++
+        options.signal.throwIfAborted()
+    }
+    assert.equal(await runNesting(request, '/surface', {}, assert.fail, assert.fail), 'unknown')
+    assert.equal(calls, 1)
+})
+
+test('a timed out synchronization preserves the confirmed saved result', async (t) => {
+    t.mock.method(AbortSignal, 'timeout', () =>
+        AbortSignal.abort(new DOMException('Request timed out', 'TimeoutError')),
+    )
+    const result = { placements: [{ id: 8 }] }
+    let confirmed = false
+    const request = async (_path, options) => {
+        if (options.method === 'POST') return result
+        options.signal.throwIfAborted()
+    }
+    const status = await runNesting(
+        request,
+        '/surface',
+        {},
+        (value) => {
+            assert.equal(value, result)
+            confirmed = true
+        },
+        assert.fail,
+    )
+    assert.equal(status, 'confirmed')
+    assert.equal(confirmed, true)
+})

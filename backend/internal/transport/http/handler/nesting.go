@@ -10,6 +10,7 @@ import (
 )
 
 type NestingHandler struct {
+	executions        nestingExecutions
 	runNestingUseCase *nestingusecase.RunNestingUseCase
 }
 
@@ -30,6 +31,7 @@ func NewNestingHandler(
 // @Param project_surface_id path int true "Project Surface ID"
 // @Param Idempotency-Key header string false "UUID for safe retry"
 // @Failure 409 {object} httperror.ErrorResponse
+// @Failure 408 {object} httperror.ErrorResponse
 // @Param nestingParams body dto.RunNestingRequest true "Nesting Params"
 // @Success 200 {object} dto.RunNestingResponse
 // @Failure 400 {object} httperror.ErrorResponse
@@ -40,6 +42,28 @@ func NewNestingHandler(
 // @Security BearerAuth
 // @Router /api/v1/projects/{project_id}/surfaces/{project_surface_id}/nesting [post]
 func (h *NestingHandler) Run(c fiber.Ctx) error {
+	return h.run(c, false)
+}
+
+// @Summary Calculate a nesting preview without writing placements
+// @Accept json
+// @Produce json
+// @Param project_id path int true "Project ID"
+// @Param project_surface_id path int true "Project surface ID"
+// @Param Idempotency-Key header string false "Execution UUID for cancellation"
+// @Param nestingParams body dto.RunNestingRequest true "Nesting Params"
+// @Success 200 {object} dto.RunNestingResponse
+// @Failure 400 {object} httperror.ErrorResponse
+// @Failure 404 {object} httperror.ErrorResponse
+// @Failure 408 {object} httperror.ErrorResponse
+// @Failure 409 {object} httperror.ErrorResponse
+// @Security BearerAuth
+// @Router /api/v1/projects/{project_id}/surfaces/{project_surface_id}/nesting/preview [post]
+func (h *NestingHandler) Preview(c fiber.Ctx) error {
+	return h.run(c, true)
+}
+
+func (h *NestingHandler) run(c fiber.Ctx, preview bool) error {
 	projectID, err := getIDFromPath(c, "project_id")
 	if err != nil {
 		return err
@@ -68,16 +92,23 @@ func (h *NestingHandler) Run(c fiber.Ctx) error {
 		projectSurfaceID,
 	)
 
-	outputRunNestingUseCase, err := h.runNestingUseCase.ExecuteWithKey(
-		c.Context(),
-		inputRunNestingUseCase,
-		c.Get("Idempotency-Key"),
-	)
+	key, err := parseExecutionKey(c.Get("Idempotency-Key"))
 	if err != nil {
-		return httperror.Handle(
-			c,
-			err,
-		)
+		return err
+	}
+	ctx, finish := h.executions.begin(c.Context(), nestingExecution{userID, projectID, projectSurfaceID, key})
+	defer finish()
+	var outputRunNestingUseCase nestingusecase.RunNestingOutput
+	if preview {
+		outputRunNestingUseCase, err = h.runNestingUseCase.Preview(ctx, inputRunNestingUseCase)
+	} else {
+		outputRunNestingUseCase, err = h.runNestingUseCase.ExecuteWithKey(ctx, inputRunNestingUseCase, key)
+	}
+	if err != nil {
+		if ctx.Err() != nil {
+			return nestingResponseError(c, ctx, err)
+		}
+		return httperror.Handle(c, err)
 	}
 
 	runNestingResp := mapper.ToRunNestingResponse(outputRunNestingUseCase)

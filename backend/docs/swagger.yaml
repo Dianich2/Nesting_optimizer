@@ -1892,6 +1892,10 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/httperror.ErrorResponse'
+        "408":
+          description: Request Timeout
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
         "409":
           description: Conflict
           schema:
@@ -1939,6 +1943,31 @@ paths:
       - BearerAuth: []
       summary: List saved nesting runs
   /api/v1/projects/{project_id}/surfaces/{project_surface_id}/nesting/operations/{operation_key}:
+    delete:
+      parameters:
+      - description: Project ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      - description: Project surface ID
+        in: path
+        name: project_surface_id
+        required: true
+        type: integer
+      - description: Execution UUID
+        in: path
+        name: operation_key
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+      security:
+      - BearerAuth: []
+      summary: Cancel an active nesting calculation
     get:
       parameters:
       - description: Project ID
@@ -1970,6 +1999,57 @@ paths:
       security:
       - BearerAuth: []
       summary: Read nesting operation status
+  /api/v1/projects/{project_id}/surfaces/{project_surface_id}/nesting/preview:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Project ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      - description: Project surface ID
+        in: path
+        name: project_surface_id
+        required: true
+        type: integer
+      - description: Execution UUID for cancellation
+        in: header
+        name: Idempotency-Key
+        type: string
+      - description: Nesting Params
+        in: body
+        name: nestingParams
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RunNestingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.RunNestingResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "408":
+          description: Request Timeout
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Calculate a nesting preview without writing placements
   /api/v1/projects/{project_id}/surfaces/{project_surface_id}/placements:
     get:
       description: List Placements

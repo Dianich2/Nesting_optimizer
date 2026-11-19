@@ -36,6 +36,7 @@
 
 .library-panel-heading {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
     gap: 12px;
@@ -74,6 +75,7 @@
 
 .library-item {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
     gap: 16px;
@@ -102,6 +104,7 @@
 
 .library-item-id {
     flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
 }
 
 .library-feedback {

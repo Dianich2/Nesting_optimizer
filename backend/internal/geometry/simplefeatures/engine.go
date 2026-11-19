@@ -287,6 +287,17 @@ func (e *Engine) CoveredBy(
 		)
 	}
 
+	// For an axis-aligned rectangle, checking exterior vertices is exactly equivalent
+	// to polygon coverage. Keep the topology predicate for other surfaces.
+	if bounds, ok := axisAlignedRectangle(outer); ok {
+		for _, point := range inner.Exterior.Points {
+			if point.X < bounds.MinX || point.X > bounds.MaxX || point.Y < bounds.MinY || point.Y > bounds.MaxY {
+				return false, nil
+			}
+		}
+		return true, nil
+	}
+
 	sfInner := toSimpleFeaturesPolygon(inner)
 	sfOuter := toSimpleFeaturesPolygon(outer)
 

@@ -95,12 +95,18 @@ func (uc *RunNestingUseCase) ExecuteWithKey(ctx context.Context, input RunNestin
 	})
 }
 
-func (uc *RunNestingUseCase) execute(
+type calculatedLayout struct {
+	result     nesting.Result
+	placements []preparedPlacement
+	duration   time.Duration
+}
+
+func (uc *RunNestingUseCase) calculate(
 	ctx context.Context,
 	input RunNestingInput,
-) (RunNestingOutput, error) {
+) (calculatedLayout, error) {
 	if err := ctx.Err(); err != nil {
-		return RunNestingOutput{}, fmt.Errorf(
+		return calculatedLayout{}, fmt.Errorf(
 			"run nesting: %w",
 			err,
 		)
@@ -108,7 +114,7 @@ func (uc *RunNestingUseCase) execute(
 
 	details := input.Validate()
 	if len(details) > 0 {
-		return RunNestingOutput{}, apperror.Validation(
+		return calculatedLayout{}, apperror.Validation(
 			"validation failed",
 			details...,
 		)
@@ -118,7 +124,7 @@ func (uc *RunNestingUseCase) execute(
 		input.Algorithm,
 	)
 	if err != nil {
-		return RunNestingOutput{}, apperror.Internal(
+		return calculatedLayout{}, apperror.Internal(
 			"failed to get nesting optimizer",
 			err,
 		)
@@ -132,26 +138,26 @@ func (uc *RunNestingUseCase) execute(
 	)
 	if err != nil {
 		if errors.Is(err, domainprojectsurface.ErrNotFound) {
-			return RunNestingOutput{}, apperror.NotFound(
+			return calculatedLayout{}, apperror.NotFound(
 				"project surface not found",
 			)
 		}
 
 		if errors.Is(err, context.Canceled) {
-			return RunNestingOutput{}, fmt.Errorf(
+			return calculatedLayout{}, fmt.Errorf(
 				"run nesting: %w",
 				err,
 			)
 		}
 
 		if errors.Is(err, context.DeadlineExceeded) {
-			return RunNestingOutput{}, fmt.Errorf(
+			return calculatedLayout{}, fmt.Errorf(
 				"run nesting: %w",
 				err,
 			)
 		}
 
-		return RunNestingOutput{}, apperror.Internal(
+		return calculatedLayout{}, apperror.Internal(
 			"failed to get project surface by id",
 			err,
 		)
@@ -170,20 +176,20 @@ func (uc *RunNestingUseCase) execute(
 	)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			return RunNestingOutput{}, fmt.Errorf(
+			return calculatedLayout{}, fmt.Errorf(
 				"run nesting: %w",
 				err,
 			)
 		}
 
 		if errors.Is(err, context.DeadlineExceeded) {
-			return RunNestingOutput{}, fmt.Errorf(
+			return calculatedLayout{}, fmt.Errorf(
 				"run nesting: %w",
 				err,
 			)
 		}
 
-		return RunNestingOutput{}, apperror.Internal(
+		return calculatedLayout{}, apperror.Internal(
 			"failed to get project patterns",
 			err,
 		)
@@ -199,7 +205,7 @@ func (uc *RunNestingUseCase) execute(
 		_, ok := foundIDs[reqProjectPattern.ProjectPatternID]
 
 		if !ok {
-			return RunNestingOutput{}, apperror.NotFound(
+			return calculatedLayout{}, apperror.NotFound(
 				"project pattern not found",
 			)
 		}
@@ -215,20 +221,20 @@ func (uc *RunNestingUseCase) execute(
 		)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
-				return RunNestingOutput{}, fmt.Errorf(
+				return calculatedLayout{}, fmt.Errorf(
 					"run nesting: %w",
 					err,
 				)
 			}
 
 			if errors.Is(err, context.DeadlineExceeded) {
-				return RunNestingOutput{}, fmt.Errorf(
+				return calculatedLayout{}, fmt.Errorf(
 					"run nesting: %w",
 					err,
 				)
 			}
 
-			return RunNestingOutput{}, apperror.Internal(
+			return calculatedLayout{}, apperror.Internal(
 				"failed to get collision placements",
 				err,
 			)
@@ -243,7 +249,7 @@ func (uc *RunNestingUseCase) execute(
 		collisionPlacements,
 	)
 	if err != nil {
-		return RunNestingOutput{}, apperror.Internal(
+		return calculatedLayout{}, apperror.Internal(
 			"failed to build nesting problem",
 			err,
 		)
@@ -257,26 +263,63 @@ func (uc *RunNestingUseCase) execute(
 	)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			return RunNestingOutput{}, fmt.Errorf(
+			return calculatedLayout{}, fmt.Errorf(
 				"run nesting: %w",
 				err,
 			)
 		}
 
 		if errors.Is(err, context.DeadlineExceeded) {
-			return RunNestingOutput{}, fmt.Errorf(
+			return calculatedLayout{}, fmt.Errorf(
 				"run nesting: %w",
 				err,
 			)
 		}
 
-		return RunNestingOutput{}, apperror.Internal(
+		return calculatedLayout{}, apperror.Internal(
 			"failed to optimize nesting problem",
 			err,
 		)
 	}
 
 	duration := time.Since(startAt)
+	preparedPlacements, err := validateResult(ctx, uc.geometryEngine, input.ProjectSurfaceID, problem, result)
+	if err != nil {
+		return calculatedLayout{}, apperror.Internal("optimizer returned an invalid layout", err)
+	}
+
+	return calculatedLayout{result: result, placements: preparedPlacements, duration: duration}, nil
+}
+
+func (uc *RunNestingUseCase) Preview(ctx context.Context, input RunNestingInput) (RunNestingOutput, error) {
+	computed, err := uc.calculate(ctx, input)
+	if err != nil {
+		return RunNestingOutput{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return RunNestingOutput{}, err
+	}
+	output := RunNestingOutput{
+		Placements: make([]PlacementItem, 0, len(computed.placements)),
+		Unplaced:   computed.result.Unplaced, Metrics: computed.result.Metrics,
+	}
+	for _, item := range computed.placements {
+		output.Placements = append(output.Placements, PlacementItem{
+			ProjectSurfaceID: item.Placement.ProjectSurfaceID, ProjectPatternID: item.Placement.ProjectPatternID,
+			X: item.Placement.X, Y: item.Placement.Y, Rotation: item.Placement.Rotation, Geometry: item.Geometry,
+		})
+	}
+	return output, nil
+}
+
+func (uc *RunNestingUseCase) execute(ctx context.Context, input RunNestingInput) (RunNestingOutput, error) {
+	computed, err := uc.calculate(ctx, input)
+	if err != nil {
+		return RunNestingOutput{}, err
+	}
+	result := computed.result
+	preparedPlacements := computed.placements
+
 	nestingRun := nestingrun.NestingRun{
 		ProjectSurfaceID: input.ProjectSurfaceID,
 		Algorithm:        input.Algorithm,
@@ -288,12 +331,7 @@ func (uc *RunNestingUseCase) execute(
 		PlacedArea:     result.Metrics.PlacedArea,
 		Utilization:    result.Metrics.Utilization,
 
-		Duration: duration,
-	}
-
-	preparedPlacements, err := validateResult(ctx, uc.geometryEngine, input.ProjectSurfaceID, problem, result)
-	if err != nil {
-		return RunNestingOutput{}, apperror.Internal("optimizer returned an invalid layout", err)
+		Duration: computed.duration,
 	}
 
 	savedPlacements := make([]domainplacement.Placement, 0, len(result.Placements))

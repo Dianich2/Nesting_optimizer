@@ -1,7 +1,10 @@
+import { GeometryCanvas } from './GeometryCanvas'
+import { GeometryWorkspace } from './GeometryWorkspace'
+import { useGeometryHistory } from './useGeometryHistory'
 import { useWheelZoom } from '../../shared/geometry/useWheelZoom'
 import { ConfirmDialog } from '../../components/dialogs/ConfirmDialog'
-import { fitAspect, zoomView } from '../../shared/geometry/viewport'
-import { useEffect, useId, useRef, useState } from 'react'
+import { resizeView, screenToWorld, zoomView } from '../../shared/geometry/viewport'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent, PointerEvent } from 'react'
 
 import { getApiErrorMessage } from '../../shared/api/errorMessages'
@@ -27,6 +30,15 @@ interface Props {
 }
 
 type EditorMode = 'rectangle' | 'points'
+interface GeometrySnapshot {
+    draft: LibraryGeometry
+    mode: EditorMode
+    width: string
+    height: string
+    ring: number
+    vertex: number | null
+}
+
 
 function CoordinateInput({
     value,
@@ -81,11 +93,6 @@ function cloneGeometry(value: LibraryGeometry): LibraryGeometry {
     }
 }
 
-function contourPath(points: LibraryPoint[], closed: boolean): string {
-    if (points.length === 0) return ''
-    return `M ${points.map((point) => `${point.x} ${point.y}`).join(' L ')}${closed ? ' Z' : ''}`
-}
-
 export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: Props) {
     const dialogRef = useRef<HTMLDialogElement>(null)
     const fileRef = useRef<HTMLInputElement>(null)
@@ -94,7 +101,14 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
         cloneGeometry(initialItem?.geometry ?? EMPTY),
     )
     const draftRef = useRef<LibraryGeometry>(initialDraft)
-    const dragRef = useRef<{ ring: number; index: number; pointerId: number } | null>(null)
+    const dragRef = useRef<{
+        ring: number
+        index: number
+        pointerId: number
+        offset: LibraryPoint
+        before: GeometrySnapshot
+        changed: boolean
+    } | null>(null)
     const allowHoles = kind === 'surfaces'
 
     const [name, setName] = useState(initialItem?.name ?? '')
@@ -112,34 +126,68 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
     })
     const [draft, setDraft] = useState<LibraryGeometry>(initialDraft)
     const [activeRing, setActiveRing] = useState(-1) // -1 = exterior, 0+ = holes
+    const [selectedVertex, setSelectedVertex] = useState<number | null>(null)
+    const [selectMode, setSelectMode] = useState(false)
+    const history = useGeometryHistory<GeometrySnapshot>()
+    const sizeBeforeEdit = useRef<GeometrySnapshot | null>(null)
     const [newX, setNewX] = useState('0')
     const [newY, setNewY] = useState('0')
     const [view, setView] = useState<DrawingViewBox>(() =>
         fitDrawingView(
             initialItem
                 ? initialDraft
-                : rectangleGeometry(kind === 'surfaces' ? 1000 : 100, kind === 'surfaces' ? 600 : 60),
+                : rectangleGeometry(
+                      kind === 'surfaces' ? 1000 : 100,
+                      kind === 'surfaces' ? 600 : 60,
+                  ),
         ),
     )
-    const gridId = useId()
     const [gridStep, setGridStep] = useState(10)
     const [showGrid, setShowGrid] = useState(true)
     const [panMode, setPanMode] = useState(false)
     const [confirmRectangle, setConfirmRectangle] = useState(false)
     const [aspect, setAspect] = useState(640 / 420)
-    const panRef = useRef<{ id: number; x: number; y: number; view: DrawingViewBox; scale: number } | null>(null)
-    const visibleView = fitAspect(view, aspect)
-    const initialView = fitAspect(fitDrawingView(initialItem?.geometry ?? rectangleGeometry(kind === 'surfaces' ? 1000 : 100, kind === 'surfaces' ? 600 : 60)), aspect)
+    const panRef = useRef<{
+        id: number
+        x: number
+        y: number
+        view: DrawingViewBox
+        scale: number
+    } | null>(null)
+    const visibleView = resizeView(view, aspect)
+    const [initialView, setInitialView] = useState(view)
+    function fitToCanvas(value: LibraryGeometry) {
+        const bounds = fitDrawingView(value, aspect)
+        setView(bounds)
+    }
+    const initialFitDone = useRef(false)
     useWheelZoom(svgRef, visibleView, setView, () => !dragRef.current && !panRef.current)
     useEffect(() => {
         const svg = svgRef.current
         if (!svg) return
         const observer = new ResizeObserver(([entry]) => {
-            if (entry.contentRect.height > 0) setAspect(entry.contentRect.width / entry.contentRect.height)
+            const { width, height } = entry.contentRect
+            if (width <= 0 || height <= 0) return
+            const nextAspect = width / height
+            setAspect(nextAspect)
+            if (!initialFitDone.current) {
+                initialFitDone.current = true
+                const fitted = fitDrawingView(
+                    initialItem
+                        ? initialDraft
+                        : rectangleGeometry(
+                              kind === 'surfaces' ? 1000 : 100,
+                              kind === 'surfaces' ? 600 : 60,
+                          ),
+                    nextAspect,
+                )
+                setView(fitted)
+                setInitialView(fitted)
+            }
         })
         observer.observe(svg)
         return () => observer.disconnect()
-    }, [])
+    }, [initialDraft, initialItem, kind])
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
@@ -169,8 +217,49 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
     const activePoints =
         activeRing < 0 ? geometry.exterior.points : (geometry.holes[activeRing]?.points ?? [])
     const rings = [geometry.exterior, ...geometry.holes]
-    const visibleRings = rings.filter((ring) => ring.points.length >= 3)
-    const areaPath = visibleRings.map((ring) => contourPath(ring.points, true)).join(' ')
+
+    function snapshot(): GeometrySnapshot {
+        return {
+            draft: draftRef.current,
+            mode,
+            width,
+            height,
+            ring: activeRing,
+            vertex: selectedVertex,
+        }
+    }
+
+    function restore(value: GeometrySnapshot) {
+        draftRef.current = value.draft
+        setDraft(value.draft)
+        setMode(value.mode)
+        setWidth(value.width)
+        setHeight(value.height)
+        setActiveRing(value.ring)
+        setSelectedVertex(value.vertex)
+        setError(null)
+    }
+
+    function replay(direction: 'undo' | 'redo') {
+        if (dragRef.current || panRef.current || saving) return
+        const value = history[direction](snapshot())
+        if (value) restore(value)
+    }
+
+    function selectRing(ring: number) {
+        setActiveRing(ring)
+        setSelectedVertex(null)
+    }
+
+    function editSize(set: (value: string) => void, value: string) {
+        if (!sizeBeforeEdit.current) {
+            const before = snapshot()
+            sizeBeforeEdit.current = before
+            history.record(before)
+        }
+        set(value)
+        setError(null)
+    }
 
     /** Guard ALL input methods: clicks, typed coordinates, vertex dragging and deletion. */
     function tryApplyDraft(candidate: LibraryGeometry): boolean {
@@ -181,6 +270,7 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
             setError(problem)
             return false
         }
+        if (!dragRef.current) history.record(snapshot())
         draftRef.current = candidate
         setDraft(candidate)
         setError(null)
@@ -235,14 +325,11 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
             )
             return
         }
-        updateActive(() => nextPoints)
+        if (updateActive(() => nextPoints)) setSelectedVertex(nextPoints.indexOf(point))
     }
 
     function pointFromPointer(event: PointerEvent<SVGSVGElement>): LibraryPoint | null {
-        const matrix = event.currentTarget.getScreenCTM()
-        if (!matrix) return null
-        const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse())
-        return { x: Math.round(point.x * 100) / 100, y: Math.round(point.y * 100) / 100 }
+        return screenToWorld(event.currentTarget, event.clientX, event.clientY)
     }
 
     function handleCanvasPointerDown(event: PointerEvent<SVGSVGElement>) {
@@ -250,60 +337,125 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
         if (panMode || event.button === 1) {
             event.preventDefault()
             const bounds = event.currentTarget.getBoundingClientRect()
-            panRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, view: visibleView, scale: visibleView.width / bounds.width }
+            panRef.current = {
+                id: event.pointerId,
+                x: event.clientX,
+                y: event.clientY,
+                view: visibleView,
+                scale: visibleView.width / bounds.width,
+            }
             event.currentTarget.setPointerCapture(event.pointerId)
             return
         }
         if (event.button !== 0) return
+        if (selectMode) {
+            setSelectedVertex(null)
+            return
+        }
         if (mode === 'rectangle' && activeRing === -1) return
         const point = pointFromPointer(event)
-        if (point) addPoint(point)
+        if (point)
+            addPoint({ x: Math.round(point.x * 100) / 100, y: Math.round(point.y * 100) / 100 })
     }
 
     function startDragging(event: PointerEvent<SVGCircleElement>, ring: number, index: number) {
-        if (panMode || saving || !event.isPrimary || dragRef.current || panRef.current || event.button !== 0) return
+        if (
+            panMode ||
+            saving ||
+            !event.isPrimary ||
+            dragRef.current ||
+            panRef.current ||
+            event.button !== 0
+        )
+            return
         event.preventDefault()
         event.stopPropagation() // A vertex is not a new point.
 
-        if (mode === 'rectangle' && ring < 0) {
-            if (!rectangleValid) return
-            // Dragging a rectangle corner switches seamlessly to free-point editing.
-            const converted: LibraryGeometry = {
-                exterior: rectangleGeometry(w, h).exterior,
-                holes: draftRef.current.holes,
-            }
-            draftRef.current = converted
-            setDraft(converted)
-            setMode('points')
+        const svg = svgRef.current
+        if (!svg) return
+        const pointer = screenToWorld(svg, event.clientX, event.clientY)
+        const vertex = rings[ring + 1].points[index]
+        if (!pointer) return
+        dragRef.current = {
+            ring,
+            index,
+            pointerId: event.pointerId,
+            before: snapshot(),
+            changed: false,
+            offset: { x: vertex.x - pointer.x, y: vertex.y - pointer.y },
         }
         setActiveRing(ring)
-        dragRef.current = { ring, index, pointerId: event.pointerId }
-        svgRef.current?.setPointerCapture(event.pointerId)
+        setSelectedVertex(index)
+        svg.setPointerCapture(event.pointerId)
     }
 
     function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
         const pan = panRef.current
         if (pan && pan.id === event.pointerId) {
-            setView({ ...pan.view, x: pan.view.x - (event.clientX - pan.x) * pan.scale, y: pan.view.y - (event.clientY - pan.y) * pan.scale })
+            setView({
+                ...pan.view,
+                x: pan.view.x - (event.clientX - pan.x) * pan.scale,
+                y: pan.view.y - (event.clientY - pan.y) * pan.scale,
+            })
             return
         }
         const drag = dragRef.current
         if (!drag || drag.pointerId !== event.pointerId) return
         const point = pointFromPointer(event)
         if (!point) return
-        updateRing(drag.ring, (points) => points.map((p, i) => (i === drag.index ? point : p)))
+        const next = {
+            x: Math.round((point.x + drag.offset.x) * 100) / 100,
+            y: Math.round((point.y + drag.offset.y) * 100) / 100,
+        }
+        const current = rings[drag.ring + 1]?.points[drag.index]
+        if (
+            !current ||
+            (Math.abs(current.x - next.x) < 0.006 && Math.abs(current.y - next.y) < 0.006)
+        )
+            return
+        if (mode === 'rectangle' && drag.ring < 0) {
+            const candidate = {
+                ...geometry,
+                exterior: {
+                    points: geometry.exterior.points.map((value, i) =>
+                        i === drag.index ? next : value,
+                    ),
+                },
+            }
+            const problem = validatePolygonConstruction(candidate, allowHoles)
+            if (problem) {
+                setError(problem)
+                return
+            }
+            draftRef.current = candidate
+            setDraft(candidate)
+            setMode('points')
+            setError(null)
+            drag.changed = true
+            return
+        }
+        if (
+            updateRing(drag.ring, (points) => points.map((p, i) => (i === drag.index ? next : p)))
+        ) {
+            drag.changed = true
+        }
+    }
+
+    function finishDrag(pointerId: number, cancelled: boolean) {
+        if (panRef.current?.id === pointerId) panRef.current = null
+        const drag = dragRef.current
+        if (drag?.pointerId !== pointerId) return
+        dragRef.current = null
+        if (drag.changed) {
+            if (cancelled) restore(drag.before)
+            else history.record(drag.before)
+        }
     }
 
     function stopDragging(event: PointerEvent<SVGSVGElement>) {
-        if (panRef.current?.id === event.pointerId) panRef.current = null
-        if (dragRef.current?.pointerId !== event.pointerId) {
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-            return
-        }
-        dragRef.current = null
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        finishDrag(event.pointerId, event.type === 'pointercancel')
+        if (event.currentTarget.hasPointerCapture(event.pointerId))
             event.currentTarget.releasePointerCapture(event.pointerId)
-        }
     }
 
     function handleManualPoint() {
@@ -320,11 +472,12 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
         addPoint({ x, y })
     }
 
-    function UseRectangleAsPoints() {
+    function switchRectangleToPoints() {
         if (!rectangleValid) {
             setError('Сначала укажите положительные размеры прямоугольника.')
             return
         }
+        history.record(snapshot())
         const next: LibraryGeometry = {
             exterior: rectangleGeometry(w, h).exterior,
             holes: draftRef.current.holes,
@@ -332,29 +485,28 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
         draftRef.current = next
         setDraft(next)
         setMode('points')
-        setActiveRing(-1)
-        setView(fitDrawingView(next))
+        selectRing(-1)
+        fitToCanvas(next)
         setError(null)
     }
 
     function changeMode(next: EditorMode) {
         if (next === mode) return
         if (next === 'points') {
-            UseRectangleAsPoints()
+            switchRectangleToPoints()
             return
         }
         setConfirmRectangle(true)
     }
 
     function applyRectangle() {
+        history.record(snapshot())
         setMode('rectangle')
-        setActiveRing(-1)
-        setView(
-            fitDrawingView({
-                exterior: rectangleGeometry(w > 0 ? w : 1, h > 0 ? h : 1).exterior,
-                holes: draftRef.current.holes,
-            }),
-        )
+        selectRing(-1)
+        fitToCanvas({
+            exterior: rectangleGeometry(w > 0 ? w : 1, h > 0 ? h : 1).exterior,
+            holes: draftRef.current.holes,
+        })
         setError(null)
     }
 
@@ -370,6 +522,7 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
             setError(`Перед новым отверстием завершите предыдущие контуры. ${problem}`)
             return
         }
+        history.record(snapshot())
         const index = draftRef.current.holes.length
         const next: LibraryGeometry = {
             ...draftRef.current,
@@ -377,18 +530,19 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
         }
         draftRef.current = next
         setDraft(next)
-        setActiveRing(index)
+        selectRing(index)
         setError(null)
     }
 
     function removeHole(index: number) {
+        history.record(snapshot())
         const next: LibraryGeometry = {
             ...draftRef.current,
             holes: draftRef.current.holes.filter((_, i) => i !== index),
         }
         draftRef.current = next
         setDraft(next)
-        setActiveRing(-1)
+        selectRing(-1)
         setError(null)
     }
 
@@ -401,11 +555,12 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
         try {
             const text = await file.text()
             const next = importSVGGeometry(text, allowHoles)
+            history.record(snapshot())
             draftRef.current = next
             setDraft(next)
             setMode('points')
-            setActiveRing(-1)
-            setView(fitDrawingView(next))
+            selectRing(-1)
+            fitToCanvas(next)
             setError(null)
         } catch (caught) {
             setError(caught instanceof Error ? caught.message : 'Не удалось импортировать SVG.')
@@ -454,389 +609,499 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
             }}
         >
             <form onSubmit={(event) => void handleSubmit(event)}>
-                <header className="geometry-dialog-heading">
-                    <div>
-                        <h2 id="geometry-dialog-title">
-                            {initialItem
-                                ? allowHoles ? 'Редактирование поверхности' : 'Редактирование лекала'
-                                : allowHoles ? 'Новая поверхность' : 'Новое лекало'}
-                        </h2>
-                        <p>
-                            Контур можно построить точками, задать размерами или импортировать из
-                            SVG.
-                        </p>
-                    </div>
-                    <button
-                        type="button"
-                        className="geometry-secondary"
-                        disabled={saving}
-                        onClick={() => dialogRef.current?.close()}
-                        aria-label="Закрыть"
-                    >
-                        ✕
-                    </button>
-                </header>
-
-                <label className="geometry-field">
-                    Название
-                    <input
-                        type="text"
-                        value={name}
-                        required
-                        maxLength={150}
-                        autoFocus
-                        onChange={(event) => setName(event.target.value)}
-                        disabled={saving}
-                        placeholder={allowHoles ? 'Например, Лист материала' : 'Например, Деталь A'}
-                    />
-                </label>
-
-                <div className="geometry-mode" role="group" aria-label="Способ создания">
-                    <button
-                        type="button"
-                        aria-pressed={mode === 'rectangle'}
-                        className={mode === 'rectangle' ? 'geometry-mode-active' : ''}
-                        onClick={() => changeMode('rectangle')}
-                        disabled={saving}
-                    >
-                        Прямоугольник
-                    </button>
-                    <button
-                        type="button"
-                        aria-pressed={mode === 'points'}
-                        className={mode === 'points' ? 'geometry-mode-active' : ''}
-                        onClick={() => changeMode('points')}
-                        disabled={saving}
-                    >
-                        По точкам
-                    </button>
-                    <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() => fileRef.current?.click()}
-                    >
-                        Импорт SVG…
-                    </button>
-                    <input
-                        ref={fileRef}
-                        type="file"
-                        accept=".svg,image/svg+xml"
-                        hidden
-                        onChange={(event) => {
-                            void importFile(event.target.files?.[0])
-                            event.target.value = ''
-                        }}
-                    />
-                </div>
-
-                {mode === 'rectangle' && (
-                    <div className="geometry-rectangle">
-                        <label className="geometry-field">
-                            Ширина
-                            <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                value={width}
-                                disabled={saving}
-                                onChange={(event) => setWidth(event.target.value)}
-                            />
-                        </label>
-                        <label className="geometry-field">
-                            Высота
-                            <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                value={height}
-                                disabled={saving}
-                                onChange={(event) => setHeight(event.target.value)}
-                            />
-                        </label>
-                        <button
-                            className="geometry-secondary"
-                            type="button"
-                            onClick={UseRectangleAsPoints}
-                        >
-                            Редактировать вершины
-                        </button>
-                    </div>
-                )}
-
-                {(mode === 'points' || allowHoles) && (
-                    <div className="geometry-rings">
-                        <div className="geometry-ring-tabs" role="group" aria-label="Выбор контура">
-                            <button
-                                type="button"
-                                aria-pressed={activeRing === -1}
-                                className={activeRing === -1 ? 'geometry-tab-active' : ''}
-                                onClick={() => setActiveRing(-1)}
-                            >
-                                Внешний ({geometry.exterior.points.length})
-                            </button>
-                            {allowHoles &&
-                                draft.holes.map((hole, index) => (
-                                    <button
-                                        key={index}
-                                        type="button"
-                                        aria-pressed={activeRing === index}
-                                        className={
-                                            activeRing === index ? 'geometry-tab-active' : ''
-                                        }
-                                        onClick={() => setActiveRing(index)}
-                                    >
-                                        Отверстие {index + 1} ({hole.points.length})
-                                    </button>
-                                ))}
-                            {allowHoles && (
+                <GeometryWorkspace
+                    toolbar={
+                        <>
+                            <div className="geometry-toolbar-title">
                                 <button
                                     type="button"
                                     className="geometry-secondary"
-                                    onClick={addHole}
+                                    disabled={saving}
+                                    onClick={() => dialogRef.current?.close()}
                                 >
-                                    + Отверстие
+                                    ← Назад
                                 </button>
-                            )}
-                        </div>
-                        {mode === 'rectangle' && activeRing < 0 ? (
-                            <p className="geometry-help">
-                                Внешний контур задаётся шириной и высотой. Добавьте отверстие или
-                                перетащите угол, чтобы перейти к редактированию точек.
-                            </p>
-                        ) : (
-                            <p className="geometry-help">
-                                Добавляйте точки кликами или по X/Y, перетаскивайте вершины.
-                                После замыкания новая точка вставляется в ближайшее допустимое ребро.
-                                Номера точек показывают порядок обхода контура.
-                            </p>
-                        )}
-                        {(mode === 'points' || activeRing >= 0) && (
-                            <>
-                                <div className="geometry-point-add">
-                                    <label>
-                                        X{' '}
-                                        <input
-                                            type="text"
-                                            inputMode="decimal"
-                                            value={newX}
-                                            onChange={(event) => setNewX(event.target.value)}
-                                            aria-label="X новой точки"
-                                        />
-                                    </label>
-                                    <label>
-                                        Y{' '}
-                                        <input
-                                            type="text"
-                                            inputMode="decimal"
-                                            value={newY}
-                                            onChange={(event) => setNewY(event.target.value)}
-                                            aria-label="Y новой точки"
-                                        />
-                                    </label>
+                                <h2 id="geometry-dialog-title" title={name}>
+                                    {name.trim() ||
+                                        (allowHoles ? 'Новая поверхность' : 'Новое лекало')}
+                                </h2>
+                            </div>
+                            <div
+                                className="geometry-tool-group"
+                                role="group"
+                                aria-label="Вид холста"
+                            >
+                                <button
+                                    type="button"
+                                    className="geometry-secondary"
+                                    aria-label="Уменьшить масштаб"
+                                    title="Уменьшить масштаб"
+                                    onClick={() => setView(zoomView(visibleView, 1.25))}
+                                >
+                                    −
+                                </button>
+                                <button
+                                    type="button"
+                                    className="geometry-secondary"
+                                    title="Вернуть исходный масштаб"
+                                    onClick={() => setView(initialView)}
+                                >
+                                    {Math.round((initialView.height / view.height) * 100)}%
+                                </button>
+                                <button
+                                    type="button"
+                                    className="geometry-secondary"
+                                    aria-label="Увеличить масштаб"
+                                    title="Увеличить масштаб"
+                                    onClick={() => setView(zoomView(visibleView, 0.8))}
+                                >
+                                    +
+                                </button>
+                                <button
+                                    type="button"
+                                    className="geometry-secondary"
+                                    onClick={() => fitToCanvas(geometry)}
+                                >
+                                    Уместить в поле
+                                </button>
+                                <button
+                                    type="button"
+                                    className="geometry-secondary"
+                                    aria-pressed={panMode}
+                                    onClick={() => setPanMode(!panMode)}
+                                >
+                                    Перемещение поля
+                                </button>
+                            </div>
+                            <div
+                                className="geometry-tool-group"
+                                role="group"
+                                aria-label="История геометрии"
+                            >
+                                <button
+                                    type="button"
+                                    className="geometry-secondary"
+                                    disabled={saving || !history.canUndo}
+                                    onClick={() => replay('undo')}
+                                >
+                                    Отменить
+                                </button>
+                                <button
+                                    type="button"
+                                    className="geometry-secondary"
+                                    disabled={saving || !history.canRedo}
+                                    onClick={() => replay('redo')}
+                                >
+                                    Повторить
+                                </button>
+                            </div>
+                            <button
+                                type="submit"
+                                className="geometry-primary"
+                                disabled={saving || !name.trim() || !!validationError}
+                            >
+                                {saving
+                                    ? 'Сохраняем…'
+                                    : initialItem
+                                      ? 'Сохранить изменения'
+                                      : 'Создать'}
+                            </button>
+                        </>
+                    }
+                    tools={
+                        <fieldset disabled={saving}>
+                            <legend>Построение</legend>
+                            <div
+                                className="geometry-mode"
+                                role="group"
+                                aria-label="Способ создания"
+                            >
+                                <button
+                                    type="button"
+                                    aria-pressed={mode === 'rectangle'}
+                                    className={mode === 'rectangle' ? 'geometry-mode-active' : ''}
+                                    onClick={() => changeMode('rectangle')}
+                                    disabled={saving}
+                                >
+                                    Прямоугольник
+                                </button>
+                                <button
+                                    type="button"
+                                    aria-pressed={mode === 'points'}
+                                    className={mode === 'points' ? 'geometry-mode-active' : ''}
+                                    onClick={() => changeMode('points')}
+                                    disabled={saving}
+                                >
+                                    По точкам
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={saving}
+                                    onClick={() => fileRef.current?.click()}
+                                >
+                                    Импорт SVG…
+                                </button>
+                                <input
+                                    ref={fileRef}
+                                    type="file"
+                                    accept=".svg,image/svg+xml"
+                                    hidden
+                                    onChange={(event) => {
+                                        void importFile(event.target.files?.[0])
+                                        event.target.value = ''
+                                    }}
+                                />
+                            </div>
+
+                            <div
+                                className="geometry-ring-tabs"
+                                role="group"
+                                aria-label="Выбор контура"
+                            >
+                                <button
+                                    type="button"
+                                    aria-pressed={activeRing === -1}
+                                    className={activeRing === -1 ? 'geometry-tab-active' : ''}
+                                    onClick={() => selectRing(-1)}
+                                >
+                                    Внешний контур ({geometry.exterior.points.length})
+                                </button>
+                                {allowHoles &&
+                                    draft.holes.map((hole, index) => (
+                                        <button
+                                            key={index}
+                                            type="button"
+                                            aria-pressed={activeRing === index}
+                                            className={
+                                                activeRing === index ? 'geometry-tab-active' : ''
+                                            }
+                                            onClick={() => selectRing(index)}
+                                        >
+                                            Отверстие {index + 1} ({hole.points.length})
+                                        </button>
+                                    ))}
+                                {allowHoles && (
                                     <button
                                         type="button"
                                         className="geometry-secondary"
-                                        onClick={handleManualPoint}
+                                        onClick={addHole}
+                                        disabled={
+                                            saving || !!validationError || draft.holes.length >= 20
+                                        }
                                     >
-                                        + Точка
+                                        + Отверстие
                                     </button>
+                                )}
+                            </div>
+
+                            <div
+                                className="geometry-mode"
+                                role="group"
+                                aria-label="Инструмент холста"
+                            >
+                                <button
+                                    type="button"
+                                    aria-pressed={selectMode && !panMode}
+                                    onClick={() => {
+                                        setSelectMode(true)
+                                        setPanMode(false)
+                                    }}
+                                >
+                                    Выбор вершин
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={mode === 'rectangle' && activeRing < 0}
+                                    aria-pressed={
+                                        !selectMode &&
+                                        !panMode &&
+                                        (mode === 'points' || activeRing >= 0)
+                                    }
+                                    onClick={() => {
+                                        setSelectMode(false)
+                                        setPanMode(false)
+                                    }}
+                                >
+                                    Добавление вершин
+                                </button>
+                            </div>
+                            {(mode === 'points' || activeRing >= 0) && (
+                                <div className="geometry-mode">
                                     <button
                                         type="button"
-                                        className="geometry-secondary"
-                                        onClick={() => updateActive(() => [])}
+                                        className="geometry-danger"
+                                        disabled={!activePoints.length}
+                                        onClick={() => {
+                                            if (updateActive(() => [])) setSelectedVertex(null)
+                                        }}
                                     >
                                         Очистить контур
                                     </button>
-                                    {activeRing >= 0 && allowHoles && (
+                                    {activeRing >= 0 && (
                                         <button
                                             type="button"
-                                            className="geometry-secondary"
+                                            className="geometry-danger"
                                             onClick={() => removeHole(activeRing)}
                                         >
                                             Удалить отверстие
                                         </button>
                                     )}
                                 </div>
-                                <div className="geometry-point-list" aria-label="Координаты вершин">
-                                    {activePoints.length === 0 && (
-                                        <p>В этом контуре ещё нет точек.</p>
-                                    )}
-                                    {activePoints.map((point, index) => (
-                                        <div className="geometry-point-row" key={index}>
-                                            <span>#{index + 1}</span>
-                                            <CoordinateInput
-                                                key={`x-${activeRing}-${index}-${point.x}-${point.y}`}
-                                                value={point.x}
-                                                label={`X точки ${index + 1}`}
-                                                onCommit={(x) =>
-                                                    updateActive((points) =>
-                                                        points.map((p, i) =>
-                                                            i === index ? { ...p, x } : p,
-                                                        ),
-                                                    )
-                                                }
-                                            />
-                                            <CoordinateInput
-                                                key={`y-${activeRing}-${index}-${point.x}-${point.y}`}
-                                                value={point.y}
-                                                label={`Y точки ${index + 1}`}
-                                                onCommit={(y) =>
-                                                    updateActive((points) =>
-                                                        points.map((p, i) =>
-                                                            i === index ? { ...p, y } : p,
-                                                        ),
-                                                    )
-                                                }
-                                            />
+                            )}
+                            <p className="geometry-help">
+                                Импорт SVG: polygon, rect и прямолинейные path (M/L/H/V/Z).
+                            </p>
+                        </fieldset>
+                    }
+                    properties={
+                        <fieldset disabled={saving}>
+                            <legend>Точное редактирование</legend>
+                            <label className="geometry-field">
+                                Название
+                                <input
+                                    type="text"
+                                    value={name}
+                                    required
+                                    maxLength={150}
+                                    onChange={(event) => setName(event.target.value)}
+                                    disabled={saving}
+                                    placeholder={
+                                        allowHoles
+                                            ? 'Например, Лист материала'
+                                            : 'Например, Деталь A'
+                                    }
+                                />
+                            </label>
+
+                            {mode === 'rectangle' && (
+                                <div className="geometry-rectangle">
+                                    <label className="geometry-field">
+                                        Ширина
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="any"
+                                            value={width}
+                                            disabled={saving}
+                                            onChange={(event) =>
+                                                editSize(setWidth, event.target.value)
+                                            }
+                                            onBlur={() => {
+                                                sizeBeforeEdit.current = null
+                                            }}
+                                        />
+                                    </label>
+                                    <label className="geometry-field">
+                                        Высота
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="any"
+                                            value={height}
+                                            disabled={saving}
+                                            onChange={(event) =>
+                                                editSize(setHeight, event.target.value)
+                                            }
+                                            onBlur={() => {
+                                                sizeBeforeEdit.current = null
+                                            }}
+                                        />
+                                    </label>
+                                    <button
+                                        className="geometry-secondary"
+                                        type="button"
+                                        onClick={switchRectangleToPoints}
+                                        disabled={saving || !rectangleValid}
+                                    >
+                                        Редактировать вершины
+                                    </button>
+                                </div>
+                            )}
+
+                            {(mode === 'points' || activeRing >= 0) && (
+                                <>
+                                    <label className="geometry-field">
+                                        Вершина контура
+                                        <select
+                                            value={selectedVertex ?? ''}
+                                            onChange={(event) =>
+                                                setSelectedVertex(
+                                                    event.target.value === ''
+                                                        ? null
+                                                        : Number(event.target.value),
+                                                )
+                                            }
+                                        >
+                                            <option value="">Выберите вершину</option>
+                                            {activePoints.map((_, index) => (
+                                                <option key={index} value={index}>
+                                                    Вершина № {index + 1}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    {selectedVertex !== null && activePoints[selectedVertex] ? (
+                                        <div className="geometry-point-add">
+                                            {(['x', 'y'] as const).map((axis) => {
+                                                const point = activePoints[selectedVertex]
+                                                return (
+                                                    <label key={axis} className="geometry-field">
+                                                        {axis.toUpperCase()}
+                                                        <CoordinateInput
+                                                            key={`${activeRing}-${selectedVertex}-${point[axis]}`}
+                                                            value={point[axis]}
+                                                            label={`${axis.toUpperCase()} точки ${selectedVertex + 1}`}
+                                                            onCommit={(coordinate) =>
+                                                                coordinate === point[axis] ||
+                                                                updateActive((points) =>
+                                                                    points.map((entry, index) =>
+                                                                        index === selectedVertex
+                                                                            ? {
+                                                                                  ...entry,
+                                                                                  [axis]: coordinate,
+                                                                              }
+                                                                            : entry,
+                                                                    ),
+                                                                )
+                                                            }
+                                                        />
+                                                    </label>
+                                                )
+                                            })}
                                             <button
                                                 type="button"
-                                                className="geometry-secondary"
-                                                aria-label={`Удалить точку ${index + 1}`}
-                                                onClick={() =>
-                                                    updateActive((points) =>
-                                                        points.filter((_, i) => i !== index),
+                                                className="geometry-secondary geometry-danger"
+                                                onClick={() => {
+                                                    if (
+                                                        updateActive((points) =>
+                                                            points.filter(
+                                                                (_, index) =>
+                                                                    index !== selectedVertex,
+                                                            ),
+                                                        )
                                                     )
-                                                }
+                                                        setSelectedVertex(null)
+                                                }}
                                             >
-                                                ✕
+                                                Удалить вершину
                                             </button>
                                         </div>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                    </div>
-                )}
-
-                <div className="geometry-preview-heading">
-                    <strong>Предпросмотр геометрии</strong>
-                    <button
-                        type="button"
-                        className="geometry-secondary"
-                        onClick={() => setView(fitDrawingView(geometry))}
-                    >
-                        Уместить в поле
-                    </button>
-                </div>
-                <div className="geometry-mode" role="group" aria-label="Вид и сетка">
-                    <button type="button" onClick={() => setView(zoomView(visibleView, 0.8))}>+</button>
-                    <span>Масштаб {Math.round(initialView.width / visibleView.width * 100)}%</span>
-                    <button type="button" onClick={() => setView(zoomView(visibleView, 1.25))}>−</button>
-                    <button type="button" onClick={() => setView(initialView)}>100%</button>
-                    <button type="button" aria-pressed={panMode} onClick={() => setPanMode(!panMode)}>Перемещение поля</button>
-                    <label><input type="checkbox" checked={showGrid} onChange={(event) => setShowGrid(event.target.checked)} /> Сетка</label>
-                    <label>Шаг сетки <input type="number" min="0.01" step="any" value={gridStep}
-                        onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value > 0) setGridStep(value) }} /></label>
-                </div>
-                <svg
-                    ref={svgRef}
-                    className={`geometry-preview ${mode === 'points' || activeRing >= 0 ? 'geometry-preview-clickable' : ''}`}
-                    viewBox={`${visibleView.x} ${visibleView.y} ${visibleView.width} ${visibleView.height}`}
-                    preserveAspectRatio="xMidYMid meet"
-                    role="img"
-                    aria-label="Предпросмотр многоугольника. В режиме точек нажмите для добавления вершины."
-                    onPointerDown={handleCanvasPointerDown}
-                    onPointerMove={handlePointerMove}
-                    onPointerUp={stopDragging}
-                    onPointerCancel={stopDragging}
-                    onLostPointerCapture={(event) => {
-                        if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null
-                        if (panRef.current?.id === event.pointerId) panRef.current = null
-                    }}
-                >
-                    <defs>
-                        <pattern id={gridId} width={gridStep} height={gridStep} patternUnits="userSpaceOnUse">
-                            <path d={`M ${gridStep} 0 H 0 V ${gridStep}`} fill="none" stroke="currentColor" strokeOpacity="0.15" strokeWidth={visibleView.width / 1200} />
-                        </pattern>
-                    </defs>
-                    <rect x={visibleView.x} y={visibleView.y} width={visibleView.width} height={visibleView.height}
-                        fill={showGrid ? `url(#${gridId})` : 'transparent'} />
-                    {areaPath && (
-                        <path d={areaPath} fill="#e9434b" fillOpacity="0.18" fillRule="evenodd" />
-                    )}
-                    {rings.map((ring, index) => (
-                        <g key={index}>
-                            <path
-                                d={contourPath(ring.points, ring.points.length >= 3)}
-                                fill="none"
-                                stroke={index === 0 ? '#e9434b' : '#60a5fa'}
-                                strokeWidth={view.width / 300}
-                                strokeLinejoin="round"
-                            />
-                            {ring.points.map((p, i) => (
-                                <g key={i}>
-                                    <circle
-                                        cx={p.x}
-                                        cy={p.y}
-                                        r={view.width / 65}
-                                        className="geometry-vertex"
-                                        fill="transparent"
-                                        onPointerDown={(event) =>
-                                            startDragging(event, index - 1, i)
-                                        }
-                                    >
-                                        <title>
-                                            Вершина {i + 1}: ({p.x}, {p.y}). Перетащите для
-                                            изменения.
-                                        </title>
-                                    </circle>
-                                    <circle
-                                        cx={p.x}
-                                        cy={p.y}
-                                        r={view.width / 125}
-                                        pointerEvents="none"
-                                        fill={index === 0 ? '#e9434b' : '#60a5fa'}
-                                        stroke="white"
-                                        strokeWidth={view.width / 650}
-                                    />
-                                    {index - 1 === activeRing && (
-                                        <text
-                                            x={p.x + view.width / 65}
-                                            y={p.y - view.width / 80}
-                                            fontSize={view.width / 75}
-                                            fill="currentColor"
-                                            pointerEvents="none"
-                                        >
-                                            {i + 1}
-                                        </text>
+                                    ) : (
+                                        <p className="geometry-help">
+                                            Выберите вершину на холсте или в списке.
+                                        </p>
                                     )}
-                                </g>
-                            ))}
-                        </g>
-                    ))}
-                </svg>
-                <p className="geometry-help">
-                    В поле Y увеличивается вниз. Для SVG поддерживаются polygon, rect и
-                    прямолинейные path (M/L/H/V/Z). Кривые и transform пока не импортируем.
-                </p>
-                {validationError && <p className="geometry-validation">{validationError}</p>}
-                {error && (
-                    <p className="geometry-error" role="alert">
-                        {error}
-                    </p>
-                )}
-                <footer className="geometry-dialog-actions">
-                    <button
-                        type="button"
-                        className="geometry-secondary"
-                        disabled={saving}
-                        onClick={() => dialogRef.current?.close()}
-                    >
-                        Отмена
-                    </button>
-                    <button
-                        type="submit"
-                        className="geometry-primary"
-                        disabled={saving || !name.trim() || !!validationError}
-                    >
-                        {saving ? 'Сохраняем…' : initialItem ? 'Сохранить изменения' : 'Создать'}
-                    </button>
-                </footer>
+                                    <div className="geometry-point-add">
+                                        <label className="geometry-field">
+                                            Новая X
+                                            <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                value={newX}
+                                                onChange={(event) => setNewX(event.target.value)}
+                                                aria-label="X новой точки"
+                                            />
+                                        </label>
+                                        <label className="geometry-field">
+                                            Новая Y
+                                            <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                value={newY}
+                                                onChange={(event) => setNewY(event.target.value)}
+                                                aria-label="Y новой точки"
+                                            />
+                                        </label>
+                                        <button
+                                            type="button"
+                                            className="geometry-secondary"
+                                            onClick={handleManualPoint}
+                                        >
+                                            Добавить по координатам
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                            <div className="geometry-grid-settings">
+                                <label>
+                                    <input
+                                        type="checkbox"
+                                        checked={showGrid}
+                                        onChange={(event) => setShowGrid(event.target.checked)}
+                                    />{' '}
+                                    Сетка
+                                </label>
+                                <label className="geometry-field">
+                                    Шаг сетки
+                                    <input
+                                        type="number"
+                                        min="0.01"
+                                        step="any"
+                                        value={gridStep}
+                                        onChange={(event) => {
+                                            const value = Number(event.target.value)
+                                            if (Number.isFinite(value) && value > 0)
+                                                setGridStep(value)
+                                        }}
+                                    />
+                                </label>
+                            </div>
+                        </fieldset>
+                    }
+                    status={
+                        <>
+                            <span>
+                                {activeRing < 0
+                                    ? 'Внешний контур'
+                                    : `Отверстие № ${activeRing + 1}`}{' '}
+                                · вершин: {activePoints.length}
+                            </span>
+                            <span className="geometry-status-axis">Ось Y направлена вниз</span>
+                            {error ? (
+                                <span className="geometry-error" role="alert">
+                                    {error}
+                                </span>
+                            ) : (
+                                validationError && (
+                                    <span className="geometry-validation">{validationError}</span>
+                                )
+                            )}
+                        </>
+                    }
+                >
+                    <GeometryCanvas
+                        geometry={geometry}
+                        visibleView={visibleView}
+                        activeRing={activeRing}
+                        selectedVertex={selectedVertex}
+                        adding={!selectMode && (mode === 'points' || activeRing >= 0)}
+                        panMode={panMode}
+                        showGrid={showGrid}
+                        gridStep={gridStep}
+                        startDragging={startDragging}
+                        canvasProps={{
+                            ref: svgRef,
+                            onPointerDown: handleCanvasPointerDown,
+                            onPointerMove: handlePointerMove,
+                            onPointerUp: stopDragging,
+                            onPointerCancel: stopDragging,
+                            onLostPointerCapture: (event) => finishDrag(event.pointerId, true),
+                        }}
+                    />
+                </GeometryWorkspace>
             </form>
-            {confirmRectangle && <ConfirmDialog title="Заменить внешний контур?" confirmLabel="Заменить"
-                onClose={() => setConfirmRectangle(false)} onConfirm={async () => applyRectangle()}>
-                <p>Текущий внешний контур будет заменён прямоугольником с указанными размерами.</p>
-            </ConfirmDialog>}
+            {confirmRectangle && (
+                <ConfirmDialog
+                    title="Заменить внешний контур?"
+                    confirmLabel="Заменить"
+                    onClose={() => setConfirmRectangle(false)}
+                    onConfirm={async () => applyRectangle()}
+                >
+                    <p>
+                        Текущий внешний контур будет заменён прямоугольником с указанными размерами.
+                    </p>
+                </ConfirmDialog>
+            )}
         </dialog>
     )
 }
