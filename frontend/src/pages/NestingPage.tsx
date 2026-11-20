@@ -1,3 +1,11 @@
+import {
+    classifyPreviewFailure,
+    mayClosePreview,
+    parseNestingAngles,
+    previewStatusOutcome,
+    validateNestingRequest,
+} from '../features/nesting/previewRecovery'
+import type { NestingOperationStatus } from '../features/nesting/previewRecovery'
 import { confirmReplay, recordPlacement } from '../features/nesting/placementHistory'
 import type { PlacementHistory, PlacementPose } from '../features/nesting/placementHistory'
 import { NestingHistory } from '../features/nesting/NestingHistory'
@@ -124,6 +132,7 @@ function Workspace({
     const [quantities, setQuantities] = useState<Record<number, number>>({})
     const [rotations, setRotations] = useState('0, 90, 180, 270')
     const [keepExisting, setKeepExisting] = useState(true)
+    const [closePreview, setClosePreview] = useState<PendingNesting | null>(null)
     const [replacement, setReplacement] = useState<NestingRequest | null>(null)
     const [historyRevision, setHistoryRevision] = useState(0)
     const [result, setResult] = useState<NestingResult | null>(null)
@@ -343,11 +352,7 @@ function Workspace({
         let reloadConfirmed = false
         await mutate(
             async () => {
-                const status = await authorizedRequest<{
-                    status: 'unknown' | 'running' | 'completed' | 'failed'
-                    result?: NestingResult
-                    failure?: { code: string; message: string }
-                }>(
+                const status = await authorizedRequest<NestingOperationStatus>(
                     `${base}/nesting/operations/${current.key}${current.kind === 'preview' ? '?kind=preview' : ''}`,
                     {
                         signal: AbortSignal.timeout(10_000),
@@ -356,11 +361,9 @@ function Workspace({
                 if (status.status === 'completed' && status.result) {
                     if (current.kind === 'preview') {
                         openInspector('automatic')
-                        setProposal({
-                            result: status.result,
-                            request: current.request,
-                            includeSaved: current.request.keep_existing,
-                        })
+                        const recovered = previewStatusOutcome(current, status)
+                        if (recovered.kind !== 'completed') return
+                        setProposal(recovered.proposal)
                         sessionStorage.removeItem(storageKey)
                         setOperation(null)
                         setSyncError(null)
@@ -388,7 +391,7 @@ function Workspace({
                     setSyncError(
                         status.status === 'running'
                             ? 'Сервер выполняет этот запуск.'
-                            : 'Сохранённый результат пока отсутствует. Можно безопасно повторить этот запуск.',
+                            : 'Статус пока неизвестен: запрос ещё может быть в пути. Повторите тот же запуск с прежним ключом; новый расчёт автоматически не запускается.',
                     )
                 }
             },
@@ -399,6 +402,11 @@ function Workspace({
     }
     async function previewRun(request: NestingRequest, retry?: PendingNesting) {
         await mutate(async () => {
+            const validation = validateNestingRequest(retry?.request ?? request)
+            if (validation) {
+                setError(validation)
+                return
+            }
             const current: PendingNesting = retry ?? {
                 kind: 'preview',
                 key: crypto.randomUUID(),
@@ -427,19 +435,56 @@ function Workspace({
                 setOperation(null)
                 setSyncError(null)
             } catch (caught) {
-                if (
-                    caught instanceof ApiError &&
-                    ['nesting_cancelled', 'nesting_timeout', 'preview_expired'].includes(
-                        caught.code ?? '',
-                    )
-                ) {
+                const category = classifyPreviewFailure(caught, !!retry)
+                if (category === 'rejected') {
                     sessionStorage.removeItem(storageKey)
                     setOperation(null)
                     setError(getApiErrorMessage(caught))
+                    setSyncError(null)
                     return
                 }
+                if (category === 'check_status') {
+                    try {
+                        const status = await authorizedRequest<NestingOperationStatus>(
+                            `${base}/nesting/operations/${current.key}?kind=preview`,
+                            { signal: AbortSignal.timeout(10_000) },
+                        )
+                        const outcome = previewStatusOutcome(current, status)
+                        if (outcome.kind === 'completed') {
+                            setProposal(outcome.proposal)
+                            openInspector('automatic')
+                            sessionStorage.removeItem(storageKey)
+                            setOperation(null)
+                            setSyncError(null)
+                            return
+                        }
+                        if (outcome.kind === 'failed') {
+                            sessionStorage.removeItem(storageKey)
+                            setOperation(null)
+                            setError(
+                                outcome.failure
+                                    ? getApiErrorMessage(
+                                          new ApiError(
+                                              500,
+                                              outcome.failure.code,
+                                              outcome.failure.message,
+                                          ),
+                                      )
+                                    : getApiErrorMessage(caught),
+                            )
+                            return
+                        }
+                    } catch {
+                        /* Retain the key when reconciliation is unavailable. */
+                    }
+                    setError(getApiErrorMessage(caught))
+                }
                 setSyncError(
-                    'Ответ предпросмотра не получен. Проверьте статус или повторите запрос с тем же ключом.',
+                    category === 'check_status'
+                        ? 'Этот повтор отклонён сервером. Исход предыдущего запроса ещё не подтверждён. Проверьте статус или закройте ожидание предпросмотра.'
+                        : caught instanceof ApiError
+                          ? 'Получен ответ об ошибке, но итог операции пока неизвестен. Проверьте статус или повторите запрос с тем же ключом.'
+                          : 'Ответ предпросмотра не получен. Проверьте статус или повторите запрос с тем же ключом.',
                 )
             }
         })
@@ -472,26 +517,20 @@ function Workspace({
         else void run(request)
     }
     function prepareRun(preview = false) {
-        const angles = rotations.split(',').map((value) => Number(value.trim()))
+        const angles = parseNestingAngles(rotations)
         const requested = Object.entries(quantities)
-            .filter(([, quantity]) => quantity > 0)
+            .filter(([, quantity]) => quantity !== 0)
             .map(([id, quantity]) => ({ project_pattern_id: Number(id), quantity }))
-        if (
-            !requested.length ||
-            requested.some((item) => !Number.isSafeInteger(item.quantity)) ||
-            rotations.split(',').some((value) => !value.trim()) ||
-            angles.some((angle) => !Number.isFinite(angle) || angle < 0 || angle >= 360)
-        ) {
-            setError(
-                'Укажите целое положительное количество хотя бы одного лекала и углы от 0 до 360° (не включая 360).',
-            )
-            return
-        }
         const request = {
             algorithm,
             patterns: requested,
             allowed_rotations: angles,
             keep_existing: keepExisting,
+        }
+        const validation = validateNestingRequest(request)
+        if (validation) {
+            setError(validation)
+            return
         }
         if (preview) void previewRun(request)
         else if (!keepExisting) setReplacement(request)
@@ -633,6 +672,11 @@ function Workspace({
                     <button disabled={busy} onClick={() => void checkOperation(operation)}>
                         Проверить статус
                     </button>
+                    {operation.kind === 'preview' && (
+                        <button disabled={busy} onClick={() => setClosePreview(operation)}>
+                            Закрыть ожидание предпросмотра
+                        </button>
+                    )}
                     {operation.kind === 'preview' && (
                         <button
                             disabled={busy}
@@ -990,6 +1034,31 @@ function Workspace({
                     }
                 >
                     <p>Удалить размещение №{selectedPlacement.id}? Проектное лекало сохраняется.</p>
+                </ConfirmDialog>
+            )}
+            {closePreview && (
+                <ConfirmDialog
+                    title="Закрыть ожидание предпросмотра?"
+                    confirmLabel="Закрыть ожидание"
+                    onClose={() => setClosePreview(null)}
+                    onConfirm={async () => {
+                        if (
+                            !pending.current &&
+                            operation?.key === closePreview.key &&
+                            mayClosePreview(operation, userId, projectId, surfaceId)
+                        ) {
+                            sessionStorage.removeItem(storageKey)
+                            setOperation(null)
+                            setSyncError(null)
+                            setError(null)
+                        }
+                        setClosePreview(null)
+                    }}
+                >
+                    Это удалит только ожидание в этой вкладке. Серверный расчёт может продолжаться
+                    до своего deadline. Если расчёт выполняется, сначала запросите отмену и
+                    проверьте статус. Сохранённая раскладка не изменится. Новый расчёт запускается
+                    только вручную.
                 </ConfirmDialog>
             )}
             {replacement && (

@@ -382,6 +382,87 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
     await automatic.click()
     await page.getByRole('spinbutton', { name: 'Угловое лекало' }).fill('1')
     await page.getByRole('spinbutton', { name: 'Прямоугольное лекало' }).fill('0')
+    // P1: obvious invalid inputs never send POST or create pending storage.
+    let validationPosts = 0
+    await page.route('**/nesting/preview', async (route) => {
+        validationPosts++
+        await route.continue()
+    })
+    const previewButton = page.getByRole('button', { name: 'Предпросмотр', exact: true })
+    const pendingPreviewCount = () =>
+        page.evaluate(
+            () =>
+                Object.keys(sessionStorage).filter((key) => key.startsWith('nesting.pending:'))
+                    .length,
+        )
+    await page.getByRole('spinbutton', { name: 'Угловое лекало' }).fill('501')
+    await previewButton.click()
+    await expect(page.getByRole('alert')).toContainText('не более 500')
+    expect(await pendingPreviewCount()).toBe(0)
+    await expect(previewButton).toBeEnabled()
+    await page.getByRole('spinbutton', { name: 'Угловое лекало' }).fill('1')
+    await page
+        .getByLabel('Углы через запятую')
+        .fill(Array.from({ length: 37 }, (_, i) => i).join(','))
+    await previewButton.click()
+    await expect(page.getByRole('alert')).toContainText('не более 36')
+    expect(validationPosts).toBe(0)
+    expect(await pendingPreviewCount()).toBe(0)
+    await page.getByLabel('Углы через запятую').fill('0,90,180,270')
+    await page.unroute('**/nesting/preview')
+
+    // Real API rejection AFTER a valid UI request: alter only the submitted body.
+    await page.route(
+        '**/nesting/preview',
+        async (route) => {
+            const body = route.request().postDataJSON()
+            body.patterns[0].quantity = 501
+            const response = await route.fetch({ postData: JSON.stringify(body) })
+            expect(response.status()).toBe(400)
+            await route.fulfill({ response })
+        },
+        { times: 1 },
+    )
+    await previewButton.click()
+    await expect(page.getByRole('alert')).toContainText('не более 500')
+    await expect(previewButton).toBeEnabled()
+    expect(await pendingPreviewCount()).toBe(0)
+
+    // An unregistered request may still be in transit. Closing is explicit and
+    // read-only; a DELETE 404 does not mean the future POST was cancelled.
+    await page.route('**/nesting/preview', (route) => route.abort('failed'), { times: 1 })
+    await previewButton.click()
+    await page.getByRole('button', { name: 'Проверить статус', exact: true }).click()
+    await expect(page.getByText(/Статус пока неизвестен:/)).toBeVisible()
+    await page.evaluate(() => sessionStorage.setItem('unrelated-save', 'preserve'))
+    await page.getByRole('button', { name: 'Закрыть ожидание предпросмотра', exact: true }).click()
+    const closeWaiting = page.getByRole('dialog', { name: 'Закрыть ожидание предпросмотра?' })
+    await expect(closeWaiting).toContainText('Серверный расчёт может продолжаться')
+    await closeWaiting.getByRole('button', { name: 'Закрыть ожидание', exact: true }).click()
+    expect(await pendingPreviewCount()).toBe(0)
+    expect(await page.evaluate(() => sessionStorage.getItem('unrelated-save'))).toBe('preserve')
+    await expect(previewButton).toBeEnabled()
+
+    const retryKeys = []
+    await page.route('**/nesting/preview', async (route) => {
+        retryKeys.push(route.request().headers()['idempotency-key'])
+        if (retryKeys.length === 1) await route.abort('failed')
+        else await route.continue()
+    })
+    await previewButton.click()
+    await page.getByRole('button', { name: 'Проверить статус', exact: true }).click()
+    await expect(page.getByText(/Статус пока неизвестен:/)).toBeVisible()
+    await page.getByRole('button', { name: 'Запросить отмену предпросмотра', exact: true }).click()
+    await expect(page.getByRole('alert')).toContainText(
+        'Сервер ещё не начал расчёт или уже завершил его.',
+    )
+    expect(await pendingPreviewCount()).toBe(1)
+    await page.getByRole('button', { name: 'Повторить тот же запуск', exact: true }).click()
+    await expect(page.getByText(/Предпросмотр · размещено 1 из 1/)).toBeVisible()
+    expect(retryKeys.length).toBe(2)
+    expect(retryKeys[0]).toBe(retryKeys[1])
+    await page.unroute('**/nesting/preview')
+    await page.getByRole('button', { name: 'Закрыть предпросмотр', exact: true }).click()
     await page.getByRole('button', { name: 'Предпросмотр', exact: true }).click()
     await expect(page.getByText(/Предпросмотр · размещено 1 из 1/)).toBeVisible()
     await expect(placement).toHaveCount(2)
