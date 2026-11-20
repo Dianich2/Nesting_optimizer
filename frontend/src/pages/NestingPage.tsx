@@ -347,10 +347,25 @@ function Workspace({
                     status: 'unknown' | 'running' | 'completed' | 'failed'
                     result?: NestingResult
                     failure?: { code: string; message: string }
-                }>(`${base}/nesting/operations/${current.key}`, {
-                    signal: AbortSignal.timeout(10_000),
-                })
+                }>(
+                    `${base}/nesting/operations/${current.key}${current.kind === 'preview' ? '?kind=preview' : ''}`,
+                    {
+                        signal: AbortSignal.timeout(10_000),
+                    },
+                )
                 if (status.status === 'completed' && status.result) {
+                    if (current.kind === 'preview') {
+                        openInspector('automatic')
+                        setProposal({
+                            result: status.result,
+                            request: current.request,
+                            includeSaved: current.request.keep_existing,
+                        })
+                        sessionStorage.removeItem(storageKey)
+                        setOperation(null)
+                        setSyncError(null)
+                        return
+                    }
                     setResult(status.result)
                     setHistoryRevision((value) => value + 1)
                     setResultAlgorithm(current.request.algorithm)
@@ -382,18 +397,51 @@ function Workspace({
         )
         if (reloadConfirmed) setReload((value) => value + 1)
     }
-    async function previewRun(request: NestingRequest) {
+    async function previewRun(request: NestingRequest, retry?: PendingNesting) {
         await mutate(async () => {
-            const key = crypto.randomUUID()
+            const current: PendingNesting = retry ?? {
+                kind: 'preview',
+                key: crypto.randomUUID(),
+                userId,
+                projectId,
+                surfaceId,
+                request,
+            }
+            sessionStorage.setItem(storageKey, JSON.stringify(current))
+            setOperation(current)
             setProposal(null)
-            setActivity({ kind: 'calculating_preview', key, cancelling: false })
-            const result = await authorizedRequest<NestingResult>(`${base}/nesting/preview`, {
-                method: 'POST',
-                signal: AbortSignal.timeout(nestingRequestTimeout),
-                headers: { 'Idempotency-Key': key },
-                body: JSON.stringify(request),
-            })
-            setProposal({ result, includeSaved: request.keep_existing, request })
+            setActivity({ kind: 'calculating_preview', key: current.key, cancelling: false })
+            try {
+                const result = await authorizedRequest<NestingResult>(`${base}/nesting/preview`, {
+                    method: 'POST',
+                    signal: AbortSignal.timeout(nestingRequestTimeout),
+                    headers: { 'Idempotency-Key': current.key },
+                    body: JSON.stringify(current.request),
+                })
+                setProposal({
+                    result,
+                    request: current.request,
+                    includeSaved: current.request.keep_existing,
+                })
+                sessionStorage.removeItem(storageKey)
+                setOperation(null)
+                setSyncError(null)
+            } catch (caught) {
+                if (
+                    caught instanceof ApiError &&
+                    ['nesting_cancelled', 'nesting_timeout', 'preview_expired'].includes(
+                        caught.code ?? '',
+                    )
+                ) {
+                    sessionStorage.removeItem(storageKey)
+                    setOperation(null)
+                    setError(getApiErrorMessage(caught))
+                    return
+                }
+                setSyncError(
+                    'Ответ предпросмотра не получен. Проверьте статус или повторите запрос с тем же ключом.',
+                )
+            }
         })
     }
 
@@ -401,10 +449,13 @@ function Workspace({
         if (!execution || cancelling) return
         setActivity({ ...execution, cancelling: true })
         try {
-            await authorizedRequest<void>(`${base}/nesting/operations/${execution.key}`, {
-                method: 'DELETE',
-                signal: AbortSignal.timeout(10_000),
-            })
+            await authorizedRequest<void>(
+                `${base}/nesting/operations/${execution.key}${execution.kind === 'calculating_preview' ? '?kind=preview' : ''}`,
+                {
+                    method: 'DELETE',
+                    signal: AbortSignal.timeout(10_000),
+                },
+            )
         } catch (caught) {
             setError(getApiErrorMessage(caught))
             setActivity((current) =>
@@ -582,9 +633,31 @@ function Workspace({
                     <button disabled={busy} onClick={() => void checkOperation(operation)}>
                         Проверить статус
                     </button>
+                    {operation.kind === 'preview' && (
+                        <button
+                            disabled={busy}
+                            onClick={() =>
+                                void mutate(async () => {
+                                    await authorizedRequest<void>(
+                                        `${base}/nesting/operations/${operation.key}?kind=preview`,
+                                        { method: 'DELETE', signal: AbortSignal.timeout(10_000) },
+                                    )
+                                    setSyncError(
+                                        'Запрос отмены принят. Проверьте итоговый статус операции.',
+                                    )
+                                })
+                            }
+                        >
+                            Запросить отмену предпросмотра
+                        </button>
+                    )}
                     <button
                         disabled={busy}
-                        onClick={() => void run(operation.request, false, operation)}
+                        onClick={() =>
+                            void (operation.kind === 'preview'
+                                ? previewRun(operation.request, operation)
+                                : run(operation.request, false, operation))
+                        }
                     >
                         Повторить тот же запуск
                     </button>

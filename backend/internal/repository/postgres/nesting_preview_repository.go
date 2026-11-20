@@ -100,6 +100,15 @@ func (r *NestingPreviewRepository) PurgeExpired(ctx context.Context, limit int) 
 	if limit < 1 || limit > 1000 {
 		limit = 1000
 	}
+	// Recover abandoned claims even when no client polls their status.
+	if _, err := r.db.ExecContext(ctx, `WITH abandoned AS (
+ SELECT project_surface_id,operation_key FROM nesting_preview_operations
+ WHERE state='running' AND lease_expires_at<=clock_timestamp()
+ ORDER BY lease_expires_at LIMIT $1 FOR UPDATE SKIP LOCKED
+ ) UPDATE nesting_preview_operations o SET state='failed',response='{"Status":"failed","Failure":{"Code":"nesting_timeout","Message":"preview worker deadline expired; start a new operation"}}'::jsonb
+ FROM abandoned a WHERE o.project_surface_id=a.project_surface_id AND o.operation_key=a.operation_key`, limit); err != nil {
+		return 0, err
+	}
 	result, err := r.db.ExecContext(ctx, `WITH expired AS (
         SELECT id FROM nesting_previews WHERE expires_at<=clock_timestamp()
         ORDER BY expires_at,id LIMIT $1 FOR UPDATE SKIP LOCKED

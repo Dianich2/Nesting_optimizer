@@ -271,6 +271,7 @@ func TestProjectResourcesAPI(t *testing.T) {
 		simplefeatures.NewEngine(), cancelRegistry, postgres.NewNestingUnitOfWork(scoped, codec),
 	)
 	cancelRun.Transactions = scopedDB
+	cancelRun.PreviewOperations = postgres.NewPreviewOperationRepository(scopedDB)
 	cancelRun.Operations = postgres.NewNestingOperationRepository(scopedDB)
 	cancelRun.Previews = postgres.NewNestingPreviewRepository(scopedDB)
 	cancelHandler := handler.NewNestingHandler(cancelRun)
@@ -293,6 +294,9 @@ func TestProjectResourcesAPI(t *testing.T) {
 		case <-cancelOptimizer.started:
 		case <-time.After(3 * time.Second):
 			t.Fatal("optimizer did not start")
+		}
+		if suffix == "/preview" {
+			operationPath += "?kind=preview"
 		}
 		must("DELETE", operationPath, "", 204)
 		select {

@@ -44,17 +44,37 @@ export function getApiErrorMessage(
         return 'Не удалось связаться с сервером. Проверьте подключение.'
     }
 
-    if (error.code === 'nesting_stale') return 'Данные поверхности, лекал или раскладки изменились. Пересчитайте результат.'
-    if (error.code === 'nesting_overloaded') return 'Все места для расчёта заняты. Попробуйте позже.'
+    if (error.code === 'preview_expired')
+        return 'Предпросмотр истёк или вытеснен. Начните новый расчёт.'
+    if (error.code === 'nesting_stale')
+        return 'Данные поверхности, лекал или раскладки изменились. Пересчитайте результат.'
+    if (error.code === 'nesting_overloaded')
+        return 'Все места для расчёта заняты. Попробуйте позже.'
     if (error.code === 'nesting_interrupted') return 'Расчёт был прерван. Запустите новую операцию.'
-    if (error.message === 'preview expired or not found') return 'Предпросмотр истёк или удалён. Рассчитайте новый.'
-    if (error.message === 'preview parameters changed') return 'Параметры предпросмотра изменились. Рассчитайте новый.'
-    if (error.details.some(detail => detail.field === 'geometry' && detail.code === 'too_long')) return 'Геометрия превышает вычислительный бюджет NFP. Упростите контуры или используйте Baseline.'
-    if (error.code === 'nesting_cancelled') return 'Расчёт отменён. Сохранённая раскладка не изменилась.'
-    if (error.code === 'nesting_timeout') return 'Расчёт превысил лимит времени. Попробуйте меньше деталей или более быстрый алгоритм.'
-    if (error.code === 'nesting_not_running') return 'Сервер ещё не начал расчёт или уже завершил его.'
-    if (error.details.some((detail) => detail.field === 'quantity' && detail.message.includes('500'))) return 'За один запуск можно разместить не более 500 деталей.'
-    if (error.details.some((detail) => detail.field === 'allowed_rotations' && detail.message.includes('36'))) return 'Укажите не более 36 допустимых углов.'
+    if (error.message === 'preview expired or not found')
+        return 'Предпросмотр истёк или удалён. Рассчитайте новый.'
+    if (error.message === 'preview parameters changed')
+        return 'Параметры предпросмотра изменились. Рассчитайте новый.'
+    if (error.details.some((detail) => detail.field === 'geometry' && detail.code === 'too_long'))
+        return 'Геометрия превышает вычислительный бюджет NFP. Упростите контуры или используйте Baseline.'
+    if (error.code === 'nesting_cancelled')
+        return 'Расчёт отменён. Сохранённая раскладка не изменилась.'
+    if (error.code === 'nesting_timeout')
+        return 'Расчёт превысил лимит времени. Попробуйте меньше деталей или более быстрый алгоритм.'
+    if (error.code === 'nesting_not_running')
+        return 'Сервер ещё не начал расчёт или уже завершил его.'
+    if (
+        error.details.some(
+            (detail) => detail.field === 'quantity' && detail.message.includes('500'),
+        )
+    )
+        return 'За один запуск можно разместить не более 500 деталей.'
+    if (
+        error.details.some(
+            (detail) => detail.field === 'allowed_rotations' && detail.message.includes('36'),
+        )
+    )
+        return 'Укажите не более 36 допустимых углов.'
     if (context === 'login' && error.status === 401) {
         return 'Неверный логин, электронная почта или пароль.'
     }

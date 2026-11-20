@@ -88,6 +88,7 @@ func newFixtureUseCase(t *testing.T, scoped *postgres.ScopedDB, opt optimizer.Op
 	uc := usecase.NewRunNestingUseCase(postgres.NewProjectSurfaceRepository(scoped, codec), postgres.NewProjectPatternRepository(scoped, codec), postgres.NewPlacementRepository(scoped, codec), sf.NewEngine(), registry, unit)
 	uc.Transactions = scoped
 	uc.Budgets = scoped
+	uc.PreviewOperations = postgres.NewPreviewOperationRepository(scoped)
 	uc.Operations = postgres.NewNestingOperationRepository(scoped)
 	uc.Previews = postgres.NewNestingPreviewRepository(scoped)
 	return uc
@@ -570,6 +571,7 @@ func TestPreviewHTTPKeySharesComputationAndSurvivesRestart(t *testing.T) {
 		return app
 	}
 	app := router(f.uc)
+	second := router(newFixtureUseCase(t, f.scoped, f.gate))
 	key := uuid.NewString()
 	body := `{"algorithm":"baseline","patterns":[{"project_pattern_id":1,"quantity":1}],"allowed_rotations":[0],"keep_existing":false}`
 	type reply struct {
@@ -593,8 +595,8 @@ func TestPreviewHTTPKeySharesComputationAndSurvivesRestart(t *testing.T) {
 	done := make(chan reply, 2)
 	go func() { done <- call(app, body) }()
 	awaitStart(t, f.gate)
-	go func() { done <- call(app, body) }()
-	conflict := call(app, strings.Replace(body, `"quantity":1`, `"quantity":2`, 1))
+	go func() { done <- call(second, body) }()
+	conflict := call(second, strings.Replace(body, `"quantity":1`, `"quantity":2`, 1))
 	if conflict.err != nil || conflict.status != 409 {
 		t.Fatalf("preview parameter conflict: %v", conflict)
 	}

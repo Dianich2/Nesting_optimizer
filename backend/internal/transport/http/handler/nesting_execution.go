@@ -21,13 +21,9 @@ type nestingExecution struct {
 }
 
 type activeNesting struct {
-	previewDone   chan struct{}
-	previewHash   [32]byte
-	previewResult nestingusecase.RunNestingOutput
-	previewErr    error
-	context       context.Context
-	cancel        context.CancelFunc
-	callers       int
+	context context.Context
+	cancel  context.CancelFunc
+	callers int
 }
 
 type nestingExecutions struct {
@@ -102,6 +98,7 @@ func parseExecutionKey(raw string) (string, error) {
 // @Summary Cancel an active nesting calculation
 // @Param project_id path int true "Project ID"
 // @Param project_surface_id path int true "Project surface ID"
+// @Param kind query string false "Operation type: save (default) or preview"
 // @Param operation_key path string true "Execution UUID"
 // @Success 204
 // @Failure 404
@@ -124,16 +121,19 @@ func (h *NestingHandler) Cancel(c fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	cancelled, err := h.runNestingUseCase.CancelOperation(c.Context(), userID, projectID, surfaceID, key)
+	cancel := h.runNestingUseCase.CancelOperation
+	if c.Query("kind") == "preview" {
+		cancel = h.runNestingUseCase.CancelPreviewOperation
+	} else if c.Query("kind") != "" && c.Query("kind") != "save" {
+		return apperror.Validation("invalid operation kind")
+	}
+	cancelled, err := cancel(c.Context(), userID, projectID, surfaceID, key)
 	if err != nil {
 		return httperror.Handle(c, err)
 	}
-	local := h.executions.cancel(nestingExecution{userID: userID, projectID: projectID, surfaceID: surfaceID, key: key, preview: true})
-	if cancelled {
-		h.executions.cancel(nestingExecution{userID: userID, projectID: projectID, surfaceID: surfaceID, key: key})
+	if !cancelled {
+		return c.Status(404).JSON(httperror.NewErrorResponse("nesting_not_running", "nesting is not running", nil))
 	}
-	if !cancelled && !local {
-		return c.Status(fiber.StatusNotFound).JSON(httperror.NewErrorResponse("nesting_not_running", "nesting is not running", nil))
-	}
+
 	return c.SendStatus(fiber.StatusNoContent)
 }

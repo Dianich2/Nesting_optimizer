@@ -21,6 +21,8 @@ import (
 )
 
 type RunNestingUseCase struct {
+	PreviewOperations OperationRepository
+
 	Budgets                  InputBudget
 	Previews                 PreviewRepository
 	Limiter                  *ComputeLimiter
@@ -332,59 +334,73 @@ func (uc *RunNestingUseCase) PreviewWithKey(ctx context.Context, input RunNestin
 	if input.PreviewID != "" {
 		return RunNestingOutput{}, apperror.Validation("preview_id is only accepted when saving")
 	}
-	if operationKey != "" {
-		if _, err := parseOperationKey(operationKey); err != nil {
-			return RunNestingOutput{}, err
-		}
-	}
-	release, err := uc.Limiter.Acquire(ctx)
-	if err != nil {
-		return RunNestingOutput{}, err
-	}
-	defer release()
-	if operationKey != "" {
-		if uc.Previews == nil {
-			return RunNestingOutput{}, apperror.Internal("preview storage unavailable", nil)
-		}
-		record, found, err := uc.Previews.FindByKey(ctx, input, operationKey)
+	if operationKey == "" {
+		release, err := uc.Limiter.Acquire(ctx)
 		if err != nil {
 			return RunNestingOutput{}, err
 		}
-		if found {
-			actual, err := Fingerprint(input)
+		defer release()
+		return uc.preview(ctx, input, "", nil)
+	}
+	key, err := parseOperationKey(operationKey)
+	if err != nil {
+		return RunNestingOutput{}, err
+	}
+	legacyID := ""
+	// Compatibility with ready previews created before persistent claims existed.
+	if uc.PreviewOperations != nil {
+		_, operation, err := uc.PreviewOperations.Find(ctx, input.ProjectSurfaceID, key)
+		if err != nil {
+			return RunNestingOutput{}, err
+		}
+		if operation == nil {
+			record, found, err := uc.Previews.FindByKey(ctx, input, operationKey)
 			if err != nil {
 				return RunNestingOutput{}, err
 			}
-			expected, err := Fingerprint(record.Data.Input)
-			if err != nil {
-				return RunNestingOutput{}, err
+			if found {
+				actual, _ := Fingerprint(input)
+				expected, _ := Fingerprint(record.Data.Input)
+				if actual != expected {
+					return RunNestingOutput{}, apperror.Conflict("idempotency key already used for different preview parameters")
+				}
+				legacyID = record.ID
 			}
-			if actual != expected {
-				return RunNestingOutput{}, apperror.Conflict("idempotency key already used for different preview parameters")
-			}
-			placements, err := validateResult(ctx, uc.geometryEngine, input.ProjectSurfaceID, record.Data.Problem, record.Data.Result)
-			if err != nil {
-				return RunNestingOutput{}, apperror.Internal("validate stored preview", err)
-			}
-			result := previewOutput(calculatedLayout{result: record.Data.Result, placements: placements})
-			result.PreviewID = record.ID
-			result.PreviewExpiresAt = record.ExpiresAt
-			return result, nil
 		}
 	}
-	return uc.preview(ctx, input, operationKey)
+	coordinated := *uc
+	coordinated.Operations = uc.PreviewOperations
+	output, err := coordinated.runCoordinated(ctx, input, key, func(ctx context.Context, in RunNestingInput, finish func(context.Context, RunNestingOutput) error) (RunNestingOutput, error) {
+		if legacyID != "" {
+			result, e := uc.restorePreview(ctx, in, RunNestingOutput{PreviewID: legacyID})
+			if e != nil {
+				return RunNestingOutput{}, e
+			}
+			_, e = projecttransaction.Run(ctx, uc.Transactions, in.ProjectID, in.UserID, func(tx context.Context) (bool, error) {
+				source := in
+				source.PreviewID = legacyID
+				if _, err := uc.Previews.Get(tx, source); err != nil {
+					return false, err
+				}
+				return true, finish(tx, result)
+			})
+			return result, e
+		}
+		return uc.preview(ctx, in, operationKey, finish)
+	})
+	if err == nil {
+		output, err = uc.restorePreview(ctx, input, output)
+	}
+	return output, err
 }
 
-func (uc *RunNestingUseCase) preview(ctx context.Context, input RunNestingInput, operationKey string) (RunNestingOutput, error) {
+func (uc *RunNestingUseCase) preview(ctx context.Context, input RunNestingInput, key string, finish func(context.Context, RunNestingOutput) error) (RunNestingOutput, error) {
 	computed, err := uc.calculate(ctx, input)
 	if err != nil {
 		return RunNestingOutput{}, err
 	}
-	if err := ctx.Err(); err != nil {
-		return RunNestingOutput{}, err
-	}
 	output := previewOutput(computed)
-	if err := uc.retainPreview(ctx, input, computed, &output, operationKey); err != nil {
+	if err = uc.retainPreview(ctx, input, computed, &output, key, finish); err != nil {
 		return RunNestingOutput{}, err
 	}
 	return output, nil

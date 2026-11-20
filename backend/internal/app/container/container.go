@@ -420,6 +420,7 @@ func New(
 	runNestingUseCase.Limiter = nestingusecase.NewComputeLimiter(cfg.Nesting.Workers, cfg.Nesting.Queue)
 	runNestingUseCase.Previews = postgres.NewNestingPreviewRepository(scopedDB)
 	runNestingUseCase.History = postgres.NewNestingRunRepository(scopedDB)
+	runNestingUseCase.PreviewOperations = postgres.NewPreviewOperationRepository(scopedDB)
 	runNestingUseCase.Operations = postgres.NewNestingOperationRepository(scopedDB)
 
 	return &Container{

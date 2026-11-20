@@ -31,7 +31,10 @@ func parseOperationKey(raw string) (uuid.UUID, error) {
 	return key, nil
 }
 
-func (uc *RunNestingUseCase) runOperation(ctx context.Context, input RunNestingInput, key uuid.UUID) (output RunNestingOutput, operationErr error) {
+func (uc *RunNestingUseCase) runOperation(ctx context.Context, input RunNestingInput, key uuid.UUID) (RunNestingOutput, error) {
+	return uc.runCoordinated(ctx, input, key, uc.executeAndCommit)
+}
+func (uc *RunNestingUseCase) runCoordinated(ctx context.Context, input RunNestingInput, key uuid.UUID, execute func(context.Context, RunNestingInput, func(context.Context, RunNestingOutput) error) (RunNestingOutput, error)) (output RunNestingOutput, operationErr error) {
 	if details := input.Validate(); len(details) > 0 {
 		return output, apperror.Validation("validation failed", details...)
 	}
@@ -89,7 +92,7 @@ func (uc *RunNestingUseCase) runOperation(ctx context.Context, input RunNestingI
 		return output, err
 	}
 	defer release()
-	output, operationErr = uc.executeAndCommit(ctx, input, func(tx context.Context, result RunNestingOutput) error {
+	output, operationErr = execute(ctx, input, func(tx context.Context, result RunNestingOutput) error {
 		return uc.Operations.Finish(tx, input.ProjectSurfaceID, key, token, OperationStatus{Status: "completed", Result: &result})
 	})
 	if cause := context.Cause(ctx); operationErr != nil && cause != nil && !errors.Is(cause, context.Canceled) && !errors.Is(cause, context.DeadlineExceeded) {

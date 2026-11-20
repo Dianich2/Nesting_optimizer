@@ -1728,6 +1728,12 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "description": "Operation type: save (default) or preview",
+                        "name": "kind",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
                         "description": "Idempotency UUID",
                         "name": "operation_key",
                         "in": "path",
@@ -1770,6 +1776,12 @@ const docTemplate = `{
                         "name": "project_surface_id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Operation type: save (default) or preview",
+                        "name": "kind",
+                        "in": "query"
                     },
                     {
                         "type": "string",

@@ -44,6 +44,7 @@ export async function runNesting(
 }
 
 export interface PendingNesting {
+    kind?: 'preview'
     key: string
     userId: number
     projectId: number
@@ -71,6 +72,8 @@ export function readPendingNesting(
         const value = raw as Partial<PendingNesting>
         const input = value.request
         if (
+            (value.kind !== undefined && value.kind !== 'preview') ||
+            (value.kind === 'preview' && input?.preview_id !== undefined) ||
             value.userId !== userId ||
             value.projectId !== projectId ||
             value.surfaceId !== surfaceId ||

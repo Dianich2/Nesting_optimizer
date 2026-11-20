@@ -38,7 +38,7 @@ func Handle(
 		status = fiber.StatusUnauthorized
 	case apperror.AppCodeForbidden:
 		status = fiber.StatusForbidden
-	case apperror.AppCodeNotFound:
+	case apperror.AppCodeNotFound, apperror.Code("preview_expired"):
 		status = fiber.StatusNotFound
 	case apperror.AppCodeTimeout:
 		status = fiber.StatusRequestTimeout

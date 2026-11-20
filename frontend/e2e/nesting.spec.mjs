@@ -448,14 +448,27 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
     await page.getByRole('button', { name: 'Автоматический раскрой', exact: true }).click()
     await page.getByRole('spinbutton', { name: 'Угловое лекало' }).fill('0')
     await page.getByRole('spinbutton', { name: 'Прямоугольное лекало' }).fill('1')
-    const previewReply = page.waitForResponse(
-        (res) =>
-            res.request().method() === 'POST' &&
-            res.url().endsWith('/nesting/preview') &&
-            res.status() === 200,
-    )
+    let exactPreview
+    let previewPosts = 0
+    let resolveLost
+    const lost = new Promise((resolve) => {
+        resolveLost = resolve
+    })
+    await page.route('**/nesting/preview', async (route) => {
+        previewPosts++
+        const response = await route.fetch()
+        exactPreview = await response.json()
+        await route.abort('failed')
+        resolveLost()
+    })
     await page.getByRole('button', { name: 'Предпросмотр', exact: true }).click()
-    const exactPreview = await (await previewReply).json()
+    await lost
+    await expect(page.getByRole('button', { name: 'Проверить статус', exact: true })).toBeVisible()
+    await page.reload()
+    await page.getByRole('button', { name: 'Проверить статус', exact: true }).click()
+    await expect(page.getByText(/Предпросмотр · размещено/)).toBeVisible()
+    expect(previewPosts).toBe(1)
+    await page.unroute('**/nesting/preview')
     await expect(
         page.getByRole('button', { name: 'Сохранить предпросмотр', exact: true }),
     ).toBeEnabled()

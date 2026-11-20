@@ -58,3 +58,9 @@ NESTING_TEST_DSN='postgres://postgres:PASSWORD@127.0.0.1:PORT/nesting_test?sslmo
 Для воспроизводимых измерений используйте BenchmarkReliabilityWorkloads и BenchmarkReliabilityNFPStages с -benchtime=1x -benchmem. Первая группа включает 10, 50 и 100 экземпляров прямоугольного и вогнутого лекала, Baseline и NFP Greedy, количество кандидатов и геометрическую проверку результата. Вторая отдельно измеряет триангуляцию, суммы Минковского, Union и hit NFP-кэша на выпуклом/вогнутом контуре и одном/двух отверстиях. Для всех пяти алгоритмов остаются BenchmarkOptimizers и BenchmarkOptimizersComparison.
 
 Ручная приёмка дополнительно включает изменение геометрии/размещений из второй вкладки во время расчёта, сохранение точного предпросмотра, повтор после потери ответа, истёкший предпросмотр и смену аккаунта при наличии незавершённой операции. Исходная пользовательская геометрия, на которой ранее наблюдалось зависание, по-прежнему нужна для отдельного воспроизведения.
+
+## Межпроцессный preview
+
+`TestPreviewHTTPKeySharesComputationAndSurvivesRestart` использует два независимых handler/usecase с общей PostgreSQL: один Optimize, одинаковый preview_id, конфликт параметров и replay после рестарта. `TestPreviewCrossInstanceCancellationAndLease` проверяет DELETE второго handler, чужого владельца, истечение lease и независимость UUID save/preview. `TestPreviewExpiryDoesNotRecompute` проверяет TTL, `TestPreviewCancelCommitRace` — однозначный итог отмены/COMMIT. Выполняйте также интеграцию с `-race`.
+
+Playwright теперь теряет реальный ответ preview POST, обновляет страницу, восстанавливает готовый preview через статус и сохраняет исходную геометрию без второго preview POST. Ручная проверка: тот же PostgreSQL и два API; POST preview через первый, GET/DELETE через второй с `?kind=preview`; затем повтор ключа и проверка неизменного preview_id. Не используйте рабочую БД.

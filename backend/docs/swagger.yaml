@@ -1978,6 +1978,10 @@ paths:
         name: project_surface_id
         required: true
         type: integer
+      - description: 'Operation type: save (default) or preview'
+        in: query
+        name: kind
+        type: string
       - description: Execution UUID
         in: path
         name: operation_key
@@ -2003,6 +2007,10 @@ paths:
         name: project_surface_id
         required: true
         type: integer
+      - description: 'Operation type: save (default) or preview'
+        in: query
+        name: kind
+        type: string
       - description: Idempotency UUID
         in: path
         name: operation_key

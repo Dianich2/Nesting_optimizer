@@ -7,6 +7,7 @@ import (
 	nestingusecase "server_nesting_optimizer/internal/usecase/nesting"
 
 	"github.com/gofiber/fiber/v3"
+	"server_nesting_optimizer/pkg/apperror"
 )
 
 type NestingHandler struct {
@@ -104,13 +105,7 @@ func (h *NestingHandler) run(c fiber.Ctx, preview bool) error {
 	defer finish()
 	var outputRunNestingUseCase nestingusecase.RunNestingOutput
 	if preview && key != "" {
-		hash, hashErr := nestingusecase.Fingerprint(inputRunNestingUseCase)
-		if hashErr != nil {
-			return hashErr
-		}
-		outputRunNestingUseCase, err = h.executions.preview(ctx, executionKey, hash, h.runNestingUseCase.Limiter, func() (nestingusecase.RunNestingOutput, error) {
-			return h.runNestingUseCase.PreviewWithKey(ctx, inputRunNestingUseCase, key)
-		})
+		outputRunNestingUseCase, err = h.runNestingUseCase.PreviewWithKey(ctx, inputRunNestingUseCase, key)
 	} else if preview {
 		outputRunNestingUseCase, err = h.runNestingUseCase.Preview(ctx, inputRunNestingUseCase)
 	} else {
@@ -132,6 +127,7 @@ func (h *NestingHandler) run(c fiber.Ctx, preview bool) error {
 // @Produce json
 // @Param project_id path int true "Project ID"
 // @Param project_surface_id path int true "Project surface ID"
+// @Param kind query string false "Operation type: save (default) or preview"
 // @Param operation_key path string true "Idempotency UUID"
 // @Success 200 {object} dto.NestingOperationResponse
 // @Failure 404 {object} httperror.ErrorResponse
@@ -150,7 +146,13 @@ func (h *NestingHandler) GetOperation(c fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	status, err := h.runNestingUseCase.GetOperation(c.Context(), userID, projectID, surfaceID, c.Params("operation_key"))
+	read := h.runNestingUseCase.GetOperation
+	if c.Query("kind") == "preview" {
+		read = h.runNestingUseCase.GetPreviewOperation
+	} else if c.Query("kind") != "" && c.Query("kind") != "save" {
+		return apperror.Validation("invalid operation kind")
+	}
+	status, err := read(c.Context(), userID, projectID, surfaceID, c.Params("operation_key"))
 	if err != nil {
 		return err
 	}
