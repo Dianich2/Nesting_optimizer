@@ -3,6 +3,7 @@ package nesting
 import (
 	"context"
 	"errors"
+	"math"
 	dg "server_nesting_optimizer/internal/domain/geometry"
 	"server_nesting_optimizer/internal/geometry/nfp"
 	sf "server_nesting_optimizer/internal/geometry/simplefeatures"
@@ -16,12 +17,23 @@ func TestGeometryFixturesPassServerValidation(t *testing.T) {
 	square := func(size float64) dg.Polygon {
 		return dg.Polygon{Exterior: dg.Ring{Points: []dg.Point{{X: 0, Y: 0}, {X: size, Y: 0}, {X: size, Y: size}, {X: 0, Y: size}}}}
 	}
-	for _, fixture := range []string{"concave", "holes", "occupied", "large_coordinates"} {
+	for _, fixture := range []string{"concave", "holes", "occupied", "large_coordinates", "radial"} {
 		for _, algorithm := range []opt.Algorithm{opt.BaselineAlgorithm, opt.NFPGreedyAlgorithm, opt.GeneticAlgorithm, opt.SimulatedAnnealingAlgorithm, opt.HybridAlgorithm} {
 			t.Run(fixture+"/"+string(algorithm), func(t *testing.T) {
 				surface := square(100)
 				pattern := square(10)
 				obstacles := []dg.Polygon{}
+				if fixture == "radial" {
+					pattern.Exterior.Points = nil
+					for i := 0; i < 12; i++ {
+						r := 5.0
+						if i%2 == 1 {
+							r = 3
+						}
+						a := 2 * math.Pi * float64(i) / 12
+						pattern.Exterior.Points = append(pattern.Exterior.Points, dg.Point{X: 6 + r*math.Cos(a), Y: 6 + r*math.Sin(a)})
+					}
+				}
 				if fixture == "concave" {
 					pattern = dg.Polygon{Exterior: dg.Ring{Points: []dg.Point{{X: 0, Y: 0}, {X: 10, Y: 0}, {X: 10, Y: 4}, {X: 4, Y: 4}, {X: 4, Y: 10}, {X: 0, Y: 10}}}}
 				}
@@ -38,7 +50,11 @@ func TestGeometryFixturesPassServerValidation(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				problem := opt.Problem{Surface: surface, Patterns: []opt.PatternItem{{PatternID: 1, Geometry: pattern, Quantity: 2}}, Obstacles: obstacles, AllowedRotations: []float64{0, 90}}
+				quantity := 2
+				if fixture == "radial" {
+					quantity = 1
+				}
+				problem := opt.Problem{Surface: surface, Patterns: []opt.PatternItem{{PatternID: 1, Geometry: pattern, Quantity: quantity}}, Obstacles: obstacles, AllowedRotations: []float64{0, 90}}
 				ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 				defer cancel()
 				builder := nfp.NewCachedBuilder(nfp.NewBuilder(engine))

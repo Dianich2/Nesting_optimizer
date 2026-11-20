@@ -63,7 +63,7 @@ func placeOnePattern(
 	}
 
 	if !isFound {
-		return CandidatePlacement{}, false, nil
+		return chooseBootstrap(ctx, engine, pattern, surface, occupied, rotations, 200000-len(candidates))
 	}
 
 	return bestCandidate, true, nil

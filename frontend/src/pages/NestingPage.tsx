@@ -151,7 +151,10 @@ function Workspace({
                     await Promise.all([
                         authorizedRequest<ProjectSurface>(base),
                         allProjectPatterns(authorizedRequest, projectId),
-                        authorizedRequest<{ items: Placement[] }>(`${base}/placements`),
+                        authorizedRequest<{ items: Placement[] }>(`${base}/placements`).then(
+                            (value) => ({ ok: true as const, items: value.items }),
+                            (error: unknown) => ({ ok: false as const, error }),
+                        ),
                         allProjectSurfaces(authorizedRequest, projectId),
                         authorizedRequest<{ name: string }>(`/projects/${projectId}`),
                     ])
@@ -160,13 +163,23 @@ function Workspace({
                     setSurfaceList(loadedSurfaces)
                     setProjectName(project.name)
                     setPatterns(loadedPatterns)
-                    setPlacements(loadedPlacements.items)
                     setHistory({ undo: [], redo: [] })
+                    // A failed layout read must not discard successfully loaded
+                    // surface/pattern context. Keep writes blocked until recovery.
+                    if (!loadedPlacements.ok) {
+                        setPlacements([])
+                        setRefreshRequired(true)
+                        throw loadedPlacements.error
+                    }
+                    setPlacements(loadedPlacements.items)
                     setSyncError(null)
                     setRefreshRequired(false)
                 }
             } catch (caught) {
-                if (active) setError(getApiErrorMessage(caught))
+                if (active) {
+                    setRefreshRequired(true)
+                    setError(getApiErrorMessage(caught))
+                }
             } finally {
                 if (active) {
                     pending.current = false

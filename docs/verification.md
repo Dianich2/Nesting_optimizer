@@ -91,4 +91,17 @@ go test -race -count=1 -timeout=20m ./internal/usecase/nesting ./internal/transp
 
 `scripts/nesting_test_diagnostics.sql` выполняет только агрегированные read-only запросы с timeout2s; требует nesting_test и явно выбранную схему test_<digits> через search_path. Не переносить его на production отключением guard. Скрипт не выводит UUID/payload/JWT/DSN. Размер relation после DELETE не обязан уменьшаться.
 
-Ограничения: radial_without_seed выявляет нулевой результат существующей эвристики даже для подходящего по площади листа; алгоритмы здесь не менялись. Исходный пользовательский SVG отсутствует. Native earcut/UnionMany не прерываются внутри вызова; timeout500/3s не доказывает успешный расчёт500/120s. Workers/queue локальны на API-процесс. Terminal idempotency rows бессрочны в существующем scope — не добавлять TTL DELETE без нового согласованного контракта.
+Ограничения: radial_without_seed выявил нулевой результат до этапа 8; bounded bootstrap исправляет первый feasible placement (см. отчёт 8). Эвристика остаётся неполной для произвольной геометрии. Исходный пользовательский SVG отсутствует. Native earcut/UnionMany не прерываются внутри вызова; timeout500/3s не доказывает успешный расчёт500/120s. Workers/queue локальны на API-процесс. Terminal idempotency rows бессрочны в существующем scope — не добавлять TTL DELETE без нового согласованного контракта.
+
+
+## Этапы 8–10
+
+Сводка — [stages8_10_summary.md](stages8_10_summary.md), отдельные отчёты описывают fail-before/pass-after, отрицательный performance-эксперимент и настоящую браузерную приёмку. Bootstrap вызывается только после неуспеха прежних кандидатов; до 5 seeds на разрешённый угол, те же topology predicates и остаточный candidate budget.
+
+Точечный эксперимент Bounds **снят**: меньше allocations не дало убедительного выигрыша wall. Для повторения 10-case сравнения нужен точный post-stage8 working-tree snapshot, а не один git archive HEAD. `NESTING_TARGETED_PERFORMANCE=1` включает TestTargetedPerformanceExperiment; запускать только по одному process в capped container. `scripts/summarize_targeted_performance.py --input LOG_DIR --output OUT_DIR` требует 3 полные before/after пары и неизменность качества/NFP work.
+
+Browser helper TestBrowserAcceptanceAPI по умолчанию SKIP. Explicit `NESTING_BROWSER_API=1`, проверенный `NESTING_TEST_DSN`, `NESTING_E2E_READY_FILE`, `NESTING_E2E_ORIGIN=http://localhost:5186` включают настоящий test API. Запуск binary из backend/internal/integration, миграции доступны по ../../migrations. Helper создаёт private schema и не читает .env. Counter/stats listener отсутствует в production cmd/api.
+
+Playwright требует NESTING_API_TARGET из проверенного readiness конкретного собственного PID; NESTING_E2E_PORT=5186 задаёт localhost frontend/baseURL, NESTING_E2E_STATS — test-only stats URL. E2E_CHROME задаёт установленный Chrome. Команда: `npm run test:e2e -- --workers=1 --trace=off`. Полный воспроизводимый запуск, настройки DB и cleanup описаны в stage10_automated_e2e_acceptance_report.md. Не подключать браузерные мутации к рабочему API.
+
+Новая матрица проверяет 1440/1366/390 и обе темы, SVG import/editor, manual Undo/Redo, radial preview/exact save с Optimize counter, reload, историю и содержимое SVG/JSON. Дополнительно: реальный second-tab stale, confirmed через reload при недоступных placements. Исправлены HTML pattern логина и сохранение контекста при отказе initial placements read. Human UX, другие browser engines, настоящий touch и исходный пользовательский SVG остаются отдельной приёмкой.

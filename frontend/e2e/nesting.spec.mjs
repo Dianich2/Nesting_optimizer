@@ -615,7 +615,7 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
     expect((await readSave()).key).toBe(savedKey)
     expect(authRetryPosts).toBe(2)
     // SQL completed is authoritative even when subsequent placements fail.
-    await page.route('**/placements', (route) => route.abort('failed'), { times: 1 })
+    await page.route('**/placements', (route) => route.abort('failed'))
     await page.getByRole('button', { name: 'Проверить статус' }).click()
     await expect(
         page.getByText('Раскрой сохранён. Не удалось загрузить полный список размещений.', {
@@ -623,6 +623,13 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
         }),
     ).toBeVisible()
     expect((await readSave()).confirmed).toBe(true)
+    await page.reload()
+    await expect(page.getByRole('button', { name: 'Проверить статус', exact: true })).toBeEnabled()
+    expect((await readSave()).confirmed).toBe(true)
+    await expect(page.getByRole('button', { name: /Закрыть ожидание/ })).toHaveCount(0)
+    await expect(canvas).toBeVisible()
+    await expect(page.getByRole('button', { name: /Добавить на поверхность/ }).first()).toBeDisabled()
+    await page.unroute('**/placements')
     await page.getByRole('button', { name: 'Проверить статус' }).click()
     await expect(placement).toHaveCount(3)
     await expect.poll(pendingPreviewCount).toBe(0)

@@ -218,8 +218,12 @@ func TestNFPExactInputDeterminismHybrid(t *testing.T) {
 		t.Logf("First mismatch: %s", builder.firstError)
 	}
 
-	require.Equal(t, uint64(8258), builder.total)
-	require.Equal(t, uint64(7257), builder.repeated)
+	measuredFitness, measuredErr := calculatePlacementsFitness(engine, problem, result.Placements)
+	require.NoError(t, measuredErr)
+	validateExperiment(t, problem, result)
+	t.Logf("bootstrap outcome placed=%d fitness=%+v", result.Metrics.PlacedCount, measuredFitness)
+	require.Equal(t, uint64(8205), builder.total)
+	require.Equal(t, uint64(6923), builder.repeated)
 	require.Zero(t, builder.mismatches)
 
 	fitness, err := calculatePlacementsFitness(
@@ -229,8 +233,8 @@ func TestNFPExactInputDeterminismHybrid(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	require.Equal(t, 8, result.Metrics.PlacedCount)
-	require.Equal(t, 3, fitness.UnplacedCount)
+	require.Equal(t, 9, result.Metrics.PlacedCount)
+	require.Equal(t, 2, fitness.UnplacedCount)
 	require.InDelta(t, 4800, fitness.UsedArea, 1e-8)
 	require.InDelta(t, 60, fitness.UsedHeight, 1e-8)
 }

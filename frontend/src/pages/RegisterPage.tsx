@@ -83,7 +83,7 @@ export function RegisterPage() {
                             type="text"
                             autoComplete="username"
                             maxLength={100}
-                            pattern="[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?"
+                            pattern="[a-z0-9](?:[a-z0-9._\-]*[a-z0-9])?"
                             title="Используйте латинские строчные буквы, цифры, точку, дефис или подчёркивание. Первый и последний символ — буква или цифра."
                             value={login}
                             onChange={(event) => setLogin(event.target.value)}
