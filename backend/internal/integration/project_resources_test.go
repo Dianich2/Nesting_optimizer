@@ -46,11 +46,15 @@ func newTestSchema(t *testing.T) *sqlx.DB {
 	if database != "nesting_test" {
 		t.Fatal("integration tests require the dedicated nesting_test database")
 	}
-	// Install shared types before selecting a per-test search_path. Otherwise
-	// the first migration can install PostGIS into a private test schema.
-	if _, err = db.Exec("CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public"); err != nil {
+	var user, postgis string
+	if err = db.Get(&user, "SELECT current_user"); err != nil {
 		t.Fatal(err)
 	}
+	if err = db.Get(&postgis, "SELECT postgis_version()"); err != nil {
+		t.Fatal("test database must have PostGIS installed in public before tests")
+	}
+	t.Logf("database gate: database=%s user=%s PostGIS=%s", database, user, postgis)
+
 	schema := fmt.Sprintf("test_%d", time.Now().UnixNano())
 	if _, err = db.Exec("CREATE SCHEMA " + schema); err != nil {
 		t.Fatal(err)
@@ -60,13 +64,18 @@ func newTestSchema(t *testing.T) *sqlx.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var active string
+	if err = scoped.Get(&active, "SELECT current_schema()"); err != nil || active != schema {
+		_ = scoped.Close()
+		t.Fatal("private test schema is not active")
+	}
 	t.Cleanup(func() { _ = scoped.Close() })
 	return scoped
 }
 
 func applyAllMigrations(t *testing.T, scoped *sqlx.DB) {
 	t.Helper()
-	migrations, err := filepath.Glob("../../migrations/*.sql")
+	migrations, err := testMigrationFiles(filepath.Join("..", "..", "migrations"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,6 +88,28 @@ func applyAllMigrations(t *testing.T, scoped *sqlx.DB) {
 		if _, err = scoped.Exec(up); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
+	}
+	var privateTables int
+	if err = scoped.Get(&privateTables, `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+ WHERE n.nspname=current_schema() AND c.relkind='r' AND c.relname IN ('users','sessions','projects','surfaces','patterns','project_surfaces','project_patterns','placements','nesting_runs','nesting_operations','nesting_previews','nesting_preview_operations')`); err != nil || privateTables != 12 {
+		t.Fatal("refuse fixture writes: required tables are not in private test schema")
+	}
+
+}
+
+func testMigrationFiles(directory string) ([]string, error) {
+	files, err := filepath.Glob(filepath.Join(directory, "*.sql"))
+	if err != nil {
+		return nil, err
+	}
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no test migrations found in %s; refuse public-schema fallback", directory)
+	}
+	return files, nil
+}
+func TestMissingMigrationDirectoryFailsClosed(t *testing.T) {
+	if files, err := testMigrationFiles(t.TempDir()); err == nil || len(files) != 0 {
+		t.Fatal("empty migration directory must reject before fixture writes")
 	}
 }
 

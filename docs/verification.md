@@ -64,3 +64,31 @@ NESTING_TEST_DSN='postgres://postgres:PASSWORD@127.0.0.1:PORT/nesting_test?sslmo
 `TestPreviewHTTPKeySharesComputationAndSurvivesRestart` использует два независимых handler/usecase с общей PostgreSQL: один Optimize, одинаковый preview_id, конфликт параметров и replay после рестарта. `TestPreviewCrossInstanceCancellationAndLease` проверяет DELETE второго handler, чужого владельца, истечение lease и независимость UUID save/preview. `TestPreviewExpiryDoesNotRecompute` проверяет TTL, `TestPreviewCancelCommitRace` — однозначный итог отмены/COMMIT. Выполняйте также интеграцию с `-race`.
 
 Playwright теперь теряет реальный ответ preview POST, обновляет страницу, восстанавливает готовый preview через статус и сохраняет исходную геометрию без второго preview POST. Ручная проверка: тот же PostgreSQL и два API; POST preview через первый, GET/DELETE через второй с `?kind=preview`; затем повтор ключа и проверка неизменного preview_id. Не используйте рабочую БД.
+
+
+## Этапы 5–7: отдельные процессы и ограниченные эксперименты
+
+Результаты и границы: `stage5_real_process_reliability_report.md`, `stage6_geometry_reliability_report.md`, `stage7_operational_reliability_report.md`, сводка `stages5_7_summary.md`. Не считать старый two-handler тест доказательством двух PID: новый `TestRealProcessLifecycle` запускает отдельные executable, независимые SQL pools и настоящие HTTP/JWT. Test-only worker/control listener отсутствует в production binary.
+
+До любого integration сначала read-only `current_database()`, `current_user`, `postgis_version()`, строго `nesting_test`. Нужны заранее установленный PostGIS в public и миграции репозитория. Helper требует непустой набор миграций и все fixture tables в своей private schema. Неверный cwd — отказ до INSERT. Не передавать DSN рабочей базы и не читать backend/.env автоматически.
+
+Из backend доступны свежие обычные проверки:
+
+```sh
+go test -count=1 ./...
+go vet ./...
+golangci-lint run ./...
+go test -race -count=1 -timeout=20m ./internal/usecase/nesting ./internal/transport/http/handler ./internal/nesting ./internal/geometry/nfp
+```
+
+Для integration задайте `NESTING_TEST_DSN` явно после gate, запускайте `go test -count=1 -timeout=20m -v ./internal/integration`. При запуске скомпилированного binary cwd должен быть backend/internal/integration (в контейнере /work/internal/integration с /work/migrations). Для child под альтернативным ELF loader дополнительно нужны `NESTING_TEST_PROCESS_BINARY`, `NESTING_TEST_CHILD_LOADER`, `NESTING_TEST_CHILD_LIBRARY`; подробности фактической команды в отчёте5. Race требует совместимой CGO/libc, а не статической CGO_ENABLED=0 сборки.
+
+Тяжёлые измерители намеренно SKIP по умолчанию. Только в отдельном capped container с CPU/RAM/timeout, по одному процессу:
+
+- `NESTING_GEOMETRY_EXPERIMENT=1`: `TestGeometryReliabilityExperiment`, timeout300s; 47case, включая ожидаемые короткие timeout на500. До/после — одинаковые seed/config, три пары. `scripts/summarize_geometry_experiment.py --input LOG_DIR --output OUT_DIR` проверяет шесть полных логов.
+- `NESTING_PROFILE_GEOMETRY=1`: `TestProfileOccupiedConcaveGeometry` с `-test.cpuprofile`/`-test.memprofile`; это реальные occupied Baseline50, не production throughput SLA.
+- `NESTING_OPERATIONAL_EXPERIMENT=1`: `TestOperationalGrowth`, timeout300s/context240s;10000 usecase операций, затем synthetic expired backlog. Запускать только при достаточном месте в выделенной test DB. Схемы сохраняются. `scripts/summarize_operational_growth.py LOG1 LOG2 LOG3 OUT.csv` отвергает неполные/failed логи.
+
+`scripts/nesting_test_diagnostics.sql` выполняет только агрегированные read-only запросы с timeout2s; требует nesting_test и явно выбранную схему test_<digits> через search_path. Не переносить его на production отключением guard. Скрипт не выводит UUID/payload/JWT/DSN. Размер relation после DELETE не обязан уменьшаться.
+
+Ограничения: radial_without_seed выявляет нулевой результат существующей эвристики даже для подходящего по площади листа; алгоритмы здесь не менялись. Исходный пользовательский SVG отсутствует. Native earcut/UnionMany не прерываются внутри вызова; timeout500/3s не доказывает успешный расчёт500/120s. Workers/queue локальны на API-процесс. Terminal idempotency rows бессрочны в существующем scope — не добавлять TTL DELETE без нового согласованного контракта.
