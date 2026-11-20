@@ -1,12 +1,14 @@
 package nfp
 
 import (
+	"context"
 	"fmt"
 	domaingeometry "server_nesting_optimizer/internal/domain/geometry"
 	"server_nesting_optimizer/internal/geometry"
 )
 
 var _ geometry.NFPBuilder = (*Builder)(nil)
+var _ geometry.ContextNFPBuilder = (*Builder)(nil)
 
 type Builder struct {
 	engine geometry.Engine
@@ -24,6 +26,16 @@ func (b *Builder) BuildExternal(
 	stationary domaingeometry.Polygon,
 	moving domaingeometry.Polygon,
 ) (domaingeometry.MultiPolygon, error) {
+	return b.BuildExternalContext(context.Background(), stationary, moving)
+}
+
+func (b *Builder) BuildExternalContext(ctx context.Context, stationary, moving domaingeometry.Polygon) (domaingeometry.MultiPolygon, error) {
+	if err := ctx.Err(); err != nil {
+		return domaingeometry.MultiPolygon{}, err
+	}
+	if err := checkComplexity(stationary, moving); err != nil {
+		return domaingeometry.MultiPolygon{}, err
+	}
 	if err := b.engine.ValidatePolygon(stationary); err != nil {
 		return domaingeometry.MultiPolygon{}, fmt.Errorf(
 			"build external validate stationary: %w",
@@ -31,6 +43,9 @@ func (b *Builder) BuildExternal(
 		)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return domaingeometry.MultiPolygon{}, err
+	}
 	if err := b.engine.ValidatePolygon(moving); err != nil {
 		return domaingeometry.MultiPolygon{}, fmt.Errorf(
 			"build external validate moving: %w",
@@ -38,6 +53,9 @@ func (b *Builder) BuildExternal(
 		)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return domaingeometry.MultiPolygon{}, err
+	}
 	centeredMoving, err := b.engine.CenterAtOrigin(moving)
 	if err != nil {
 		return domaingeometry.MultiPolygon{}, fmt.Errorf(
@@ -48,7 +66,7 @@ func (b *Builder) BuildExternal(
 
 	reflectedMoving := reflectAtOrigin(centeredMoving)
 
-	stationaryTriangles, err := triangulate(stationary)
+	stationaryTriangles, err := triangulateContext(ctx, stationary)
 	if err != nil {
 		return domaingeometry.MultiPolygon{}, fmt.Errorf(
 			"build external triangulate stationary: %w",
@@ -56,7 +74,7 @@ func (b *Builder) BuildExternal(
 		)
 	}
 
-	movingTriangles, err := triangulate(reflectedMoving)
+	movingTriangles, err := triangulateContext(ctx, reflectedMoving)
 	if err != nil {
 		return domaingeometry.MultiPolygon{}, fmt.Errorf(
 			"build external triangulate moving: %w",
@@ -64,11 +82,22 @@ func (b *Builder) BuildExternal(
 		)
 	}
 
+	if len(movingTriangles) != 0 && len(stationaryTriangles) > maxMinkowskiPieces/len(movingTriangles) {
+		return domaingeometry.MultiPolygon{}, ErrComplexity
+	}
 	pieces := make([]domaingeometry.Polygon, 0, len(stationaryTriangles)*len(movingTriangles))
 
 	for _, stationaryTriangle := range stationaryTriangles {
+		if err := ctx.Err(); err != nil {
+			return domaingeometry.MultiPolygon{}, err
+		}
 		for _, movingTriangle := range movingTriangles {
-			piece, err := convexMinkowskiSum(
+			if len(pieces)%64 == 0 {
+				if err := ctx.Err(); err != nil {
+					return domaingeometry.MultiPolygon{}, err
+				}
+			}
+			piece, err := convexMinkowskiSumContext(ctx,
 				stationaryTriangle,
 				movingTriangle,
 			)
@@ -83,7 +112,7 @@ func (b *Builder) BuildExternal(
 		}
 	}
 
-	result, err := unionPolygons(pieces)
+	result, err := unionPolygonsContext(ctx, pieces)
 	if err != nil {
 		return domaingeometry.MultiPolygon{}, fmt.Errorf(
 			"build external union polygons: %w",

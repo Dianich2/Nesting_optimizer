@@ -41,3 +41,21 @@ func TestNestingExecutionsCancelConcurrentCallers(t *testing.T) {
 	close(cancelCalled)
 	callers.Wait()
 }
+
+func TestExecutionSurvivesClientDisconnectAndFinishIsIdempotent(t *testing.T) {
+	var executions nestingExecutions
+	parent, cancel := context.WithCancel(t.Context())
+	key := nestingExecution{userID: 1, projectID: 1, surfaceID: 1, key: "key"}
+	ctx, finish := executions.begin(parent, key)
+	cancel()
+	if ctx.Err() != nil {
+		t.Fatal("disconnect cancelled a server-owned operation")
+	}
+	finish()
+	_, nextFinish := executions.begin(t.Context(), key)
+	defer nextFinish()
+	finish()
+	if !executions.cancel(key) {
+		t.Fatal("old finish removed a newer execution")
+	}
+}

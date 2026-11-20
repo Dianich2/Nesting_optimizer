@@ -4,25 +4,30 @@ import (
 	"context"
 	"errors"
 	httperror "server_nesting_optimizer/internal/transport/http/errors"
+	nestingusecase "server_nesting_optimizer/internal/usecase/nesting"
 	"server_nesting_optimizer/pkg/apperror"
 	"sync"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 )
 
-const nestingDeadline = 2 * time.Minute
+const nestingDeadline = nestingusecase.ExecutionTimeout
 
 type nestingExecution struct {
+	preview                      bool
 	userID, projectID, surfaceID int64
 	key                          string
 }
 
 type activeNesting struct {
-	context context.Context
-	cancel  context.CancelFunc
-	callers int
+	previewDone   chan struct{}
+	previewHash   [32]byte
+	previewResult nestingusecase.RunNestingOutput
+	previewErr    error
+	context       context.Context
+	cancel        context.CancelFunc
+	callers       int
 }
 
 type nestingExecutions struct {
@@ -32,7 +37,7 @@ type nestingExecutions struct {
 
 func (executions *nestingExecutions) begin(parent context.Context, key nestingExecution) (context.Context, func()) {
 	if key.key == "" {
-		return context.WithTimeout(parent, nestingDeadline)
+		return context.WithTimeout(context.WithoutCancel(parent), nestingDeadline)
 	}
 	executions.mu.Lock()
 	defer executions.mu.Unlock()
@@ -41,19 +46,22 @@ func (executions *nestingExecutions) begin(parent context.Context, key nestingEx
 	}
 	job := executions.active[key]
 	if job == nil {
-		ctx, cancel := context.WithTimeout(parent, nestingDeadline)
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), nestingDeadline)
 		job = &activeNesting{context: ctx, cancel: cancel}
 		executions.active[key] = job
 	}
 	job.callers++
+	var once sync.Once
 	return job.context, func() {
-		executions.mu.Lock()
-		defer executions.mu.Unlock()
-		job.callers--
-		if job.callers == 0 {
-			job.cancel()
-			delete(executions.active, key)
-		}
+		once.Do(func() {
+			executions.mu.Lock()
+			defer executions.mu.Unlock()
+			job.callers--
+			if job.callers == 0 {
+				job.cancel()
+				delete(executions.active, key)
+			}
+		})
 	}
 }
 
@@ -116,7 +124,15 @@ func (h *NestingHandler) Cancel(c fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if !h.executions.cancel(nestingExecution{userID, projectID, surfaceID, key}) {
+	cancelled, err := h.runNestingUseCase.CancelOperation(c.Context(), userID, projectID, surfaceID, key)
+	if err != nil {
+		return httperror.Handle(c, err)
+	}
+	local := h.executions.cancel(nestingExecution{userID: userID, projectID: projectID, surfaceID: surfaceID, key: key, preview: true})
+	if cancelled {
+		h.executions.cancel(nestingExecution{userID: userID, projectID: projectID, surfaceID: surfaceID, key: key})
+	}
+	if !cancelled && !local {
 		return c.Status(fiber.StatusNotFound).JSON(httperror.NewErrorResponse("nesting_not_running", "nesting is not running", nil))
 	}
 	return c.SendStatus(fiber.StatusNoContent)

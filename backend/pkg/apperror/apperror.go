@@ -13,6 +13,12 @@ const (
 	AppCodeUnauthorized Code = "unauthorized_error"
 	AppCodeForbidden    Code = "forbidden_error"
 	AppCodeInternal     Code = "internal_error"
+	AppCodeStale        Code = "nesting_stale"
+	AppCodeCancelled    Code = "nesting_cancelled"
+	AppCodeTimeout      Code = "nesting_timeout"
+	AppCodeOverloaded   Code = "nesting_overloaded"
+	AppCodePending      Code = "nesting_pending"
+	AppCodeInterrupted  Code = "nesting_interrupted"
 )
 
 const (

@@ -4,6 +4,7 @@ import (
 	"server_nesting_optimizer/internal/nesting"
 	"server_nesting_optimizer/internal/transport/http/dto"
 	nestingusecase "server_nesting_optimizer/internal/usecase/nesting"
+	"time"
 )
 
 func ToRunNestingInput(
@@ -23,6 +24,7 @@ func ToRunNestingInput(
 	}
 
 	return nestingusecase.RunNestingInput{
+		PreviewID:        req.PreviewID,
 		Algorithm:        nesting.Algorithm(req.Algorithm),
 		UserID:           userID,
 		ProjectID:        projectID,
@@ -59,7 +61,12 @@ func ToRunNestingResponse(
 		})
 	}
 
+	var expires *time.Time
+	if !output.PreviewExpiresAt.IsZero() {
+		expires = &output.PreviewExpiresAt
+	}
 	return dto.RunNestingResponse{
+		PreviewID: output.PreviewID, PreviewExpiresAt: expires,
 		Placements: placements,
 		Unplaced:   unplaced,
 		Metrics: dto.RunNestingMetricsResponse{

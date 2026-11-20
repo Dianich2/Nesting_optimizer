@@ -6,12 +6,15 @@ import (
 	"time"
 )
 
+const ExecutionTimeout = 2 * time.Minute
+
 type RunNestingPatternInput struct {
 	ProjectPatternID int64
 	Quantity         int
 }
 
 type RunNestingInput struct {
+	PreviewID        string `json:",omitempty"`
 	Algorithm        nesting.Algorithm
 	UserID           int64
 	ProjectID        int64
@@ -34,7 +37,9 @@ type PlacementItem struct {
 }
 
 type RunNestingOutput struct {
-	Placements []PlacementItem
-	Unplaced   []nesting.UnplacedPattern
-	Metrics    nesting.Metrics
+	PreviewID        string
+	PreviewExpiresAt time.Time
+	Placements       []PlacementItem
+	Unplaced         []nesting.UnplacedPattern
+	Metrics          nesting.Metrics
 }

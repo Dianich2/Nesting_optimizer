@@ -8,6 +8,10 @@ import (
 	domainprojectsurface "server_nesting_optimizer/internal/domain/project_surface"
 )
 
+type InputBudget interface {
+	CheckNestingBudget(context.Context, RunNestingInput) error
+}
+
 type PlacementRepository interface {
 	ListForCollisionCheck(
 		ctx context.Context,

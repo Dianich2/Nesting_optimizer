@@ -539,6 +539,8 @@ definitions:
         type: integer
       keep_existing:
         type: boolean
+      parameters:
+        type: object
       placed_area:
         type: number
       placed_count:
@@ -559,8 +561,17 @@ definitions:
           $ref: '#/definitions/dto.NestingHistoryItem'
         type: array
     type: object
+  dto.NestingOperationFailure:
+    properties:
+      code:
+        type: string
+      message:
+        type: string
+    type: object
   dto.NestingOperationResponse:
     properties:
+      failure:
+        $ref: '#/definitions/dto.NestingOperationFailure'
       result:
         $ref: '#/definitions/dto.RunNestingResponse'
       status:
@@ -642,6 +653,8 @@ definitions:
         items:
           $ref: '#/definitions/dto.RunNestingPatternRequest'
         type: array
+      preview_id:
+        type: string
     type: object
   dto.RunNestingResponse:
     properties:
@@ -651,6 +664,10 @@ definitions:
         items:
           $ref: '#/definitions/dto.RunNestingPlacementResponse'
         type: array
+      preview_expires_at:
+        type: string
+      preview_id:
+        type: string
       unplaced:
         items:
           $ref: '#/definitions/dto.RunNestingUnplacedPatternResponse'
@@ -1851,7 +1868,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Run automatic nesting for a project surface
+      description: Run automatic nesting, or save the exact server-owned preview by
+        including preview_id and its original parameters. Writes are atomic and reject
+        stale source snapshots.
       parameters:
       - description: Project ID
         in: path
@@ -1902,6 +1921,10 @@ paths:
             $ref: '#/definitions/httperror.ErrorResponse'
         "500":
           description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "503":
+          description: Service Unavailable
           schema:
             $ref: '#/definitions/httperror.ErrorResponse'
       security:
@@ -2003,6 +2026,9 @@ paths:
     post:
       consumes:
       - application/json
+      description: Returns a server-owned preview_id valid for 15 minutes. Save it
+        using POST /nesting with the same parameters and preview_id. Retention is
+        bounded per user.
       parameters:
       - description: Project ID
         in: path
@@ -2045,6 +2071,10 @@ paths:
             $ref: '#/definitions/httperror.ErrorResponse'
         "409":
           description: Conflict
+          schema:
+            $ref: '#/definitions/httperror.ErrorResponse'
+        "503":
+          description: Service Unavailable
           schema:
             $ref: '#/definitions/httperror.ErrorResponse'
       security:

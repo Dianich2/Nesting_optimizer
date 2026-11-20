@@ -92,3 +92,24 @@ test('a timed out synchronization preserves the confirmed saved result', async (
     assert.equal(status, 'confirmed')
     assert.equal(confirmed, true)
 })
+
+for (const [status, code, terminal] of [
+    [408, undefined, false],
+    [408, 'nesting_timeout', true],
+    [409, 'nesting_stale', true],
+    [429, 'rate_limit', true],
+    [503, undefined, false],
+    [503, 'nesting_pending', false],
+    [503, 'nesting_overloaded', true],
+    [500, 'internal_error', false],
+]) {
+    test(`HTTP ${status} / ${code} has explicit save recovery semantics`, async () => {
+        const failure = new ApiError(status, code)
+        const request = async () => {
+            throw failure
+        }
+        const result = runNesting(request, '/surface', {}, assert.fail, assert.fail)
+        if (terminal) await assert.rejects(result, failure)
+        else assert.equal(await result, 'unknown')
+    })
+}

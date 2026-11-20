@@ -9,6 +9,7 @@ import (
 	"server_nesting_optimizer/internal/repository/postgres"
 	httptransport "server_nesting_optimizer/internal/transport/http"
 	"server_nesting_optimizer/pkg/logger"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/jmoiron/sqlx"
@@ -59,6 +60,10 @@ func New() (*App, error) {
 }
 
 func (a *App) Run() error {
+	ctx, cancel := context.WithCancel(context.Background())
+	cleanupDone := make(chan struct{})
+	go func() { defer close(cleanupDone); a.cleanupPreviews(ctx) }()
+	defer func() { cancel(); <-cleanupDone }()
 	addr := fmt.Sprintf(":%d", a.cfg.HTTP.Port)
 
 	a.log.Info(
@@ -83,4 +88,32 @@ func (a *App) Stop() {
 	}
 
 	a.log.Info("application stopped")
+}
+
+// Cleanup is tied to the server lifetime and runs immediately after a restart.
+// Each pass is bounded in rows and time and never waits on an applying preview.
+func (a *App) cleanupPreviews(ctx context.Context) {
+	previews := postgres.NewNestingPreviewRepository(a.db)
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		cleanup, cancel := context.WithTimeout(ctx, 5*time.Second)
+		var err error
+		for cleanup.Err() == nil {
+			var count int64
+			count, err = previews.PurgeExpired(cleanup, 1000)
+			if err != nil || count < 1000 {
+				break
+			}
+		}
+		cancel()
+		if err != nil && ctx.Err() == nil {
+			a.log.Error("purge expired nesting previews", "error", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }

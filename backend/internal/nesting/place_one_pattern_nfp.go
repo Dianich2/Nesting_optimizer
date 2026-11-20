@@ -23,7 +23,7 @@ func placeOnePatternNFP(
 		)
 	}
 
-	candidates, err := generateNFPCandidatesForRotations(
+	candidates, err := generateNFPCandidatesForRotationsContext(ctx,
 		engine,
 		nfpBuilder,
 		pattern,

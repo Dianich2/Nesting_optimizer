@@ -94,6 +94,7 @@ func chooseBestCandidate(
 		occupiedBounds,
 	)
 
+	recordCandidateStatistics(ctx, len(candidates))
 	for _, candidate := range candidates {
 		if err := ctx.Err(); err != nil {
 			return CandidatePlacement{}, false, fmt.Errorf(

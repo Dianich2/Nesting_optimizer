@@ -19,6 +19,7 @@ import { NestingCanvas } from '../features/nesting/NestingCanvas'
 import { PlacementProperties } from '../features/nesting/PlacementProperties'
 import { layoutMetrics } from '../features/nesting/geometry'
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog'
+import { ApiError } from '../shared/api/http'
 import './NestingPage.css'
 
 const format = (value: number) => value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })
@@ -31,7 +32,9 @@ const algorithms = {
 }
 
 export function NestingPage() {
+    const { user } = useAuth()
     const { projectId = '', surfaceId = '' } = useParams()
+    if (!user) return <p role="status">Проверяем сеанс…</p>
     if (
         ![projectId, surfaceId].every(
             (value) => /^[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value)),
@@ -41,19 +44,38 @@ export function NestingPage() {
     }
     return (
         <Workspace
-            key={`${projectId}:${surfaceId}`}
+            key={`${user.id}:${projectId}:${surfaceId}`}
+            userId={user.id}
             projectId={Number(projectId)}
             surfaceId={Number(surfaceId)}
         />
     )
 }
 
-function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: number }) {
+type WorkspaceActivity =
+    | { kind: 'idle' | 'loading' | 'manual' | 'syncing' | 'recovering' }
+    | {
+          kind: 'calculating_preview' | 'calculating_saved' | 'saving_preview'
+          key: string
+          cancelling: boolean
+      }
+
+function Workspace({
+    projectId,
+    surfaceId,
+    userId,
+}: {
+    projectId: number
+    surfaceId: number
+    userId: number
+}) {
     const { authorizedRequest } = useAuth()
     const navigate = useNavigate()
     const base = `/projects/${projectId}/surfaces/${surfaceId}`
-    const storageKey = `nesting.pending:${base}`
-    const [operation, setOperation] = useState(() => readPendingNesting(storageKey))
+    const storageKey = `nesting.pending:${userId}:${base}`
+    const [operation, setOperation] = useState(() =>
+        readPendingNesting(storageKey, userId, projectId, surfaceId),
+    )
     const [surfaceList, setSurfaceList] = useState<ProjectSurface[]>([])
     const [projectName, setProjectName] = useState('')
     const [surface, setSurface] = useState<ProjectSurface | null>(null)
@@ -64,12 +86,14 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
     const [syncError, setSyncError] = useState<string | null>(null)
     const [refreshRequired, setRefreshRequired] = useState(false)
     const [reload, setReload] = useState(0)
-    const [busy, setBusy] = useState(false)
-    const [execution, setExecution] = useState<{ key: string; preview: boolean } | null>(null)
-    const [cancelling, setCancelling] = useState(false)
+    const [activity, setActivity] = useState<WorkspaceActivity>({ kind: 'loading' })
+    const busy = activity.kind !== 'idle'
+    const execution = 'key' in activity ? activity : null
+    const cancelling = execution?.cancelling ?? false
     const [proposal, setProposal] = useState<{
         result: NestingResult
         includeSaved: boolean
+        request: NestingRequest
     } | null>(null)
     const [patternsOpen, setPatternsOpen] = useState(() => window.innerWidth > 700)
     const [inspectorOpen, setInspectorOpen] = useState(() => window.innerWidth > 700)
@@ -108,7 +132,7 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
         let active = true
         async function load() {
             pending.current = true
-            setBusy(true)
+            setActivity({ kind: 'loading' })
             setError(null)
             try {
                 const [loadedSurface, loadedPatterns, loadedPlacements, loadedSurfaces, project] =
@@ -134,7 +158,7 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
             } finally {
                 if (active) {
                     pending.current = false
-                    setBusy(false)
+                    setActivity({ kind: 'idle' })
                 }
             }
         }
@@ -144,10 +168,14 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
         }
     }, [authorizedRequest, base, projectId, reload])
 
-    async function mutate(action: () => Promise<void>, rethrow = false) {
+    async function mutate(
+        action: () => Promise<void>,
+        rethrow = false,
+        phase: WorkspaceActivity = { kind: 'manual' },
+    ) {
         if (pending.current) return
         pending.current = true
-        setBusy(true)
+        setActivity(phase)
         setError(null)
         try {
             await action()
@@ -156,7 +184,7 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
             if (rethrow) throw caught
         } finally {
             pending.current = false
-            setBusy(false)
+            setActivity({ kind: 'idle' })
         }
     }
     function requestCreate(pose: PlacementPose) {
@@ -249,11 +277,21 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
     async function run(request: NestingRequest, rethrow = false, retry?: PendingNesting) {
         await mutate(async () => {
             if ((refreshRequired || operation) && !retry) return
-            const current = retry ?? { key: crypto.randomUUID(), request }
+            const current = retry ?? {
+                key: crypto.randomUUID(),
+                request,
+                userId,
+                projectId,
+                surfaceId,
+            }
             sessionStorage.setItem(storageKey, JSON.stringify(current))
             setOperation(current)
             setProposal(null)
-            setExecution({ key: current.key, preview: false })
+            setActivity({
+                kind: request.preview_id ? 'saving_preview' : 'calculating_saved',
+                key: current.key,
+                cancelling: false,
+            })
             const clearOperation = () => {
                 sessionStorage.removeItem(storageKey)
                 setOperation(null)
@@ -263,7 +301,7 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
                 base,
                 request,
                 (response) => {
-                    setExecution(null)
+                    setActivity({ kind: 'syncing' })
                     setResult(response)
                     setHistory({ undo: [], redo: [] })
                     setHistoryRevision((value) => value + 1)
@@ -283,15 +321,10 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
                 },
                 setPlacements,
                 current.key,
-            )
-                .finally(() => {
-                    setExecution(null)
-                    setCancelling(false)
-                })
-                .catch((caught) => {
-                    clearOperation()
-                    throw caught
-                })
+            ).catch((caught) => {
+                clearOperation()
+                throw caught
+            })
             if (status !== 'unknown') clearOperation()
             if (status === 'synchronized') {
                 setSyncError(null)
@@ -302,63 +335,71 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
             setSyncError(
                 status === 'confirmed'
                     ? 'Раскрой сохранён. Не удалось загрузить полный список размещений.'
-                    : 'Связь с сервером прервалась. Проверьте статус или повторите тот же запуск с сохранённым ключом.',
+                    : 'Подтверждение сохранения пока не получено. Проверьте статус или повторите тот же запуск с сохранённым ключом.',
             )
         }, rethrow)
     }
     async function checkOperation(current: PendingNesting) {
-        await mutate(async () => {
-            const status = await authorizedRequest<{
-                status: 'unknown' | 'running' | 'completed' | 'failed'
-                result?: NestingResult
-            }>(`${base}/nesting/operations/${current.key}`, {
-                signal: AbortSignal.timeout(10_000),
-            })
-            if (status.status === 'completed' && status.result) {
-                setResult(status.result)
-                setHistoryRevision((value) => value + 1)
-                setResultAlgorithm(current.request.algorithm)
-                setSelected(null)
-                sessionStorage.removeItem(storageKey)
-                setOperation(null)
-                setReload((value) => value + 1)
-            } else if (status.status === 'failed') {
-                sessionStorage.removeItem(storageKey)
-                setOperation(null)
-                setRefreshRequired(false)
-                setSyncError('Сервер отклонил запуск. Раскладка сохранена в прежнем состоянии.')
-            } else {
-                setSyncError(
-                    status.status === 'running'
-                        ? 'Сервер выполняет этот запуск.'
-                        : 'Сохранённый результат пока отсутствует. Можно безопасно повторить этот запуск.',
-                )
-            }
-        })
+        let reloadConfirmed = false
+        await mutate(
+            async () => {
+                const status = await authorizedRequest<{
+                    status: 'unknown' | 'running' | 'completed' | 'failed'
+                    result?: NestingResult
+                    failure?: { code: string; message: string }
+                }>(`${base}/nesting/operations/${current.key}`, {
+                    signal: AbortSignal.timeout(10_000),
+                })
+                if (status.status === 'completed' && status.result) {
+                    setResult(status.result)
+                    setHistoryRevision((value) => value + 1)
+                    setResultAlgorithm(current.request.algorithm)
+                    setSelected(null)
+                    sessionStorage.removeItem(storageKey)
+                    setOperation(null)
+                    reloadConfirmed = true
+                } else if (status.status === 'failed') {
+                    sessionStorage.removeItem(storageKey)
+                    setOperation(null)
+                    setRefreshRequired(false)
+                    setSyncError(
+                        status.failure
+                            ? getApiErrorMessage(
+                                  new ApiError(500, status.failure.code, status.failure.message),
+                              )
+                            : 'Сервер отклонил запуск. Раскладка сохранена в прежнем состоянии.',
+                    )
+                } else {
+                    setSyncError(
+                        status.status === 'running'
+                            ? 'Сервер выполняет этот запуск.'
+                            : 'Сохранённый результат пока отсутствует. Можно безопасно повторить этот запуск.',
+                    )
+                }
+            },
+            false,
+            { kind: 'recovering' },
+        )
+        if (reloadConfirmed) setReload((value) => value + 1)
     }
     async function previewRun(request: NestingRequest) {
         await mutate(async () => {
             const key = crypto.randomUUID()
             setProposal(null)
-            setExecution({ key, preview: true })
-            try {
-                const result = await authorizedRequest<NestingResult>(`${base}/nesting/preview`, {
-                    method: 'POST',
-                    signal: AbortSignal.timeout(nestingRequestTimeout),
-                    headers: { 'Idempotency-Key': key },
-                    body: JSON.stringify(request),
-                })
-                setProposal({ result, includeSaved: request.keep_existing })
-            } finally {
-                setExecution(null)
-                setCancelling(false)
-            }
+            setActivity({ kind: 'calculating_preview', key, cancelling: false })
+            const result = await authorizedRequest<NestingResult>(`${base}/nesting/preview`, {
+                method: 'POST',
+                signal: AbortSignal.timeout(nestingRequestTimeout),
+                headers: { 'Idempotency-Key': key },
+                body: JSON.stringify(request),
+            })
+            setProposal({ result, includeSaved: request.keep_existing, request })
         })
     }
 
     async function cancelExecution() {
         if (!execution || cancelling) return
-        setCancelling(true)
+        setActivity({ ...execution, cancelling: true })
         try {
             await authorizedRequest<void>(`${base}/nesting/operations/${execution.key}`, {
                 method: 'DELETE',
@@ -366,8 +407,18 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
             })
         } catch (caught) {
             setError(getApiErrorMessage(caught))
-            setCancelling(false)
+            setActivity((current) =>
+                'key' in current && current.key === execution.key
+                    ? { ...current, cancelling: false }
+                    : current,
+            )
         }
+    }
+    function saveProposal() {
+        if (!proposal?.result.preview_id) return
+        const request = { ...proposal.request, preview_id: proposal.result.preview_id }
+        if (!request.keep_existing) setReplacement(request)
+        else void run(request)
     }
     function prepareRun(preview = false) {
         const angles = rotations.split(',').map((value) => Number(value.trim()))
@@ -426,7 +477,7 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
         })
     }
     const addingPattern = adding ? patterns.find((item) => item.id === patternId) : undefined
-    const editingDisabled = busy || !!proposal
+    const editingDisabled = busy || !!proposal || refreshRequired || !!operation
     const selectedPlacement = placements.find((item) => item.id === selected)
     const metrics = useMemo(
         () => (surface ? layoutMetrics(surface.geometry, placements) : null),
@@ -567,9 +618,11 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
                         <span role="status">
                             {cancelling
                                 ? 'Останавливаем расчёт…'
-                                : execution.preview
+                                : execution.kind === 'calculating_preview'
                                   ? 'Расчёт предпросмотра…'
-                                  : 'Расчёт с сохранением…'}
+                                  : execution.kind === 'saving_preview'
+                                    ? 'Сохранение предпросмотра…'
+                                    : 'Расчёт с сохранением…'}
                         </span>
                         <button
                             className="nesting-button"
@@ -755,7 +808,9 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
                                     Учитывать сохранённые размещения
                                 </label>
                                 <button
-                                    disabled={busy || !patterns.length}
+                                    disabled={
+                                        busy || !!operation || refreshRequired || !patterns.length
+                                    }
                                     onClick={() => prepareRun(true)}
                                 >
                                     Предпросмотр
@@ -765,17 +820,17 @@ function Workspace({ projectId, surfaceId }: { projectId: number; surfaceId: num
                                     disabled={
                                         busy || refreshRequired || !!operation || !patterns.length
                                     }
-                                    onClick={() => prepareRun()}
+                                    onClick={() => (proposal ? saveProposal() : prepareRun())}
                                 >
-                                    Рассчитать и сохранить
+                                    {proposal ? 'Сохранить предпросмотр' : 'Рассчитать и сохранить'}
                                 </button>
                                 {proposal && (
                                     <p>
                                         Не размещено:{' '}
                                         {proposal.result.metrics.requested_count -
                                             proposal.result.metrics.placed_count}
-                                        . Сохранение выполняет новый расчёт с выбранными
-                                        параметрами.
+                                        . Можно сохранить показанную раскладку без повторного
+                                        расчёта.
                                     </p>
                                 )}
                             </section>

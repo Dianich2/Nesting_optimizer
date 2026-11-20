@@ -5,9 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-
 	"github.com/google/uuid"
 	nestingcase "server_nesting_optimizer/internal/usecase/nesting"
+	"server_nesting_optimizer/pkg/apperror"
+	"time"
 )
 
 type NestingOperationRepository struct{ db DBTX }
@@ -16,41 +17,27 @@ func NewNestingOperationRepository(db DBTX) *NestingOperationRepository {
 	return &NestingOperationRepository{db: db}
 }
 
-const operationLockID = `hashtextextended($1::text || ':' || $2::text, 2738504)`
-
-func (r *NestingOperationRepository) Lock(ctx context.Context, surfaceID int64, key uuid.UUID) error {
-	_, err := r.db.ExecContext(ctx, `SELECT pg_advisory_xact_lock(`+operationLockID+`)`, surfaceID, key.String())
-	return err
-}
-
-func (r *NestingOperationRepository) Running(ctx context.Context, surfaceID int64, key uuid.UUID) (bool, error) {
-	var acquired bool
-	err := r.db.GetContext(ctx, &acquired, `SELECT pg_try_advisory_xact_lock(`+operationLockID+`)`, surfaceID, key.String())
-	return !acquired, err
-}
-
-// Attempt is called under the project transaction. A failed attempt rolls back
-// layout writes before the use case can record a terminal rejection.
-func (r *NestingOperationRepository) Attempt(ctx context.Context, run func() error) error {
-	if _, err := r.db.ExecContext(ctx, "SAVEPOINT nesting_attempt"); err != nil {
-		return err
+func (r *NestingOperationRepository) Reserve(ctx context.Context, surfaceID int64, key uuid.UUID, hash []byte, token uuid.UUID, expires time.Time) (bool, error) {
+	result, err := r.db.ExecContext(ctx, `INSERT INTO nesting_operations(project_surface_id,operation_key,request_hash,response,state,lease_token,lease_expires_at)
+        VALUES($1,$2,$3,'{"Status":"running"}','running',$4,clock_timestamp()+($5*interval '1 millisecond')) ON CONFLICT DO NOTHING`, surfaceID, key, hash, token, max(int64(0), time.Until(expires).Milliseconds()))
+	if err != nil {
+		return false, err
 	}
-	if err := run(); err != nil {
-		if _, rollbackErr := r.db.ExecContext(ctx, "ROLLBACK TO SAVEPOINT nesting_attempt"); rollbackErr != nil {
-			return rollbackErr
-		}
-		return err
-	}
-	_, err := r.db.ExecContext(ctx, "RELEASE SAVEPOINT nesting_attempt")
-	return err
+	count, err := result.RowsAffected()
+	return count == 1, err
 }
 
 func (r *NestingOperationRepository) Find(ctx context.Context, surfaceID int64, key uuid.UUID) ([]byte, *nestingcase.OperationStatus, error) {
+	_, err := r.db.ExecContext(ctx, `UPDATE nesting_operations SET state='failed',response='{"Status":"failed","Failure":{"Code":"nesting_timeout","Message":"nesting worker deadline expired; start a new operation"}}'
+		WHERE project_surface_id=$1 AND operation_key=$2 AND state='running' AND lease_expires_at <= clock_timestamp()`, surfaceID, key)
+	if err != nil {
+		return nil, nil, err
+	}
 	var row struct {
 		Hash     []byte `db:"request_hash"`
 		Response []byte `db:"response"`
 	}
-	err := r.db.GetContext(ctx, &row, `SELECT request_hash, response FROM nesting_operations WHERE project_surface_id=$1 AND operation_key=$2`, surfaceID, key)
+	err = r.db.GetContext(ctx, &row, `SELECT request_hash,response FROM nesting_operations WHERE project_surface_id=$1 AND operation_key=$2`, surfaceID, key)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil, nil
 	}
@@ -64,11 +51,57 @@ func (r *NestingOperationRepository) Find(ctx context.Context, surfaceID int64, 
 	return row.Hash, &output, nil
 }
 
-func (r *NestingOperationRepository) Save(ctx context.Context, surfaceID int64, key uuid.UUID, hash []byte, result nestingcase.OperationStatus) error {
-	response, err := json.Marshal(result)
+func (r *NestingOperationRepository) Finish(ctx context.Context, surfaceID int64, key, token uuid.UUID, status nestingcase.OperationStatus) error {
+	response, err := json.Marshal(status)
 	if err != nil {
 		return err
 	}
-	_, err = r.db.ExecContext(ctx, `INSERT INTO nesting_operations (project_surface_id,operation_key,request_hash,response) VALUES ($1,$2,$3,$4::jsonb)`, surfaceID, key, hash, string(response))
-	return err
+	result, err := r.db.ExecContext(ctx, `UPDATE nesting_operations SET state=$4,response=$5::jsonb
+        WHERE project_surface_id=$1 AND operation_key=$2 AND lease_token=$3 AND state='running'
+        AND ($4 <> 'completed' OR (NOT cancel_requested AND lease_expires_at > clock_timestamp()))`, surfaceID, key, token, status.Status, string(response))
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		var row struct {
+			Cancelled bool `db:"cancel_requested"`
+			Expired   bool `db:"expired"`
+		}
+		lookup := r.db.GetContext(ctx, &row, `SELECT cancel_requested,lease_expires_at<=clock_timestamp() AS expired FROM nesting_operations WHERE project_surface_id=$1 AND operation_key=$2 AND lease_token=$3`, surfaceID, key, token)
+		if errors.Is(lookup, sql.ErrNoRows) {
+			return apperror.NotFound("nesting operation not found")
+		}
+		if lookup != nil {
+			return lookup
+		}
+		if row.Cancelled {
+			return &apperror.AppError{Code: apperror.AppCodeCancelled, Message: "nesting was cancelled"}
+		}
+		if row.Expired {
+			return &apperror.AppError{Code: apperror.AppCodeTimeout, Message: "nesting execution timed out"}
+		}
+		return &apperror.AppError{Code: apperror.AppCodeInterrupted, Message: "nesting operation is no longer active"}
+	}
+	return nil
+}
+
+func (r *NestingOperationRepository) Cancel(ctx context.Context, surfaceID int64, key uuid.UUID) (bool, error) {
+	result, err := r.db.ExecContext(ctx, `UPDATE nesting_operations SET cancel_requested=TRUE WHERE project_surface_id=$1 AND operation_key=$2 AND state='running' AND lease_expires_at>clock_timestamp()`, surfaceID, key)
+	if err != nil {
+		return false, err
+	}
+	count, err := result.RowsAffected()
+	return count == 1, err
+}
+func (r *NestingOperationRepository) CancellationRequested(ctx context.Context, surfaceID int64, key, token uuid.UUID) (bool, error) {
+	var active bool
+	err := r.db.GetContext(ctx, &active, `SELECT state='running' AND NOT cancel_requested AND lease_expires_at>clock_timestamp() FROM nesting_operations WHERE project_surface_id=$1 AND operation_key=$2 AND lease_token=$3`, surfaceID, key, token)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, apperror.NotFound("nesting operation not found")
+	}
+	return !active, err
 }

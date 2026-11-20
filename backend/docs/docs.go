@@ -1554,7 +1554,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Run automatic nesting for a project surface",
+                "description": "Run automatic nesting, or save the exact server-owned preview by including preview_id and its original parameters. Writes are atomic and reject stale source snapshots.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1632,6 +1632,12 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httperror.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
                         "schema": {
                             "$ref": "#/definitions/httperror.ErrorResponse"
                         }
@@ -1790,6 +1796,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Returns a server-owned preview_id valid for 15 minutes. Save it using POST /nesting with the same parameters and preview_id. Retention is bounded per user.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1855,6 +1862,12 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/httperror.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
                         "schema": {
                             "$ref": "#/definitions/httperror.ErrorResponse"
                         }
@@ -3372,6 +3385,9 @@ const docTemplate = `{
                 "keep_existing": {
                     "type": "boolean"
                 },
+                "parameters": {
+                    "type": "object"
+                },
                 "placed_area": {
                     "type": "number"
                 },
@@ -3403,9 +3419,23 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.NestingOperationFailure": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.NestingOperationResponse": {
             "type": "object",
             "properties": {
+                "failure": {
+                    "$ref": "#/definitions/dto.NestingOperationFailure"
+                },
                 "result": {
                     "$ref": "#/definitions/dto.RunNestingResponse"
                 },
@@ -3530,6 +3560,9 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/dto.RunNestingPatternRequest"
                     }
+                },
+                "preview_id": {
+                    "type": "string"
                 }
             }
         },
@@ -3544,6 +3577,12 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/dto.RunNestingPlacementResponse"
                     }
+                },
+                "preview_expires_at": {
+                    "type": "string"
+                },
+                "preview_id": {
+                    "type": "string"
                 },
                 "unplaced": {
                     "type": "array",

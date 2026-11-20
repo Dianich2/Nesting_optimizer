@@ -6,6 +6,7 @@ import (
 )
 
 type NestingRun struct {
+	Parameters       []byte
 	ID               int64
 	ProjectSurfaceID int64
 	Algorithm        nesting.Algorithm

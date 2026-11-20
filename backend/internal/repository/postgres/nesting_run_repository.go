@@ -22,6 +22,7 @@ func NewNestingRunRepository(
 }
 
 type NestingRunRow struct {
+	Parameters       []byte    `db:"parameters"`
 	ID               int64     `db:"id"`
 	ProjectSurfaceID int64     `db:"project_surface_id"`
 	Algorithm        string    `db:"algorithm"`
@@ -54,6 +55,7 @@ func (r *NestingRunRepository) Create(
 		input.PlacedArea,
 		input.Utilization,
 		input.Duration.Milliseconds(),
+		string(input.Parameters),
 	); err != nil {
 		return nestingrun.NestingRun{}, fmt.Errorf(
 			"create nesting run: %w",
@@ -68,6 +70,7 @@ func nestingRunRowToDomain(
 	row NestingRunRow,
 ) nestingrun.NestingRun {
 	return nestingrun.NestingRun{
+		Parameters:       row.Parameters,
 		ID:               row.ID,
 		ProjectSurfaceID: row.ProjectSurfaceID,
 		Algorithm:        nesting.Algorithm(row.Algorithm),
@@ -86,7 +89,7 @@ func (r *NestingRunRepository) List(ctx context.Context, userID, projectID, surf
 	rows := make([]NestingRunRow, 0)
 	err := r.db.SelectContext(ctx, &rows, `
  SELECT n.id,n.project_surface_id,n.algorithm,n.keep_existing,n.requested_count,n.placed_count,
-        n.surface_area,n.placed_area,n.utilization,n.duration_ms,n.created_at
+        n.surface_area,n.placed_area,n.utilization,n.duration_ms,n.created_at,n.parameters
  FROM nesting_runs n
  JOIN project_surfaces s ON s.id=n.project_surface_id
  JOIN projects p ON p.id=s.project_id

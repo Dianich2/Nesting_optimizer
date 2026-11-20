@@ -1,6 +1,7 @@
 package nfp
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -64,13 +65,26 @@ func prepareTriangulationInput(
 func triangulate(
 	polygon domaingeometry.Polygon,
 ) ([]domaingeometry.Polygon, error) {
+	return triangulateContext(context.Background(), polygon)
+}
+
+func triangulateContext(ctx context.Context, polygon domaingeometry.Polygon) ([]domaingeometry.Polygon, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	preparedTriangulationInput := prepareTriangulationInput(polygon)
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	indices, err := earcut.Earcut(
 		preparedTriangulationInput.Vertices,
 		preparedTriangulationInput.HoleIndices,
 		2,
 	)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if err != nil {
 		return nil, fmt.Errorf(
 			"triangulate polygon: %w",
@@ -107,6 +121,9 @@ func triangulate(
 		2,
 		indices,
 	)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	if math.Abs(deviation) > config.TriangulationDeviationTolerance ||
 		math.IsInf(deviation, 0) ||
@@ -122,6 +139,11 @@ func triangulate(
 	newPolygons := make([]domaingeometry.Polygon, 0, len(indices)/3)
 
 	for i := 0; i < l; i += 3 {
+		if i%192 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		newPolygon := domaingeometry.Polygon{
 			Exterior: domaingeometry.Ring{
 				Points: []domaingeometry.Point{

@@ -24,7 +24,7 @@ func NewNestingHandler(
 
 // godoc: RunNesting godoc
 // @Summary Run automatic nesting
-// @Description Run automatic nesting for a project surface
+// @Description Run automatic nesting, or save the exact server-owned preview by including preview_id and its original parameters. Writes are atomic and reject stale source snapshots.
 // @Accept json
 // @Produce json
 // @Param project_id path int true "Project ID"
@@ -38,6 +38,7 @@ func NewNestingHandler(
 // @Failure 401 {object} httperror.ErrorResponse
 // @Failure 404 {object} httperror.ErrorResponse
 // @Failure 500 {object} httperror.ErrorResponse
+// @Failure 503 {object} httperror.ErrorResponse
 // @Resource Nesting
 // @Security BearerAuth
 // @Router /api/v1/projects/{project_id}/surfaces/{project_surface_id}/nesting [post]
@@ -46,6 +47,7 @@ func (h *NestingHandler) Run(c fiber.Ctx) error {
 }
 
 // @Summary Calculate a nesting preview without writing placements
+// @Description Returns a server-owned preview_id valid for 15 minutes. Save it using POST /nesting with the same parameters and preview_id. Retention is bounded per user.
 // @Accept json
 // @Produce json
 // @Param project_id path int true "Project ID"
@@ -57,6 +59,7 @@ func (h *NestingHandler) Run(c fiber.Ctx) error {
 // @Failure 404 {object} httperror.ErrorResponse
 // @Failure 408 {object} httperror.ErrorResponse
 // @Failure 409 {object} httperror.ErrorResponse
+// @Failure 503 {object} httperror.ErrorResponse
 // @Security BearerAuth
 // @Router /api/v1/projects/{project_id}/surfaces/{project_surface_id}/nesting/preview [post]
 func (h *NestingHandler) Preview(c fiber.Ctx) error {
@@ -96,10 +99,19 @@ func (h *NestingHandler) run(c fiber.Ctx, preview bool) error {
 	if err != nil {
 		return err
 	}
-	ctx, finish := h.executions.begin(c.Context(), nestingExecution{userID, projectID, projectSurfaceID, key})
+	executionKey := nestingExecution{userID: userID, projectID: projectID, surfaceID: projectSurfaceID, key: key, preview: preview}
+	ctx, finish := h.executions.begin(c.Context(), executionKey)
 	defer finish()
 	var outputRunNestingUseCase nestingusecase.RunNestingOutput
-	if preview {
+	if preview && key != "" {
+		hash, hashErr := nestingusecase.Fingerprint(inputRunNestingUseCase)
+		if hashErr != nil {
+			return hashErr
+		}
+		outputRunNestingUseCase, err = h.executions.preview(ctx, executionKey, hash, h.runNestingUseCase.Limiter, func() (nestingusecase.RunNestingOutput, error) {
+			return h.runNestingUseCase.PreviewWithKey(ctx, inputRunNestingUseCase, key)
+		})
+	} else if preview {
 		outputRunNestingUseCase, err = h.runNestingUseCase.Preview(ctx, inputRunNestingUseCase)
 	} else {
 		outputRunNestingUseCase, err = h.runNestingUseCase.ExecuteWithKey(ctx, inputRunNestingUseCase, key)
@@ -143,6 +155,9 @@ func (h *NestingHandler) GetOperation(c fiber.Ctx) error {
 		return err
 	}
 	response := dto.NestingOperationResponse{Status: status.Status}
+	if status.Failure != nil {
+		response.Failure = &dto.NestingOperationFailure{Code: string(status.Failure.Code), Message: status.Failure.Message}
+	}
 	if status.Result != nil {
 		result := mapper.ToRunNestingResponse(*status.Result)
 		response.Result = &result
@@ -184,7 +199,8 @@ func (h *NestingHandler) History(c fiber.Ctx) error {
 	response := dto.NestingHistoryResponse{Items: make([]dto.NestingHistoryItem, 0, len(runs)), HasNext: hasNext}
 	for _, run := range runs {
 		response.Items = append(response.Items, dto.NestingHistoryItem{
-			ID: run.ID, Algorithm: string(run.Algorithm), KeepExisting: run.KeepExisting,
+			Parameters: run.Parameters,
+			ID:         run.ID, Algorithm: string(run.Algorithm), KeepExisting: run.KeepExisting,
 			RequestedCount: run.RequestedCount, PlacedCount: run.PlacedCount, SurfaceArea: run.SurfaceArea,
 			PlacedArea: run.PlacedArea, Utilization: run.Utilization, DurationMS: run.Duration.Milliseconds(), CreatedAt: run.CreatedAt,
 		})

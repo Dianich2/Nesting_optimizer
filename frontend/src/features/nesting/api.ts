@@ -17,12 +17,15 @@ export interface Placement {
     updated_at: string
 }
 export interface NestingRequest {
+    preview_id?: string
     algorithm: string
     patterns: { project_pattern_id: number; quantity: number }[]
     allowed_rotations: number[]
     keep_existing: boolean
 }
 export interface NestingResult {
+    preview_id?: string
+    preview_expires_at?: string
     placements: Placement[]
     unplaced: { project_pattern_id: number; quantity: number }[]
     metrics: {

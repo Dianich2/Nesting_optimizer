@@ -6,7 +6,13 @@ import (
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
+type NestingConfig struct {
+	Workers int `env:"WORKERS" env-default:"2"`
+	Queue   int `env:"QUEUE" env-default:"4"`
+}
+
 type Config struct {
+	Nesting  NestingConfig  `env-prefix:"NESTING_"`
 	App      AppConfig      `env-prefix:"APP_"`
 	HTTP     HTTPConfig     `env-prefix:"HTTP_"`
 	Log      LogConfig      `env-prefix:"LOG_"`
@@ -55,6 +61,9 @@ func Load() (Config, error) {
 		if err := cleanenv.ReadEnv(&cfg); err != nil {
 			return Config{}, fmt.Errorf("read config: %w", err)
 		}
+	}
+	if cfg.Nesting.Workers < 1 || cfg.Nesting.Workers > 32 || cfg.Nesting.Queue < 0 || cfg.Nesting.Queue > 128 {
+		return Config{}, fmt.Errorf("NESTING_WORKERS must be 1..32 and NESTING_QUEUE must be 0..128")
 	}
 	return cfg, nil
 }

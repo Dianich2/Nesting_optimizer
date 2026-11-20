@@ -416,6 +416,9 @@ func New(
 	updateProjectUseCase.Transactions = scopedDB
 	deleteProjectUseCase.Transactions = scopedDB
 	runNestingUseCase.Transactions = scopedDB
+	runNestingUseCase.Budgets = scopedDB
+	runNestingUseCase.Limiter = nestingusecase.NewComputeLimiter(cfg.Nesting.Workers, cfg.Nesting.Queue)
+	runNestingUseCase.Previews = postgres.NewNestingPreviewRepository(scopedDB)
 	runNestingUseCase.History = postgres.NewNestingRunRepository(scopedDB)
 	runNestingUseCase.Operations = postgres.NewNestingOperationRepository(scopedDB)
 

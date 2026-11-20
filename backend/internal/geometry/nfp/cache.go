@@ -1,6 +1,7 @@
 package nfp
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
@@ -38,6 +39,7 @@ type CachedBuilder struct {
 }
 
 var _ geometry.NFPBuilder = (*CachedBuilder)(nil)
+var _ geometry.ContextNFPBuilder = (*CachedBuilder)(nil)
 
 func NewCachedBuilder(delegate geometry.NFPBuilder) *CachedBuilder {
 	return &CachedBuilder{
@@ -50,6 +52,13 @@ func (c *CachedBuilder) BuildExternal(
 	stationary domaingeometry.Polygon,
 	moving domaingeometry.Polygon,
 ) (domaingeometry.MultiPolygon, error) {
+	return c.BuildExternalContext(context.Background(), stationary, moving)
+}
+
+func (c *CachedBuilder) BuildExternalContext(ctx context.Context, stationary, moving domaingeometry.Polygon) (domaingeometry.MultiPolygon, error) {
+	if err := ctx.Err(); err != nil {
+		return domaingeometry.MultiPolygon{}, err
+	}
 	if c == nil || c.delegate == nil {
 		return domaingeometry.MultiPolygon{},
 			fmt.Errorf("cached NFP builder is not initialized")
@@ -63,15 +72,22 @@ func (c *CachedBuilder) BuildExternal(
 			continue
 		}
 
+		result := cloneMultiPolygon(entry.result)
+		if err := ctx.Err(); err != nil {
+			return domaingeometry.MultiPolygon{}, err
+		}
 		c.hits++
-		return cloneMultiPolygon(entry.result), nil
+		return result, nil
 	}
 
 	c.misses++
 
-	result, err := c.delegate.BuildExternal(stationary, moving)
+	result, err := geometry.BuildExternal(ctx, c.delegate, stationary, moving)
 	if err != nil {
 		return result, err
+	}
+	if err := ctx.Err(); err != nil {
+		return domaingeometry.MultiPolygon{}, err
 	}
 
 	if c.count >= defaultCacheMaxEntries {
@@ -84,11 +100,15 @@ func (c *CachedBuilder) BuildExternal(
 		return result, nil
 	}
 
-	c.entries[key] = append(c.entries[key], cacheEntry{
+	entry := cacheEntry{
 		stationary: clonePolygon(stationary),
 		moving:     clonePolygon(moving),
 		result:     cloneMultiPolygon(result),
-	})
+	}
+	if err := ctx.Err(); err != nil {
+		return domaingeometry.MultiPolygon{}, err
+	}
+	c.entries[key] = append(c.entries[key], entry)
 
 	c.count++
 	c.usedBytes += entrySize

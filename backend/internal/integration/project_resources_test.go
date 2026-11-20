@@ -46,6 +46,11 @@ func newTestSchema(t *testing.T) *sqlx.DB {
 	if database != "nesting_test" {
 		t.Fatal("integration tests require the dedicated nesting_test database")
 	}
+	// Install shared types before selecting a per-test search_path. Otherwise
+	// the first migration can install PostGIS into a private test schema.
+	if _, err = db.Exec("CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public"); err != nil {
+		t.Fatal(err)
+	}
 	schema := fmt.Sprintf("test_%d", time.Now().UnixNano())
 	if _, err = db.Exec("CREATE SCHEMA " + schema); err != nil {
 		t.Fatal(err)
@@ -130,7 +135,7 @@ func TestProjectResourcesAPI(t *testing.T) {
 				req.Header.Set("X-Placement-Version", operationKey[1])
 			}
 		}
-		res, err := app.Test(req, fiber.TestConfig{Timeout: 10 * time.Second})
+		res, err := app.Test(req, fiber.TestConfig{Timeout: 130 * time.Second})
 		if err != nil {
 			t.Error(err)
 			return 0, nil
@@ -267,6 +272,7 @@ func TestProjectResourcesAPI(t *testing.T) {
 	)
 	cancelRun.Transactions = scopedDB
 	cancelRun.Operations = postgres.NewNestingOperationRepository(scopedDB)
+	cancelRun.Previews = postgres.NewNestingPreviewRepository(scopedDB)
 	cancelHandler := handler.NewNestingHandler(cancelRun)
 	cancelBase := "/cancel/projects/:project_id/surfaces/:project_surface_id/nesting"
 	app.Post(cancelBase, cancelHandler.Run)
@@ -513,10 +519,14 @@ func TestProjectResourcesAPI(t *testing.T) {
 	wg.Go(func() { createStatus, _ = request("POST", exercisePath+"/placements", manualBody) })
 	wg.Go(func() { updateStatus, _ = request("POST", exercisePath+"/nesting", autoBody) })
 	wg.Wait()
-	if createStatus != 201 || updateStatus != 200 {
+	if createStatus != 201 || (updateStatus != 200 && updateStatus != 409) {
 		t.Fatalf("manual/auto race: %d %d", createStatus, updateStatus)
 	}
-	if layout := must("GET", exercisePath+"/placements", "", 200); len(layout["items"].([]any)) != 2 {
+	expectedCount := 2
+	if updateStatus == 409 {
+		expectedCount = 1
+	}
+	if layout := must("GET", exercisePath+"/placements", "", 200); len(layout["items"].([]any)) != expectedCount {
 		t.Fatal("layout lost a concurrent write")
 	}
 
@@ -544,7 +554,7 @@ func TestProjectResourcesAPI(t *testing.T) {
 		t.Fatalf("project deletion/nesting race: %d %d", deleteStatus, nestingStatus)
 	}
 	must("DELETE", "/projects/1", "", 404)
-	for _, table := range []string{"project_surfaces", "project_patterns", "placements", "nesting_runs"} {
+	for _, table := range []string{"project_surfaces", "project_patterns", "placements", "nesting_runs", "nesting_operations", "nesting_previews"} {
 		var rows int
 		if err := scoped.Get(&rows, "SELECT count(*) FROM "+table); err != nil || rows != 0 {
 			t.Fatalf("%s not cleared by project deletion: %d, %v", table, rows, err)

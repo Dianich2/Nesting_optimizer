@@ -40,7 +40,11 @@ func Handle(
 		status = fiber.StatusForbidden
 	case apperror.AppCodeNotFound:
 		status = fiber.StatusNotFound
-	case apperror.AppCodeConflict:
+	case apperror.AppCodeTimeout:
+		status = fiber.StatusRequestTimeout
+	case apperror.AppCodeOverloaded, apperror.AppCodePending:
+		status = fiber.StatusServiceUnavailable
+	case apperror.AppCodeConflict, apperror.AppCodeStale, apperror.AppCodeCancelled, apperror.AppCodeInterrupted:
 		status = fiber.StatusConflict
 	}
 

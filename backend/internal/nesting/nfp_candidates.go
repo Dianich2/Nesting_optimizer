@@ -1,6 +1,7 @@
 package nesting
 
 import (
+	"context"
 	"fmt"
 	domaingeometry "server_nesting_optimizer/internal/domain/geometry"
 	"server_nesting_optimizer/internal/geometry"
@@ -14,10 +15,17 @@ func generateNFPCandidatesForRotations(
 	occupied []domaingeometry.Polygon,
 	rotations []float64,
 ) ([]Candidate, error) {
+	return generateNFPCandidatesForRotationsContext(context.Background(), engine, nfpBuilder, pattern, surface, occupied, rotations)
+}
+
+func generateNFPCandidatesForRotationsContext(ctx context.Context, engine geometry.Engine, nfpBuilder geometry.NFPBuilder, pattern, surface domaingeometry.Polygon, occupied []domaingeometry.Polygon, rotations []float64) ([]Candidate, error) {
 	allCandidates := make([]Candidate, 0)
 	seen := make(map[Candidate]struct{})
 
 	for _, rotation := range rotations {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		normalizedRotation := geometry.NormalizeDegrees(rotation)
 
 		rotatedPattern, err := engine.Transform(
@@ -33,7 +41,7 @@ func generateNFPCandidatesForRotations(
 			)
 		}
 
-		rotationCandidates, err := generateNFPCandidates(
+		rotationCandidates, err := generateNFPCandidatesContext(ctx,
 			nfpBuilder,
 			rotatedPattern,
 			surface,
@@ -54,6 +62,9 @@ func generateNFPCandidatesForRotations(
 				allCandidates = append(allCandidates, rotationCandidate)
 			}
 		}
+		if len(allCandidates) > 200000 {
+			return nil, geometry.ErrComplexity
+		}
 	}
 
 	return allCandidates, nil
@@ -66,6 +77,13 @@ func generateNFPCandidates(
 	occupied []domaingeometry.Polygon,
 	rotation float64,
 ) ([]Candidate, error) {
+	return generateNFPCandidatesContext(context.Background(), nfpBuilder, rotatedPattern, surface, occupied, rotation)
+}
+
+func generateNFPCandidatesContext(ctx context.Context, nfpBuilder geometry.NFPBuilder, rotatedPattern, surface domaingeometry.Polygon, occupied []domaingeometry.Polygon, rotation float64) ([]Candidate, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	candidates := make([]Candidate, 0)
 	seen := make(map[Candidate]struct{}, 0)
 	vertices := ringVertices(rotatedPattern.Exterior)
@@ -117,7 +135,13 @@ func generateNFPCandidates(
 	}
 
 	for _, occupiedDetail := range occupied {
-		nfp, err := nfpBuilder.BuildExternal(
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if len(candidates) > 200000 {
+			return nil, geometry.ErrComplexity
+		}
+		nfp, err := geometry.BuildExternal(ctx, nfpBuilder,
 			occupiedDetail,
 			rotatedPattern,
 		)
@@ -129,6 +153,9 @@ func generateNFPCandidates(
 		}
 
 		for _, nfpPolygon := range nfp.Polygons {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			for _, exteriorPoint := range nfpPolygon.Exterior.Points {
 				candidate := Candidate{
 					X:        exteriorPoint.X - centerX,

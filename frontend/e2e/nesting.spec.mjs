@@ -436,12 +436,52 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
         { times: 1 },
     )
     await page.getByRole('button', { name: 'Рассчитать и сохранить' }).click()
-    await expect(page.getByText(/Связь с сервером прервалась/)).toBeVisible({ timeout: 20000 })
+    await expect(page.getByText(/Подтверждение сохранения пока не получено/)).toBeVisible({
+        timeout: 20000,
+    })
     await page.reload()
     await page.getByRole('button', { name: 'Проверить статус' }).click()
     await expect(placement).toHaveCount(3)
     await page.getByRole('button', { name: 'История', exact: true }).click()
     await expect(page.getByRole('table').getByRole('row')).toHaveCount(2)
+
+    await page.getByRole('button', { name: 'Автоматический раскрой', exact: true }).click()
+    await page.getByRole('spinbutton', { name: 'Угловое лекало' }).fill('0')
+    await page.getByRole('spinbutton', { name: 'Прямоугольное лекало' }).fill('1')
+    const previewReply = page.waitForResponse(
+        (res) =>
+            res.request().method() === 'POST' &&
+            res.url().endsWith('/nesting/preview') &&
+            res.status() === 200,
+    )
+    await page.getByRole('button', { name: 'Предпросмотр', exact: true }).click()
+    const exactPreview = await (await previewReply).json()
+    await expect(
+        page.getByRole('button', { name: 'Сохранить предпросмотр', exact: true }),
+    ).toBeEnabled()
+    const savedReply = page.waitForResponse(
+        (res) =>
+            res.request().method() === 'POST' &&
+            res.url().endsWith('/nesting') &&
+            res.status() === 200,
+    )
+    await page.getByRole('button', { name: 'Сохранить предпросмотр', exact: true }).click()
+    const savedResponse = await savedReply
+    expect(savedResponse.request().postDataJSON().preview_id).toBe(exactPreview.preview_id)
+    const exactSaved = await savedResponse.json()
+    const poses = (items) =>
+        items.map(({ project_pattern_id, x, y, rotation, geometry }) => ({
+            project_pattern_id,
+            x,
+            y,
+            rotation,
+            geometry,
+        }))
+    expect(poses(exactSaved.placements)).toEqual(poses(exactPreview.placements))
+    expect(exactSaved.placements.every((item) => item.id > 0)).toBe(true)
+    await expect(placement).toHaveCount(4)
+    await page.getByRole('button', { name: 'История', exact: true }).click()
+    await expect(page.getByRole('table').getByRole('row')).toHaveCount(3)
     expect(
         await page
             .getByRole('table')
@@ -532,20 +572,20 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
     expect(file.suggestedFilename()).toMatch(/\.svg$/)
     const exported = await readFile(await file.path(), 'utf8')
     expect(exported).toContain('fill-rule="evenodd"')
-    expect(exported.match(/<path /g)).toHaveLength(4)
+    expect(exported.match(/<path /g)).toHaveLength(5)
 
     await page
         .getByRole('combobox', { name: 'Поверхность', exact: true })
         .selectOption(urls[1].split('/').at(-2))
     await expect(placement).toHaveCount(0)
     await page.goto(urls[0])
-    await expect(placement).toHaveCount(3)
+    await expect(placement).toHaveCount(4)
     await placement.first().focus()
     await placement.first().press('Enter')
     await page.getByRole('button', { name: 'Удалить размещение', exact: true }).click()
     await page.getByRole('dialog').getByRole('button', { name: 'Отмена' }).click()
-    await expect(placement).toHaveCount(3)
-    for (const count of [2, 1, 0]) {
+    await expect(placement).toHaveCount(4)
+    for (const count of [3, 2, 1, 0]) {
         await placement.first().focus()
         await placement.first().press('Enter')
         await page.getByRole('button', { name: 'Удалить размещение', exact: true }).click()
