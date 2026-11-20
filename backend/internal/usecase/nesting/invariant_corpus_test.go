@@ -2,7 +2,9 @@ package nesting
 
 import (
 	"encoding/json"
+	"math"
 	"os"
+	dg "server_nesting_optimizer/internal/domain/geometry"
 	sf "server_nesting_optimizer/internal/geometry/simplefeatures"
 	opt "server_nesting_optimizer/internal/nesting"
 	"testing"
@@ -32,6 +34,15 @@ func TestInvariantCorpusServerValidation(t *testing.T) {
 		if _, e = validateResult(t.Context(), engine, 1, row.Problem, row.Result); e != nil {
 			t.Fatalf("server validation %s/%s: %v", row.Name, row.Algorithm, e)
 		}
+		// Every row, including zero-placement results, must reject an invalid
+		// surface; copy points so the positive corpus remains unchanged.
+		invalid := row.Problem
+		invalid.Surface.Exterior.Points = append([]dg.Point(nil), row.Problem.Surface.Exterior.Points...)
+		invalid.Surface.Exterior.Points[0].X = math.NaN()
+		if prepared, err := validateResult(t.Context(), engine, 1, invalid, row.Result); err == nil || prepared != nil {
+			t.Fatalf("invalid surface accepted: %s/%s", row.Name, row.Algorithm)
+		}
+		negative++
 		// Copy only the mutable result slice; never corrupt the positive corpus.
 		if len(row.Result.Placements) > 0 {
 			bad := row.Result

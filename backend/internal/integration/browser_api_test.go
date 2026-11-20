@@ -2,7 +2,9 @@ package integration
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +19,7 @@ import (
 	"server_nesting_optimizer/internal/repository/postgres"
 	transport "server_nesting_optimizer/internal/transport/http"
 	uc "server_nesting_optimizer/internal/usecase/nesting"
+	"strconv"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -110,8 +113,35 @@ func TestBrowserAcceptanceAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stats := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"optimize_calls": calls.Load()})
+	stats := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		result := map[string]any{"optimize_calls": calls.Load()}
+		if raw := r.URL.Query().Get("surface_id"); raw != "" {
+			id, err := strconv.ParseInt(raw, 10, 64)
+			if err != nil || id <= 0 {
+				http.Error(w, "invalid test surface", 400)
+				return
+			}
+			ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+			defer cancel()
+			var count, runs int
+			var snapshot string
+			if err := db.GetContext(ctx, &count, "SELECT count(*) FROM placements WHERE project_surface_id=$1", id); err != nil {
+				http.Error(w, "test query failed", 500)
+				return
+			}
+			if err := db.GetContext(ctx, &runs, "SELECT count(*) FROM nesting_runs WHERE project_surface_id=$1", id); err != nil {
+				http.Error(w, "test query failed", 500)
+				return
+			}
+			if err := db.GetContext(ctx, &snapshot, `SELECT COALESCE(jsonb_agg(to_jsonb(p) ORDER BY id),'[]'::jsonb)::text FROM placements p WHERE project_surface_id=$1`, id); err != nil {
+				http.Error(w, "test query failed", 500)
+				return
+			}
+			result["placements"] = count
+			result["nesting_runs"] = runs
+			result["layout_hash"] = fmt.Sprintf("%x", sha256.Sum256([]byte(snapshot)))
+		}
+		_ = json.NewEncoder(w).Encode(result)
 	}))
 	defer stats.Close()
 	var schema string

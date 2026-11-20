@@ -17,6 +17,7 @@ export default defineConfig({
         launchOptions: { executablePath: process.env.E2E_CHROME || undefined },
         actionTimeout: 10_000,
         trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
         viewport: { width: 1440, height: 1000 },
     },
     webServer: {

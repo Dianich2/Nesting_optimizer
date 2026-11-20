@@ -259,6 +259,68 @@ func TestGeometryInvariantExperiment(t *testing.T) {
 			run(fmt.Sprintf("property/seed20261121/%d", i), p, a)
 		}
 	}
+
+	// Preserve the ORIGINAL 523 rows/order first. Additional stage15 examples
+	// exercise strict contacts with all five solvers; no old assertions removed.
+	if len(rows) != 523 {
+		t.Fatalf("original corpus incomplete: %d", len(rows))
+	}
+	algorithms := []Algorithm{BaselineAlgorithm, NFPGreedyAlgorithm, GeneticAlgorithm, SimulatedAnnealingAlgorithm, HybridAlgorithm}
+	data, err := os.ReadFile("testdata/stage12_property12_counterexample.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var original struct {
+		Problem Problem
+		Formed  []dg.Polygon
+	}
+	if err = json.Unmarshal(data, &original); err != nil || len(original.Formed) != 2 {
+		t.Fatalf("original fixture: %v", err)
+	}
+	for _, name := range []string{"original-obstacle", "diagonal-contact", "ulp-width", "hole-boundary"} {
+		p := invariantProblem("rectangle")
+		switch name {
+		case "original-obstacle":
+			p = original.Problem
+			p.Patterns = append([]PatternItem(nil), p.Patterns...)
+			p.Patterns[0].Quantity = 1
+			p.Obstacles = []dg.Polygon{original.Formed[0]}
+		case "diagonal-contact":
+			p.Patterns[0].Geometry = invariantShape(0, 0, 6, 0, 0, 6)
+			p.Obstacles = []dg.Polygon{invariantShape(0, 0, 12, 0, 0, 12)}
+		case "ulp-width":
+			p.Surface = rectangle(12, 4)
+			p.AllowedRotations = []float64{0}
+			p.Obstacles = []dg.Polygon{rectangle(6, 4)}
+			p.Patterns[0].Geometry = rectangle(math.Nextafter(6, 0), 4)
+		case "hole-boundary":
+			p.Surface = rectangle(12, 12)
+			p.Surface.Holes = []dg.Ring{invariantShape(2, 2, 10, 2, 10, 10, 2, 10).Exterior}
+			p.Patterns[0].Geometry = rectangle(2, 2)
+		}
+		for _, a := range algorithms {
+			run("stage15/"+name, p, a)
+		}
+	}
+	extraRandom := rand.New(rand.NewSource(20261126))
+	for i := 0; i < 4; i++ {
+		p := invariantProblem("rectangle")
+		p.AllowedRotations = []float64{33, 45, 90}
+		star := dg.Polygon{}
+		n := 6 + i
+		for j := 0; j < n; j++ {
+			angle := 2 * math.Pi * float64(j) / float64(n)
+			r := 2 + extraRandom.Float64()*3
+			star.Exterior.Points = append(star.Exterior.Points, dg.Point{X: 6 + r*math.Cos(angle), Y: 6 + r*math.Sin(angle)})
+		}
+		p.Patterns[0].Geometry = star
+		for _, a := range algorithms {
+			run(fmt.Sprintf("stage15/property/seed20261126/%d", i), p, a)
+		}
+	}
+	if len(rows) != 563 {
+		t.Fatalf("extended corpus incomplete: %d", len(rows))
+	}
 	runtime.ReadMemStats(&after)
 	path := os.Getenv("NESTING_INVARIANT_OUTPUT")
 	if path == "" {

@@ -333,29 +333,7 @@ func (e *Engine) InteriorsIntersect(
 		)
 	}
 
-	sfFirst := toSimpleFeaturesPolygon(first)
-	sfSecond := toSimpleFeaturesPolygon(second)
-
-	relation, err := geom.Relate(
-		sfFirst.AsGeometry(),
-		sfSecond.AsGeometry(),
-	)
-	if err != nil {
-		return false, fmt.Errorf(
-			"interiors intersect: %w",
-			err,
-		)
-	}
-
-	doInteriorsIntersect, err := geom.RelateMatches(relation, "2********")
-	if err != nil {
-		return false, fmt.Errorf(
-			"interiors intersect: %w",
-			err,
-		)
-	}
-
-	return doInteriorsIntersect, nil
+	return strictInteriors(first, second, &strictState{})
 }
 
 func (e *Engine) Bounds(

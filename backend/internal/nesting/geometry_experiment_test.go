@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"runtime"
@@ -109,6 +110,12 @@ func TestGeometryReliabilityExperiment(t *testing.T) {
 	if os.Getenv("NESTING_GEOMETRY_EXPERIMENT") != "1" {
 		t.Skip("explicit bounded geometry experiment")
 	}
+	var corpus []invariantCase
+	run := func(name string, algorithm Algorithm, problem Problem, budget time.Duration, allowTimeout bool) {
+		if row := runGeometryExperiment(t, name, algorithm, problem, budget, allowTimeout); row != nil {
+			corpus = append(corpus, *row)
+		}
+	}
 	algorithms := []Algorithm{BaselineAlgorithm, NFPGreedyAlgorithm, GeneticAlgorithm, SimulatedAnnealingAlgorithm, HybridAlgorithm}
 	names := []string{"rectangle", "concave", "one_hole", "two_holes", "occupied", "close_points", "radial_without_seed"}
 	for _, name := range names {
@@ -140,7 +147,7 @@ func TestGeometryReliabilityExperiment(t *testing.T) {
 				}
 			}
 			problem := Problem{Surface: surface, Patterns: []PatternItem{{PatternID: 1, Geometry: pattern, Quantity: 6}}, AllowedRotations: []float64{0, 90}, Obstacles: obstacles}
-			runGeometryExperiment(t, name, algorithm, problem, 10*time.Second, false)
+			run(name, algorithm, problem, 10*time.Second, false)
 		}
 	}
 	for _, count := range []int{10, 50, 100, 500} {
@@ -154,7 +161,7 @@ func TestGeometryReliabilityExperiment(t *testing.T) {
 			if count == 500 {
 				budget = 3 * time.Second
 			}
-			runGeometryExperiment(t, "quantity", algorithm, problem, budget, count >= 100)
+			run("quantity", algorithm, problem, budget, count >= 100)
 		}
 	}
 	for _, vertices := range []int{32, 64, 128} {
@@ -163,16 +170,27 @@ func TestGeometryReliabilityExperiment(t *testing.T) {
 			t.Fatal(err)
 		}
 		problem := Problem{Surface: rectangle(500, 500), Patterns: []PatternItem{{PatternID: 1, Geometry: experimentPolygon(vertices), Quantity: 2}}, AllowedRotations: []float64{0, 90}, Obstacles: []dg.Polygon{seed}}
-		runGeometryExperiment(t, "vertices", NFPGreedyAlgorithm, problem, 5*time.Second, true)
+		run("vertices", NFPGreedyAlgorithm, problem, 5*time.Second, true)
 	}
 	// 36 is accepted, 37 remains a server validation rejection (existing API tests).
 	angles := make([]float64, 36)
 	for i := range angles {
 		angles[i] = float64(i) * 10
 	}
-	runGeometryExperiment(t, "36_angles", NFPGreedyAlgorithm, Problem{Surface: rectangle(100, 100), Patterns: []PatternItem{{PatternID: 1, Geometry: rectangle(10, 10), Quantity: 2}}, AllowedRotations: angles}, 5*time.Second, true)
+	run("36_angles", NFPGreedyAlgorithm, Problem{Surface: rectangle(100, 100), Patterns: []PatternItem{{PatternID: 1, Geometry: rectangle(10, 10), Quantity: 2}}, AllowedRotations: angles}, 5*time.Second, true)
+	if path := os.Getenv("NESTING_GEOMETRY_CORPUS"); path != "" {
+		data, err := json.Marshal(corpus)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("LOAD_CORPUS completed_cases=%d", len(corpus))
+	}
+
 }
-func runGeometryExperiment(t *testing.T, name string, algorithm Algorithm, problem Problem, budget time.Duration, allowTimeout bool) {
+func runGeometryExperiment(t *testing.T, name string, algorithm Algorithm, problem Problem, budget time.Duration, allowTimeout bool) *invariantCase {
 	t.Helper()
 	opt, calls, miss := experimentOptimizer(t, algorithm)
 	ctx, cancel := context.WithTimeout(t.Context(), budget)
@@ -231,4 +249,23 @@ func runGeometryExperiment(t *testing.T, name string, algorithm Algorithm, probl
 	}
 	data, _ := json.Marshal(row)
 	t.Log("GEOMETRY_ROW " + string(data))
+	if err != nil || os.Getenv("NESTING_GEOMETRY_CORPUS") == "" {
+		return nil
+	}
+	formed := []dg.Polygon{}
+	engine := simplefeatures.NewEngine()
+	for _, p := range result.Placements {
+		var shape dg.Polygon
+		for _, item := range problem.Patterns {
+			if item.PatternID == p.PatternID {
+				shape = item.Geometry
+			}
+		}
+		geometry, e := engine.Transform(shape, p.X, p.Y, p.Rotation)
+		if e != nil {
+			t.Fatal(e)
+		}
+		formed = append(formed, geometry)
+	}
+	return &invariantCase{Name: fmt.Sprintf("load/%s/q%d/v%d", name, problem.Patterns[0].Quantity, len(problem.Patterns[0].Geometry.Exterior.Points)), Algorithm: algorithm, Problem: problem, Result: result, Formed: formed}
 }

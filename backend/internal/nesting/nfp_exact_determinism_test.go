@@ -222,8 +222,11 @@ func TestNFPExactInputDeterminismHybrid(t *testing.T) {
 	require.NoError(t, measuredErr)
 	validateExperiment(t, problem, result)
 	t.Logf("bootstrap outcome placed=%d fitness=%+v", result.Metrics.PlacedCount, measuredFitness)
-	require.Equal(t, uint64(8205), builder.total)
-	require.Equal(t, uint64(6923), builder.repeated)
+	// Strict predicates reject 44 micro-overlap decisions accepted by legacy Relate.
+	// Exact slab oracle + PostGIS validate these pairs and the final 9 placements;
+	// see stage14_strict_topology_report.md. Quality assertions below are unchanged.
+	require.Equal(t, uint64(8200), builder.total)
+	require.Equal(t, uint64(6915), builder.repeated)
 	require.Zero(t, builder.mismatches)
 
 	fitness, err := calculatePlacementsFitness(

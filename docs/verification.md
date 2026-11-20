@@ -106,12 +106,33 @@ Playwright требует NESTING_API_TARGET из проверенного readi
 
 Новая матрица проверяет 1440/1366/390 и обе темы, SVG import/editor, manual Undo/Redo, radial preview/exact save с Optimize counter, reload, историю и содержимое SVG/JSON. Дополнительно: реальный second-tab stale, confirmed через reload при недоступных placements. Исправлены HTML pattern логина и сохранение контекста при отказе initial placements read. Human UX, другие browser engines, настоящий touch и исходный пользовательский SVG остаются отдельной приёмкой.
 
-## Этапы 11–13: важный текущий blocker
+## История этапов 11–13
 
-См. [сводку](stages11_13_summary.md). Candidate budget этапа11 принят: единый MaxCandidates200000 для raw work и хранения,сквознойctx,раннийoverflow-safe product,streaming NFP. Explicit `NESTING_CANDIDATE_EXPERIMENT=1` включает TestCandidateBudgetWatchdog; запускать только в capped subprocess. Normal/SQL/race gates11 прошли.
+[Сводка](stages11_13_summary.md) и отчёт12 описывают состояние до исправления: candidate budget принят, а TestStrictContactOracleRegression был красным. Два валидных треугольника имеют два exact rational proper crossings; прежний Go Relate возвращает false, PostGIS true. Fixture сохранён без изменения expected. Тогда обязательный stop соблюдён, старые E2E не выдавались за новую приёмку.
 
-Этап12 **BLOCKED**, текущий общий Go suite **FAIL** на маленьком deterministic TestStrictContactOracleRegression. Тест не gated;не удалять/не менятьожиданиерадиgreen. Два валидных треугольника имеют2exactrationalpropercrossings,GoInteriorsIntersect=false,PostGIS=true. Fixture в internal/geometry/simplefeatures/testdata/stage12_contact_counterexample.json;полныйисходныйpropertycase — internal/nesting/testdata/stage12_property12_counterexample.json.
+## Текущие этапы 14–16 — PASS
 
-Bounded corpus: `NESTING_INVARIANT_EXPERIMENT=1 NESTING_INVARIANT_OUTPUT=...` для TestGeometryInvariantExperiment. Его файл передаётся через NESTING_INVARIANT_CORPUS в TestInvariantCorpusServerValidation и TestGeometryCorpusPostGISOracle. Последний требует валидированного nesting_test/private schema,читаетточнуюGogeometryчерезWKB,ничего невращаетвSQL. Negativecontroloracle нельзяослаблятьarea-tolerance:минимальнаяintersectionareaокругляетсяв0,ноDE9IMиexactsignsпоказываютпересечение. Детали — в stage12_geometry_invariants_report.md.
+[Сводка](stages14_16_summary.md) содержит результаты, изменённые файлы, артефакты и ограничения. Regression теперь зелёный по умолчанию. `strict_interiors.go` не использует topology epsilon: filtered exact signs, AABB, holes/containment/совпадающие рёбра и vertex-on-edge intervals. Пределы — 1 000 000 work units /4096 exact operations на вызов; исчерпание возвращает ErrComplexity. Context по прежнему публичному интерфейсу проверяется между bounded вызовами.
 
-Новыйполныйgate12/Playwright13доразрешенияэтогоFAILнезаявлять. Это обязательный stop изТЗ;старые7/7E2Eэтапа10нельзявыдатьза13. Productionprecision/engine/контрактыавтоматическинеизменялись.
+Малые математические tests и300 seeded pairs входят в обычный Go suite;3000 orientation triples сравниваются с прямой rational арифметикой. Explicit тяжёлые измерения запускаются отдельно в capped runner, не считаются PASS из обычного SKIP:
+
+```sh
+# Из backend; только в отдельном CPU/RAM/deadline runner:
+NESTING_INVARIANT_EXPERIMENT=1 NESTING_INVARIANT_OUTPUT=/tmp/corpus.json \
+ go test -count=1 -timeout=300s -run '^TestGeometryInvariantExperiment$' -v ./internal/nesting
+NESTING_INVARIANT_CORPUS=/tmp/corpus.json \
+ go test -count=1 -run '^TestInvariantCorpusServerValidation$' -v ./internal/usecase/nesting
+# После actual current_database/current_user/PostGIS gate, только nesting_test:
+NESTING_TEST_DSN="$VALIDATED_TEST_DSN" NESTING_INVARIANT_CORPUS=/tmp/corpus.json \
+ go test -count=1 -run '^TestGeometryCorpusPostGISOracle$' -v ./internal/integration
+```
+
+Corpus сохраняет исходные523 rows/order и добавляет40 near-contact/seeded examples. Новый server test отвергает invalid surface у каждого результата, включая нулевые. PostGIS получает фактически сформированную Go WKB без SQL-реконструкции вращения. Нельзя ослаблять oracle через площадь: микропересечение может иметь округлённую ST_Area=0.
+
+`NESTING_GEOMETRY_EXPERIMENT=1 NESTING_GEOMETRY_CORPUS=/tmp/load.json` включает прежний47-case load и дополнительно сохраняет actual geometry успешных результатов. Timeout rows не входят в positive corpus: они обязаны иметь zero partial. Для этапа15 объединены563 invariant +43 completed load rows; все606 прошли server/WKB oracle. Команды,47-case результаты и метрики — в отчёте15.
+
+`NESTING_STRICT_TRANSITION=/tmp/transition.json` включает TestStrictHybridTransitionEvidence (native). Его44 различия old/strict проверяются TestStrictTransitionExact (geometry) и TestStrictTransitionPostGIS (integration). `NESTING_STRICT_MATRIX=/tmp/matrix.json` сохраняет22 math pairs из TestStrictTopologyMatrix; тот же файл проверяет TestStrictMatrixPostGIS. Эти evidence-пути явно opt-in; минимальный исходный regression остаётся обязательным.
+
+Для E2E используются scripts/run_stage16_browser.py, test-only browser helper, отдельный собственный `nesting-stage16-db` и private schema. Test DB после приёмки остановлена; перед повторением отдельно подготовьте этот изолированный стенд, не подставляйте рабочий DSN. Wrapper проверяет DB/PID/origin, использует loopback5188, retries0/traceoff и сохраняет JSON report. Финальные прогоны выполнены с `/tmp/nesting-stage16-api-race.test`, API logs отдельно проверены на DATA RACE. Полный рецепт — в отчёте16.
+
+Физический телефон, pinch gesture, Firefox/WebKit (не установлены), исходный SVG и человеческое удобство не объявляются проверенными. Chrome native touch emulation покрыла tap/drag/pan и zoom-кнопки. Нет обещания оптимальности или arbitrary500/120s.

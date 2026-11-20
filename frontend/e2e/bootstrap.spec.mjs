@@ -6,7 +6,7 @@ const radial = fileURLToPath(new URL('./fixtures/radial-pattern.svg', import.met
 const api = process.env.NESTING_API_TARGET + '/api/v1'
 const poses = (items) => items.map(({ x, y, rotation, geometry }) => ({ x, y, rotation, geometry }))
 
-for (const width of [1440, 1366, 390]) {
+for (const width of [1440, 1366, 768, 700, 390]) {
     for (const theme of ['light', 'dark']) {
         test(`radial exact preview, exports and layout ${width} ${theme}`, async ({ page, request }, info) => {
             const errors = []
