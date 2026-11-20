@@ -202,7 +202,7 @@ func TestBootstrapPreservesLegacySuccess(t *testing.T) {
 	engine := simplefeatures.NewEngine()
 	surface := rectangle(100, 100)
 	pattern := rectangle(10, 10)
-	candidates, err := generateCandidates(engine, pattern, collectAnchors(surface, nil), []float64{0, 90})
+	candidates, err := generateCandidates(engine, pattern, mustAnchors(t, surface), []float64{0, 90})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,4 +225,13 @@ func TestBootstrapPreservesLegacySuccess(t *testing.T) {
 	if math.Abs(bounds.MinX) > 1e-12 || math.Abs(bounds.MinY) > 1e-12 {
 		t.Fatalf("expected allowed boundary contact, got %+v", bounds)
 	}
+}
+
+func mustAnchors(t *testing.T, p dg.Polygon) []dg.Point {
+	t.Helper()
+	v, e := collectAnchors(p, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return v
 }

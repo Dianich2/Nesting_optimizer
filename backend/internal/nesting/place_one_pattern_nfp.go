@@ -23,7 +23,7 @@ func placeOnePatternNFP(
 		)
 	}
 
-	candidates, err := generateNFPCandidatesForRotationsContext(ctx,
+	batch, err := generateNFPCandidateBatch(ctx,
 		engine,
 		nfpBuilder,
 		pattern,
@@ -45,6 +45,7 @@ func placeOnePatternNFP(
 		)
 	}
 
+	candidates := batch.items
 	bestCandidate, isFound, err := chooseBestCandidate(
 		ctx,
 		engine,
@@ -61,7 +62,7 @@ func placeOnePatternNFP(
 	}
 
 	if !isFound {
-		return chooseBootstrap(ctx, engine, pattern, surface, occupied, rotations, 200000-len(candidates))
+		return chooseBootstrap(ctx, engine, pattern, surface, occupied, rotations, MaxCandidates-batch.work)
 	}
 
 	return bestCandidate, true, nil

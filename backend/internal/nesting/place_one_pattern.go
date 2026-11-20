@@ -22,17 +22,18 @@ func placeOnePattern(
 		)
 	}
 
-	anchors := collectAnchors(
-		surface,
-		occupied,
-	)
-
-	candidates, err := generateCandidates(
-		engine,
-		pattern,
-		anchors,
-		rotations,
-	)
+	anchorCount, err := countAnchors(ctx, surface, occupied)
+	if err != nil {
+		return CandidatePlacement{}, false, err
+	}
+	if _, err = candidateProduct(MaxCandidates, anchorCount, len(ringVertices(pattern.Exterior)), len(rotations)); err != nil {
+		return CandidatePlacement{}, false, err
+	}
+	anchors, err := collectAnchorsContext(ctx, surface, occupied)
+	if err != nil {
+		return CandidatePlacement{}, false, err
+	}
+	candidates, err := generateCandidatesContext(ctx, engine, pattern, anchors, rotations)
 	if err != nil {
 		return CandidatePlacement{}, false, fmt.Errorf(
 			"place one pattern: %w",
@@ -63,7 +64,7 @@ func placeOnePattern(
 	}
 
 	if !isFound {
-		return chooseBootstrap(ctx, engine, pattern, surface, occupied, rotations, 200000-len(candidates))
+		return chooseBootstrap(ctx, engine, pattern, surface, occupied, rotations, MaxCandidates-len(candidates))
 	}
 
 	return bestCandidate, true, nil

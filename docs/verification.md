@@ -105,3 +105,13 @@ Browser helper TestBrowserAcceptanceAPI по умолчанию SKIP. Explicit `
 Playwright требует NESTING_API_TARGET из проверенного readiness конкретного собственного PID; NESTING_E2E_PORT=5186 задаёт localhost frontend/baseURL, NESTING_E2E_STATS — test-only stats URL. E2E_CHROME задаёт установленный Chrome. Команда: `npm run test:e2e -- --workers=1 --trace=off`. Полный воспроизводимый запуск, настройки DB и cleanup описаны в stage10_automated_e2e_acceptance_report.md. Не подключать браузерные мутации к рабочему API.
 
 Новая матрица проверяет 1440/1366/390 и обе темы, SVG import/editor, manual Undo/Redo, radial preview/exact save с Optimize counter, reload, историю и содержимое SVG/JSON. Дополнительно: реальный second-tab stale, confirmed через reload при недоступных placements. Исправлены HTML pattern логина и сохранение контекста при отказе initial placements read. Human UX, другие browser engines, настоящий touch и исходный пользовательский SVG остаются отдельной приёмкой.
+
+## Этапы 11–13: важный текущий blocker
+
+См. [сводку](stages11_13_summary.md). Candidate budget этапа11 принят: единый MaxCandidates200000 для raw work и хранения,сквознойctx,раннийoverflow-safe product,streaming NFP. Explicit `NESTING_CANDIDATE_EXPERIMENT=1` включает TestCandidateBudgetWatchdog; запускать только в capped subprocess. Normal/SQL/race gates11 прошли.
+
+Этап12 **BLOCKED**, текущий общий Go suite **FAIL** на маленьком deterministic TestStrictContactOracleRegression. Тест не gated;не удалять/не менятьожиданиерадиgreen. Два валидных треугольника имеют2exactrationalpropercrossings,GoInteriorsIntersect=false,PostGIS=true. Fixture в internal/geometry/simplefeatures/testdata/stage12_contact_counterexample.json;полныйисходныйpropertycase — internal/nesting/testdata/stage12_property12_counterexample.json.
+
+Bounded corpus: `NESTING_INVARIANT_EXPERIMENT=1 NESTING_INVARIANT_OUTPUT=...` для TestGeometryInvariantExperiment. Его файл передаётся через NESTING_INVARIANT_CORPUS в TestInvariantCorpusServerValidation и TestGeometryCorpusPostGISOracle. Последний требует валидированного nesting_test/private schema,читаетточнуюGogeometryчерезWKB,ничего невращаетвSQL. Negativecontroloracle нельзяослаблятьarea-tolerance:минимальнаяintersectionareaокругляетсяв0,ноDE9IMиexactsignsпоказываютпересечение. Детали — в stage12_geometry_invariants_report.md.
+
+Новыйполныйgate12/Playwright13доразрешенияэтогоFAILнезаявлять. Это обязательный stop изТЗ;старые7/7E2Eэтапа10нельзявыдатьза13. Productionprecision/engine/контрактыавтоматическинеизменялись.

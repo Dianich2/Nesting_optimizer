@@ -16,6 +16,7 @@ func chooseBootstrap(ctx context.Context, engine geometry.Engine, pattern, surfa
 	if err := ctx.Err(); err != nil {
 		return CandidatePlacement{}, false, err
 	}
+	remaining = min(remaining, MaxCandidates)
 	const seedsPerRotation = 5
 	if remaining < 0 || len(rotations) > remaining/seedsPerRotation {
 		return CandidatePlacement{}, false, geometry.ErrComplexity
@@ -24,8 +25,7 @@ func chooseBootstrap(ctx context.Context, engine geometry.Engine, pattern, surfa
 	if err != nil {
 		return CandidatePlacement{}, false, err
 	}
-	candidates := make([]Candidate, 0, seedsPerRotation*len(rotations))
-	seen := make(map[Candidate]struct{}, cap(candidates))
+	buffer := newCandidateBuffer(remaining, true)
 	for _, rotation := range rotations {
 		if err = ctx.Err(); err != nil {
 			return CandidatePlacement{}, false, err
@@ -47,13 +47,12 @@ func chooseBootstrap(ctx context.Context, engine geometry.Engine, pattern, surfa
 				return CandidatePlacement{}, false, geometry.ErrInvalidTransform
 			}
 			c := Candidate{X: xy[0], Y: xy[1], Rotation: rotation}
-			if _, ok := seen[c]; !ok {
-				seen[c] = struct{}{}
-				candidates = append(candidates, c)
+			if e := buffer.add(ctx, c); e != nil {
+				return CandidatePlacement{}, false, e
 			}
 		}
 	}
-	result, found, err := chooseBestCandidate(ctx, engine, pattern, candidates, surface, occupied)
+	result, found, err := chooseBestCandidate(ctx, engine, pattern, buffer.items, surface, occupied)
 	if err != nil {
 		return CandidatePlacement{}, false, fmt.Errorf("bootstrap candidate: %w", err)
 	}

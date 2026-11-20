@@ -63,13 +63,7 @@ func TestCandidatesFromAnchors(t *testing.T) {
 		},
 	}
 
-	assert.Equal(
-		t,
-		wantCandidate,
-		candidatesFromAnchors(
-			anchors,
-			rotatedPattern,
-			rotation,
-		),
-	)
+	got, err := candidatesFromAnchors(anchors, rotatedPattern, rotation)
+	assert.NoError(t, err)
+	assert.Equal(t, wantCandidate, got)
 }

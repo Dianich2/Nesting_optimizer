@@ -3,190 +3,125 @@ package nesting
 import (
 	"context"
 	"fmt"
-	domaingeometry "server_nesting_optimizer/internal/domain/geometry"
+	dg "server_nesting_optimizer/internal/domain/geometry"
 	"server_nesting_optimizer/internal/geometry"
 )
 
-func generateNFPCandidatesForRotations(
-	engine geometry.Engine,
-	nfpBuilder geometry.NFPBuilder,
-	pattern domaingeometry.Polygon,
-	surface domaingeometry.Polygon,
-	occupied []domaingeometry.Polygon,
-	rotations []float64,
-) ([]Candidate, error) {
-	return generateNFPCandidatesForRotationsContext(context.Background(), engine, nfpBuilder, pattern, surface, occupied, rotations)
+func generateNFPCandidatesForRotations(engine geometry.Engine, builder geometry.NFPBuilder, pattern, surface dg.Polygon, occupied []dg.Polygon, rotations []float64) ([]Candidate, error) {
+	return generateNFPCandidatesForRotationsContext(context.Background(), engine, builder, pattern, surface, occupied, rotations)
 }
-
-func generateNFPCandidatesForRotationsContext(ctx context.Context, engine geometry.Engine, nfpBuilder geometry.NFPBuilder, pattern, surface domaingeometry.Polygon, occupied []domaingeometry.Polygon, rotations []float64) ([]Candidate, error) {
-	allCandidates := make([]Candidate, 0)
-	seen := make(map[Candidate]struct{})
-
-	for _, rotation := range rotations {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		normalizedRotation := geometry.NormalizeDegrees(rotation)
-
-		rotatedPattern, err := engine.Transform(
-			pattern,
-			0,
-			0,
-			normalizedRotation,
-		)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"generate NFP candidates for rotations: rotate pattern: %w",
-				err,
-			)
-		}
-
-		rotationCandidates, err := generateNFPCandidatesContext(ctx,
-			nfpBuilder,
-			rotatedPattern,
-			surface,
-			occupied,
-			normalizedRotation,
-		)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"generate NFP candidates for rotations: %w",
-				err,
-			)
-		}
-
-		for _, rotationCandidate := range rotationCandidates {
-			_, ok := seen[rotationCandidate]
-			if !ok {
-				seen[rotationCandidate] = struct{}{}
-				allCandidates = append(allCandidates, rotationCandidate)
-			}
-		}
-		if len(allCandidates) > 200000 {
-			return nil, geometry.ErrComplexity
-		}
-	}
-
-	return allCandidates, nil
-}
-
-func generateNFPCandidates(
-	nfpBuilder geometry.NFPBuilder,
-	rotatedPattern domaingeometry.Polygon,
-	surface domaingeometry.Polygon,
-	occupied []domaingeometry.Polygon,
-	rotation float64,
-) ([]Candidate, error) {
-	return generateNFPCandidatesContext(context.Background(), nfpBuilder, rotatedPattern, surface, occupied, rotation)
-}
-
-func generateNFPCandidatesContext(ctx context.Context, nfpBuilder geometry.NFPBuilder, rotatedPattern, surface domaingeometry.Polygon, occupied []domaingeometry.Polygon, rotation float64) ([]Candidate, error) {
-	if err := ctx.Err(); err != nil {
+func generateNFPCandidatesForRotationsContext(ctx context.Context, engine geometry.Engine, builder geometry.NFPBuilder, pattern, surface dg.Polygon, occupied []dg.Polygon, rotations []float64) ([]Candidate, error) {
+	b, err := generateNFPCandidateBatch(ctx, engine, builder, pattern, surface, occupied, rotations)
+	if err != nil {
 		return nil, err
 	}
-	candidates := make([]Candidate, 0)
-	seen := make(map[Candidate]struct{}, 0)
-	vertices := ringVertices(rotatedPattern.Exterior)
-
-	minX, maxX := vertices[0].X, vertices[0].X
-	minY, maxY := vertices[0].Y, vertices[0].Y
-
-	for _, point := range vertices[1:] {
-		if point.X < minX {
-			minX = point.X
-		}
-		if point.X > maxX {
-			maxX = point.X
-		}
-		if point.Y < minY {
-			minY = point.Y
-		}
-		if point.Y > maxY {
-			maxY = point.Y
-		}
+	return b.items, nil
+}
+func generateNFPCandidateBatch(ctx context.Context, engine geometry.Engine, builder geometry.NFPBuilder, pattern, surface dg.Polygon, occupied []dg.Polygon, rotations []float64) (*candidateBuffer, error) {
+	anchors, err := countAnchors(ctx, surface, nil)
+	if err != nil {
+		return nil, err
 	}
-
-	centerX := minX/2 + maxX/2
-	centerY := minY/2 + maxY/2
-
-	var anchors []domaingeometry.Point
-	surfaceVertices := ringVertices(surface.Exterior)
-	anchors = append(anchors, surfaceVertices...)
-
-	for _, hole := range surface.Holes {
-		anchors = append(
-			anchors,
-			ringVertices(hole)...,
-		)
+	if _, err = candidateProduct(MaxCandidates, anchors, len(ringVertices(pattern.Exterior)), len(rotations)); err != nil {
+		return nil, err
 	}
-
-	surfaceCandidates := candidatesFromAnchors(
-		anchors,
-		rotatedPattern,
-		rotation,
-	)
-
-	for _, surfaceCandidate := range surfaceCandidates {
-		_, ok := seen[surfaceCandidate]
-		if !ok {
-			seen[surfaceCandidate] = struct{}{}
-			candidates = append(candidates, surfaceCandidate)
-		}
-	}
-
-	for _, occupiedDetail := range occupied {
-		if err := ctx.Err(); err != nil {
+	b := newCandidateBuffer(MaxCandidates, true)
+	b.items = []Candidate{}
+	for _, rotation := range rotations {
+		if err = ctx.Err(); err != nil {
 			return nil, err
 		}
-		if len(candidates) > 200000 {
-			return nil, geometry.ErrComplexity
+		rotation = geometry.NormalizeDegrees(rotation)
+		rotated, e := engine.Transform(pattern, 0, 0, rotation)
+		if e != nil {
+			return nil, fmt.Errorf("generate NFP candidates: %w", e)
 		}
-		nfp, err := geometry.BuildExternal(ctx, nfpBuilder,
-			occupiedDetail,
-			rotatedPattern,
-		)
+		if e = appendNFPCandidates(ctx, b, builder, rotated, surface, occupied, rotation); e != nil {
+			return nil, e
+		}
+	}
+	if err = ctx.Err(); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+func generateNFPCandidates(builder geometry.NFPBuilder, pattern, surface dg.Polygon, occupied []dg.Polygon, rotation float64) ([]Candidate, error) {
+	return generateNFPCandidatesContext(context.Background(), builder, pattern, surface, occupied, rotation)
+}
+func generateNFPCandidatesContext(ctx context.Context, builder geometry.NFPBuilder, pattern, surface dg.Polygon, occupied []dg.Polygon, rotation float64) ([]Candidate, error) {
+	b := newCandidateBuffer(MaxCandidates, true)
+	b.items = []Candidate{}
+	if err := appendNFPCandidates(ctx, b, builder, pattern, surface, occupied, rotation); err != nil {
+		return nil, err
+	}
+	return b.items, nil
+}
+func appendNFPCandidates(ctx context.Context, b *candidateBuffer, builder geometry.NFPBuilder, pattern, surface dg.Polygon, occupied []dg.Polygon, rotation float64) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	vertices := ringVertices(pattern.Exterior)
+	if len(vertices) == 0 {
+		return geometry.ErrInvalidPolygon
+	}
+	minX, maxX, minY, maxY := vertices[0].X, vertices[0].X, vertices[0].Y, vertices[0].Y
+	for _, p := range vertices[1:] {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if p.X < minX {
+			minX = p.X
+		}
+		if p.X > maxX {
+			maxX = p.X
+		}
+		if p.Y < minY {
+			minY = p.Y
+		}
+		if p.Y > maxY {
+			maxY = p.Y
+		}
+	}
+	centerX, centerY := minX/2+maxX/2, minY/2+maxY/2
+	anchors, err := collectAnchorsContext(ctx, surface, nil)
+	if err != nil {
+		return err
+	}
+	if err = appendAnchorCandidates(ctx, b, anchors, pattern, rotation); err != nil {
+		return err
+	}
+	for _, stationary := range occupied {
+		if err = ctx.Err(); err != nil {
+			return err
+		}
+		nfp, err := geometry.BuildExternal(ctx, builder, stationary, pattern)
 		if err != nil {
-			return nil, fmt.Errorf(
-				"generate NFP candidates: %w",
-				err,
-			)
+			return fmt.Errorf("generate NFP candidates: %w", err)
 		}
-
-		for _, nfpPolygon := range nfp.Polygons {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			for _, exteriorPoint := range nfpPolygon.Exterior.Points {
-				candidate := Candidate{
-					X:        exteriorPoint.X - centerX,
-					Y:        exteriorPoint.Y - centerY,
-					Rotation: rotation,
-				}
-
-				_, ok := seen[candidate]
-				if !ok {
-					seen[candidate] = struct{}{}
-					candidates = append(candidates, candidate)
+		appendRing := func(r dg.Ring) error {
+			for _, p := range r.Points {
+				if e := b.add(ctx, Candidate{X: p.X - centerX, Y: p.Y - centerY, Rotation: rotation}); e != nil {
+					return e
 				}
 			}
-
-			for _, hole := range nfpPolygon.Holes {
-				for _, holePoint := range hole.Points {
-					candidate := Candidate{
-						X:        holePoint.X - centerX,
-						Y:        holePoint.Y - centerY,
-						Rotation: rotation,
-					}
-
-					_, ok := seen[candidate]
-					if !ok {
-						seen[candidate] = struct{}{}
-						candidates = append(candidates, candidate)
-					}
+			return ctx.Err()
+		}
+		for _, p := range nfp.Polygons {
+			if err = ctx.Err(); err != nil {
+				return err
+			}
+			if err = appendRing(p.Exterior); err != nil {
+				return err
+			}
+			for _, h := range p.Holes {
+				if err = ctx.Err(); err != nil {
+					return err
+				}
+				if err = appendRing(h); err != nil {
+					return err
 				}
 			}
 		}
 	}
-
-	return candidates, nil
+	return ctx.Err()
 }
