@@ -72,3 +72,13 @@ test('preview pending preserves its kind and rejects save payloads and foreign s
         JSON.stringify({ ...preview, request: { ...record.request, preview_id: record.key } })
     assert.equal(readPendingNesting('key', 7, 1, 2), null)
 })
+
+test('confirmed save survives reload but cannot masquerade as preview', (t) => {
+    const storage = installStorage(t)
+    storage.getItem = () => JSON.stringify({ ...record, confirmed: true })
+    assert.equal(readPendingNesting('key', 7, 1, 2)?.confirmed, true)
+    storage.getItem = () => JSON.stringify({ ...record, confirmed: false })
+    assert.equal(readPendingNesting('key', 7, 1, 2), null)
+    storage.getItem = () => JSON.stringify({ ...record, kind: 'preview', confirmed: true })
+    assert.equal(readPendingNesting('key', 7, 1, 2), null)
+})

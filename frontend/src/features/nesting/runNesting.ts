@@ -1,3 +1,6 @@
+import { classifySaveFailure } from './saveRecovery.ts'
+import type { SaveOutcome } from './saveRecovery'
+import type { NestingOperationStatus } from './previewRecovery'
 import { ApiError } from '../../shared/api/http.ts'
 import type { NestingRequest, NestingResult, Placement, Request } from './api'
 
@@ -10,7 +13,8 @@ export async function runNesting(
     onConfirmed: (result: NestingResult) => void,
     onSynchronized: (placements: Placement[]) => void,
     operationKey?: string,
-): Promise<'synchronized' | 'confirmed' | 'unknown'> {
+    retry = false,
+): Promise<SaveOutcome> {
     let result: NestingResult
     try {
         result = await request<NestingResult>(`${base}/nesting`, {
@@ -21,15 +25,61 @@ export async function runNesting(
         })
     } catch (error) {
         if (
-            error instanceof ApiError &&
-            ([400, 401, 403, 404, 409, 422, 429].includes(error.status) ||
-                error.code === 'nesting_timeout' ||
-                error.code === 'nesting_overloaded')
+            classifySaveFailure(error, retry) === 'definitive_rejection' &&
+            error instanceof ApiError
         )
-            throw error
-        return 'unknown'
+            return { status: 'rejected', error }
+        if ((!retry && classifySaveFailure(error, retry) === 'uncertain') || !operationKey)
+            return { status: 'unknown', error }
+        return reconcileSavedNesting(
+            request,
+            base,
+            operationKey,
+            onConfirmed,
+            onSynchronized,
+            error,
+        )
     }
+    return synchronizeSavedNesting(request, base, result, onConfirmed, onSynchronized)
+}
 
+export async function reconcileSavedNesting(
+    request: Request,
+    base: string,
+    key: string,
+    onConfirmed: (result: NestingResult) => void,
+    onSynchronized: (placements: Placement[]) => void,
+    postError?: unknown,
+): Promise<SaveOutcome> {
+    let status: NestingOperationStatus
+    try {
+        status = await request<NestingOperationStatus>(`${base}/nesting/operations/${key}`, {
+            signal: AbortSignal.timeout(10_000),
+        })
+    } catch (error) {
+        return { status: 'unknown', error }
+    }
+    if (status.status === 'completed' && status.result)
+        return synchronizeSavedNesting(request, base, status.result, onConfirmed, onSynchronized)
+    if (status.status === 'failed' && status.failure)
+        return {
+            status: 'rejected',
+            error: new ApiError(500, status.failure.code, status.failure.message),
+        }
+    return {
+        status: 'unknown',
+        error: postError,
+        operationStatus: status.status === 'running' ? 'running' : 'unknown',
+    }
+}
+
+async function synchronizeSavedNesting(
+    request: Request,
+    base: string,
+    result: NestingResult,
+    onConfirmed: (result: NestingResult) => void,
+    onSynchronized: (placements: Placement[]) => void,
+): Promise<SaveOutcome> {
     onConfirmed(result)
     let saved: { items: Placement[] }
     try {
@@ -37,13 +87,14 @@ export async function runNesting(
             signal: AbortSignal.timeout(10_000),
         })
     } catch {
-        return 'confirmed'
+        return { status: 'confirmed' }
     }
     onSynchronized(saved.items)
-    return 'synchronized'
+    return { status: 'synchronized' }
 }
 
 export interface PendingNesting {
+    confirmed?: true
     kind?: 'preview'
     key: string
     userId: number
@@ -72,6 +123,8 @@ export function readPendingNesting(
         const value = raw as Partial<PendingNesting>
         const input = value.request
         if (
+            (value.confirmed !== undefined && value.confirmed !== true) ||
+            (value.kind === 'preview' && value.confirmed !== undefined) ||
             (value.kind !== undefined && value.kind !== 'preview') ||
             (value.kind === 'preview' && input?.preview_id !== undefined) ||
             value.userId !== userId ||

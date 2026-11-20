@@ -1,3 +1,5 @@
+import { isPendingSaveScope } from '../features/nesting/saveRecovery'
+import type { SaveOutcome } from '../features/nesting/saveRecovery'
 import {
     classifyPreviewFailure,
     mayClosePreview,
@@ -14,6 +16,7 @@ import {
     nestingRequestTimeout,
     readPendingNesting,
     runNesting,
+    reconcileSavedNesting,
 } from '../features/nesting/runNesting'
 import type { PendingNesting } from '../features/nesting/runNesting'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -283,9 +286,37 @@ function Workspace({
             }
         })
     }
+    function finishSavedOutcome(outcome: SaveOutcome, clear: () => void) {
+        if (outcome.status === 'rejected') {
+            clear()
+            setRefreshRequired(false)
+            setSyncError(null)
+            setError(getApiErrorMessage(outcome.error))
+            return
+        }
+        if (outcome.status === 'synchronized') {
+            clear()
+            setRefreshRequired(false)
+            setSyncError(null)
+            return
+        }
+        setRefreshRequired(true)
+        setReplacement(null)
+        if (outcome.status === 'confirmed') {
+            setSyncError('Раскрой сохранён. Не удалось загрузить полный список размещений.')
+            return
+        }
+        setSyncError(
+            operation?.confirmed
+                ? 'Раскрой сохранён. Не удалось проверить статус синхронизации. Повторите проверку позже.'
+                : 'Подтверждение сохранения пока не получено. Новый сохраняющий запуск заблокирован: проверьте статус или повторите тот же запуск с сохранённым ключом.',
+        )
+        if (outcome.error) setError(getApiErrorMessage(outcome.error))
+    }
     async function run(request: NestingRequest, rethrow = false, retry?: PendingNesting) {
         await mutate(async () => {
             if ((refreshRequired || operation) && !retry) return
+            if (retry && !isPendingSaveScope(retry, userId, projectId, surfaceId)) return
             const current = retry ?? {
                 key: crypto.randomUUID(),
                 request,
@@ -297,7 +328,7 @@ function Workspace({
             setOperation(current)
             setProposal(null)
             setActivity({
-                kind: request.preview_id ? 'saving_preview' : 'calculating_saved',
+                kind: current.request.preview_id ? 'saving_preview' : 'calculating_saved',
                 key: current.key,
                 cancelling: false,
             })
@@ -308,50 +339,57 @@ function Workspace({
             const status = await runNesting(
                 authorizedRequest,
                 base,
-                request,
+                current.request,
                 (response) => {
+                    sessionStorage.setItem(
+                        storageKey,
+                        JSON.stringify({ ...current, confirmed: true }),
+                    )
+                    setOperation({ ...current, confirmed: true })
                     setActivity({ kind: 'syncing' })
                     setResult(response)
                     setHistory({ undo: [], redo: [] })
                     setHistoryRevision((value) => value + 1)
-                    setResultAlgorithm(request.algorithm)
+                    setResultAlgorithm(current.request.algorithm)
                     setSelected(null)
-                    if (!retry)
-                        setPlacements((items) =>
-                            Array.from(
-                                new Map(
-                                    [
-                                        ...(request.keep_existing ? items : []),
-                                        ...response.placements,
-                                    ].map((item) => [item.id, item]),
-                                ).values(),
-                            ),
-                        )
                 },
                 setPlacements,
                 current.key,
-            ).catch((caught) => {
-                clearOperation()
-                throw caught
-            })
-            if (status !== 'unknown') clearOperation()
-            if (status === 'synchronized') {
-                setSyncError(null)
-                return
-            }
-            setRefreshRequired(true)
-            setReplacement(null)
-            setSyncError(
-                status === 'confirmed'
-                    ? 'Раскрой сохранён. Не удалось загрузить полный список размещений.'
-                    : 'Подтверждение сохранения пока не получено. Проверьте статус или повторите тот же запуск с сохранённым ключом.',
+                !!retry,
             )
+            finishSavedOutcome(status, clearOperation)
         }, rethrow)
     }
     async function checkOperation(current: PendingNesting) {
-        let reloadConfirmed = false
         await mutate(
             async () => {
+                if (current.kind === undefined) {
+                    if (!isPendingSaveScope(current, userId, projectId, surfaceId)) return
+                    const outcome = await reconcileSavedNesting(
+                        authorizedRequest,
+                        base,
+                        current.key,
+                        (response) => {
+                            sessionStorage.setItem(
+                                storageKey,
+                                JSON.stringify({ ...current, confirmed: true }),
+                            )
+                            setOperation({ ...current, confirmed: true })
+                            setActivity({ kind: 'syncing' })
+                            setResult(response)
+                            setResultAlgorithm(current.request.algorithm)
+                            setHistory({ undo: [], redo: [] })
+                            setHistoryRevision((value) => value + 1)
+                            setSelected(null)
+                        },
+                        setPlacements,
+                    )
+                    finishSavedOutcome(outcome, () => {
+                        sessionStorage.removeItem(storageKey)
+                        setOperation(null)
+                    })
+                    return
+                }
                 const status = await authorizedRequest<NestingOperationStatus>(
                     `${base}/nesting/operations/${current.key}${current.kind === 'preview' ? '?kind=preview' : ''}`,
                     {
@@ -369,13 +407,6 @@ function Workspace({
                         setSyncError(null)
                         return
                     }
-                    setResult(status.result)
-                    setHistoryRevision((value) => value + 1)
-                    setResultAlgorithm(current.request.algorithm)
-                    setSelected(null)
-                    sessionStorage.removeItem(storageKey)
-                    setOperation(null)
-                    reloadConfirmed = true
                 } else if (status.status === 'failed') {
                     sessionStorage.removeItem(storageKey)
                     setOperation(null)
@@ -398,7 +429,6 @@ function Workspace({
             false,
             { kind: 'recovering' },
         )
-        if (reloadConfirmed) setReload((value) => value + 1)
     }
     async function previewRun(request: NestingRequest, retry?: PendingNesting) {
         await mutate(async () => {
@@ -668,7 +698,11 @@ function Workspace({
             </header>
             {operation && !execution && (
                 <div role="status">
-                    <p>Ожидается подтверждение запуска раскроя.</p>
+                    <p>
+                        {operation.confirmed
+                            ? 'Раскрой сохранён. Ожидается синхронизация размещений.'
+                            : 'Ожидается подтверждение запуска раскроя.'}
+                    </p>
                     <button disabled={busy} onClick={() => void checkOperation(operation)}>
                         Проверить статус
                     </button>
@@ -677,13 +711,13 @@ function Workspace({
                             Закрыть ожидание предпросмотра
                         </button>
                     )}
-                    {operation.kind === 'preview' && (
+                    {!operation.confirmed && (
                         <button
                             disabled={busy}
                             onClick={() =>
                                 void mutate(async () => {
                                     await authorizedRequest<void>(
-                                        `${base}/nesting/operations/${operation.key}?kind=preview`,
+                                        `${base}/nesting/operations/${operation.key}${operation.kind === 'preview' ? '?kind=preview' : ''}`,
                                         { method: 'DELETE', signal: AbortSignal.timeout(10_000) },
                                     )
                                     setSyncError(
@@ -692,7 +726,9 @@ function Workspace({
                                 })
                             }
                         >
-                            Запросить отмену предпросмотра
+                            {operation.kind === 'preview'
+                                ? 'Запросить отмену предпросмотра'
+                                : 'Запросить отмену сохранения'}
                         </button>
                     )}
                     <button

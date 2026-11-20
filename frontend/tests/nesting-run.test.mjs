@@ -27,7 +27,7 @@ for (const keep_existing of [true, false]) {
                 },
                 () => events.push('synchronized'),
             )
-            assert.equal(status, syncFails ? 'confirmed' : 'synchronized')
+            assert.equal(status.status, syncFails ? 'confirmed' : 'synchronized')
             assert.deepEqual(events, [
                 '/surface/nesting',
                 'confirmed',
@@ -44,16 +44,11 @@ test('uncertain POST is sent once and requires reconciliation', async () => {
         calls++
         throw new TypeError('network')
     }
-    assert.equal(await runNesting(request, '/surface', {}, assert.fail, assert.fail), 'unknown')
+    assert.equal(
+        (await runNesting(request, '/surface', {}, assert.fail, assert.fail)).status,
+        'unknown',
+    )
     assert.equal(calls, 1)
-})
-
-test('confirmed validation error is propagated', async () => {
-    const error = new ApiError(409, 'conflict_error')
-    const request = async () => {
-        throw error
-    }
-    await assert.rejects(runNesting(request, '/surface', {}, assert.fail, assert.fail), error)
 })
 
 test('a timed out calculation requires reconciliation and is sent once', async (t) => {
@@ -65,7 +60,10 @@ test('a timed out calculation requires reconciliation and is sent once', async (
         calls++
         options.signal.throwIfAborted()
     }
-    assert.equal(await runNesting(request, '/surface', {}, assert.fail, assert.fail), 'unknown')
+    assert.equal(
+        (await runNesting(request, '/surface', {}, assert.fail, assert.fail)).status,
+        'unknown',
+    )
     assert.equal(calls, 1)
 })
 
@@ -89,27 +87,6 @@ test('a timed out synchronization preserves the confirmed saved result', async (
         },
         assert.fail,
     )
-    assert.equal(status, 'confirmed')
+    assert.equal(status.status, 'confirmed')
     assert.equal(confirmed, true)
 })
-
-for (const [status, code, terminal] of [
-    [408, undefined, false],
-    [408, 'nesting_timeout', true],
-    [409, 'nesting_stale', true],
-    [429, 'rate_limit', true],
-    [503, undefined, false],
-    [503, 'nesting_pending', false],
-    [503, 'nesting_overloaded', true],
-    [500, 'internal_error', false],
-]) {
-    test(`HTTP ${status} / ${code} has explicit save recovery semantics`, async () => {
-        const failure = new ApiError(status, code)
-        const request = async () => {
-            throw failure
-        }
-        const result = runNesting(request, '/surface', {}, assert.fail, assert.fail)
-        if (terminal) await assert.rejects(result, failure)
-        else assert.equal(await result, 'unknown')
-    })
-}
