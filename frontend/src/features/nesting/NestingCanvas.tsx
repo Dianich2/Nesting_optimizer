@@ -1,6 +1,7 @@
+import { draftGhostTransform } from './placementDraft'
 import { useWheelZoom } from '../../shared/geometry/useWheelZoom'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { PointerEvent } from 'react'
+import type { PointerEvent, ReactNode } from 'react'
 import type { PolygonGeometry } from '../project-resources/types'
 import type { Placement } from './api'
 import { polygonPath } from './geometry'
@@ -22,10 +23,12 @@ interface Props {
     busy: boolean
     adding: boolean
     draftPattern?: PolygonGeometry
+    draftRotation?: number
+    draftControls?: ReactNode
     proposedPlacements?: Placement[]
     showSaved: boolean
     onSelect: (id: number | null) => void
-    onAdd: (x: number, y: number) => void
+    onAdd: (x: number, y: number, rotation: number) => void
     onMove: (id: number, x: number, y: number, rotation?: number) => void
 }
 export function NestingCanvas({
@@ -35,6 +38,8 @@ export function NestingCanvas({
     busy,
     adding,
     draftPattern,
+    draftRotation = 0,
+    draftControls,
     proposedPlacements,
     showSaved,
     onSelect,
@@ -61,6 +66,7 @@ export function NestingCanvas({
     const [grid, setGrid] = useState(true)
     const [snap, setSnap] = useState(false)
     const [step, setStep] = useState(10)
+    const [stepText, setStepText] = useState('10')
     const [preview, setPreview] = useState<{
         id: number
         dx?: number
@@ -118,7 +124,8 @@ export function NestingCanvas({
             const point = screenToWorld(event.currentTarget, event.clientX, event.clientY)
             if (!point) return
             const position = snapped(point.x, point.y)
-            onAdd(position.x, position.y)
+            event.currentTarget.focus()
+            onAdd(position.x, position.y, draftRotation)
         } else onSelect(null)
     }
     function rotationAt(event: PointerEvent<SVGSVGElement>, item: Placement, original: number) {
@@ -175,6 +182,7 @@ export function NestingCanvas({
     }
     return (
         <div className="nesting-canvas">
+            {draftControls}
             <div className="nesting-tools">
                 <button
                     type="button"
@@ -224,23 +232,37 @@ export function NestingCanvas({
                             Шаг{' '}
                             <input
                                 type="number"
-                                value={step}
+                                value={stepText}
                                 min="0.01"
                                 step="any"
                                 onChange={(event) => {
+                                    setStepText(event.target.value)
                                     const value = Number(event.target.value)
-                                    if (Number.isFinite(value) && value > 0) setStep(value)
+                                    if (
+                                        event.target.value.trim() &&
+                                        Number.isFinite(value) &&
+                                        value >= 0.01
+                                    )
+                                        setStep(value)
                                 }}
                             />
                         </label>
                     </div>
                 </details>
+                {(!stepText.trim() ||
+                    !Number.isFinite(Number(stepText)) ||
+                    Number(stepText) < 0.01) && (
+                    <span role="alert">
+                        Шаг сетки должен быть не меньше 0,01. Пока используется {step}.
+                    </span>
+                )}
                 {preview?.rotation !== undefined && <output>{preview.rotation.toFixed(1)}°</output>}
             </div>
             <svg
                 ref={svg}
                 viewBox={`${visible.x} ${visible.y} ${visible.width} ${visible.height}`}
                 aria-label="Рабочая поверхность раскроя"
+                tabIndex={0}
                 onPointerDown={start}
                 onPointerMove={move}
                 onPointerLeave={() => setCursor(null)}
@@ -346,7 +368,8 @@ export function NestingCanvas({
                 {adding && !pan && !busy && ghost && cursor && (
                     <path
                         d={ghost.path}
-                        transform={`translate(${cursor.x - ghost.x} ${cursor.y - ghost.y})`}
+                        transform={draftGhostTransform(ghost, cursor, draftRotation)}
+                        data-placement-ghost="true"
                         fill="#6da5ee"
                         fillOpacity="0.35"
                         stroke="#4089d6"

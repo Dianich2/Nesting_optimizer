@@ -397,7 +397,7 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
         )
     await page.getByRole('spinbutton', { name: 'Угловое лекало' }).fill('501')
     await previewButton.click()
-    await expect(page.getByRole('alert')).toContainText('не более 500')
+    await expect(page.getByRole('alert')).toContainText('целое число от 0 до 500')
     await expect.poll(pendingPreviewCount).toBe(0)
     await expect(previewButton).toBeEnabled()
     await page.getByRole('spinbutton', { name: 'Угловое лекало' }).fill('1')
@@ -661,7 +661,7 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
     expect(previewPosts).toBe(1)
     await page.unroute('**/nesting/preview')
     await expect(
-        page.getByRole('button', { name: 'Сохранить предпросмотр', exact: true }),
+        page.getByRole('button', { name: 'Сохранить этот предпросмотр', exact: true }),
     ).toBeEnabled()
     let exactSaved
     let previewSaveKey
@@ -677,7 +677,7 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
         },
         { times: 1 },
     )
-    await page.getByRole('button', { name: 'Сохранить предпросмотр', exact: true }).click()
+    await page.getByRole('button', { name: 'Сохранить этот предпросмотр', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Проверить статус', exact: true })).toBeEnabled()
     expect((await readSave()).request.preview_id).toBe(exactPreview.preview_id)
     await page.getByRole('button', { name: 'Проверить статус', exact: true }).click()

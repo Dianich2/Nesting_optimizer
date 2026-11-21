@@ -132,7 +132,7 @@ test('all five native previews save exact geometry once with real SQL history', 
         expect(preview.placements).toHaveLength(1)
         expect((await sqlStats(page, surface.id)).optimize_calls).toBe(initial + index + 1)
         const saving = page.waitForResponse((r) => r.url().endsWith('/nesting') && r.request().method() === 'POST')
-        await page.getByRole('button', { name: 'Сохранить предпросмотр', exact: true }).click()
+        await page.getByRole('button', { name: 'Сохранить этот предпросмотр', exact: true }).click()
         const savedResponse = await saving
         expect(savedResponse.status()).toBe(200)
         expect(savedResponse.request().postDataJSON().preview_id).toBe(preview.preview_id)
@@ -182,6 +182,10 @@ test.describe('Chrome touch emulation', () => {
         await expect(placements).toHaveCount(1)
         const cancelAdding = page.getByRole('button', { name: /Отменить добавление/ })
         if (await cancelAdding.isVisible()) await cancelAdding.tap()
+        // A successful draft now opens its properties, as required by stage21.
+        // Close the mobile overlay before interacting with the underlying canvas.
+        const propertiesPanel = page.getByRole('button', { name: 'Панель', exact: true })
+        if (await propertiesPanel.getAttribute('aria-expanded') === 'true') await propertiesPanel.tap()
         const zoom = page.getByRole('button', { name: 'Приблизить', exact: true })
         await zoom.evaluate((button) => { window.stage16ZoomEvents = []; for (const type of ['pointerdown','pointerup','click']) button.addEventListener(type, (e) => window.stage16ZoomEvents.push({ type, pointerType: e.pointerType })) })
         const initialView = await canvas.getAttribute('viewBox')

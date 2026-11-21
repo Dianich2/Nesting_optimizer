@@ -1,3 +1,6 @@
+body:has(.nesting-page) {
+    min-width: 0;
+}
 .app-shell:has(.nesting-page) {
     display: flex;
     flex-direction: column;
@@ -259,6 +262,27 @@
     }
 }
 
+@media (max-width: 360px) {
+    .app-shell:has(.nesting-page) .app-header { gap: 4px; padding: 4px; }
+    .app-shell:has(.nesting-page) .app-brand > span:last-child,
+    .nesting-page > header > h1 {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+    .app-shell:has(.nesting-page) .app-brand-mark { flex-basis: 24px; width: 24px; height: 24px; }
+    .app-shell:has(.nesting-page) .app-nav-link { padding: 4px 6px; font-size: 12px; }
+    .app-shell:has(.nesting-page) .app-logout-button { padding: 6px 8px; font-size: 13px; }
+    .nesting-page > header { padding: 4px 8px; }
+    .nesting-page > header > a { font-size: 12px; }
+    .nesting-page > header > .nesting-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+    .nesting-page > header > .nesting-tools > button { padding-inline: 4px; }
+    .nesting-status { padding: 4px 8px; font-size: 12px; line-height: 1.3; }
+}
+
 .nesting-menu {
     position: relative;
     font-size: 13px;
@@ -305,5 +329,111 @@
     }
     .nesting-page > header > .nesting-tools {
         width: 100%;
+    }
+}
+
+.nesting-draft-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    padding: 8px 12px;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    overflow-wrap: anywhere;
+    max-height: 40dvh;
+    overflow: auto;
+}
+.nesting-draft-tools label {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+.nesting-draft-tools input {
+    width: 85px;
+}
+.nesting-draft-tools small {
+    flex-basis: 100%;
+}
+.nesting-canvas svg:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -3px;
+}
+
+.nesting-workspace aside {
+    padding: 16px;
+}
+.nesting-page button {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.nesting-page button:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+}
+.nesting-auto-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    margin-block: 12px;
+}
+.nesting-auto-actions > button {
+    width: 100%;
+    min-height: 40px;
+}
+.nesting-result-summary {
+    padding: 6px 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    background: var(--color-surface);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    border-bottom: 1px solid var(--color-border);
+    overflow-wrap: anywhere;
+}
+.nesting-result-summary p {
+    margin: 0;
+}
+.nesting-workspace aside > button + button {
+    margin-block-start: 6px;
+}
+
+/* Keep the complete page within the CSS viewport at high browser zoom. */
+@media (max-width: 1000px) {
+    .app-shell:has(.nesting-page) .app-header {
+        flex-wrap: wrap;
+        gap: 6px 10px;
+        padding-inline: 8px;
+    }
+}
+@media (max-width: 700px) {
+    .app-shell:has(.nesting-page) .app-brand {
+        min-width: 0;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    .app-shell:has(.nesting-page) .app-brand-mark {
+        flex: 0 0 30px;
+        width: 30px;
+        height: 30px;
+    }
+    .app-shell:has(.nesting-page) .app-navigation {
+        flex-wrap: wrap;
+        min-width: 0;
+        gap: 4px;
+    }
+    .app-shell:has(.nesting-page) .app-nav-link {
+        padding: 6px 8px;
+    }
+    .nesting-page > header > label {
+        min-width: 0;
+        max-width: 100%;
+    }
+    .nesting-page > header select {
+        width: 100%;
+        max-width: 185px;
     }
 }

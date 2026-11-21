@@ -56,11 +56,11 @@ export function getApiErrorMessage(
     if (error.message === 'preview parameters changed')
         return 'Параметры предпросмотра изменились. Рассчитайте новый.'
     if (error.details.some((detail) => detail.field === 'geometry' && detail.code === 'too_long'))
-        return 'Геометрия превышает вычислительный бюджет NFP. Упростите контуры или используйте Baseline.'
+        return 'Сложность геометрии превышает вычислительный бюджет. Упростите контуры, сократите число углов или попробуйте другой алгоритм.'
     if (error.code === 'nesting_cancelled')
         return 'Расчёт отменён. Сохранённая раскладка не изменилась.'
     if (error.code === 'nesting_timeout')
-        return 'Расчёт превысил лимит времени. Попробуйте меньше деталей или более быстрый алгоритм.'
+        return 'Достигнут предел расчёта 120 секунд. Прежняя раскладка сохранена. Попробуйте меньше углов или другой алгоритм; это не гарантирует размещение.'
     if (error.code === 'nesting_not_running')
         return 'Сервер ещё не начал расчёт или уже завершил его.'
     if (

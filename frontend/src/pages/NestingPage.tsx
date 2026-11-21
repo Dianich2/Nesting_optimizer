@@ -1,3 +1,5 @@
+import { parseQuantityDrafts } from '../features/nesting/quantityDraft'
+import { draftKeyAction, parseDraftRotation } from '../features/nesting/placementDraft'
 import { isPendingSaveScope } from '../features/nesting/saveRecovery'
 import type { SaveOutcome } from '../features/nesting/saveRecovery'
 import {
@@ -40,6 +42,25 @@ const algorithms = {
     genetic: 'Генетический',
     simulated_annealing: 'Имитация отжига',
     hybrid: 'Гибридный',
+}
+
+function ExecutionProgress({ request, saving }: { request?: NestingRequest; saving: boolean }) {
+    const [started] = useState(() => Date.now())
+    const [now, setNow] = useState(started)
+    useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), 1000)
+        return () => clearInterval(timer)
+    }, [])
+    return (
+        <span>
+            {request
+                ? `${algorithms[request.algorithm as keyof typeof algorithms] ?? request.algorithm} · запрошено ${request.patterns.reduce((n, p) => n + p.quantity, 0)} · `
+                : ''}
+            {saving
+                ? 'Сохраняется показанный результат без повторного расчёта'
+                : `Прошло ${Math.floor((now - started) / 1000)} с · предел расчёта 120 с`}
+        </span>
+    )
 }
 
 export function NestingPage() {
@@ -130,9 +151,16 @@ function Workspace({
     const [selected, setSelected] = useState<number | null>(null)
     const [patternId, setPatternId] = useState<number | null>(null)
     const [adding, setAdding] = useState(false)
+    const [draftRotation, setDraftRotation] = useState(0)
+    const [draftRotationText, setDraftRotationText] = useState('0')
+    function changeDraftRotation(raw: string) {
+        setDraftRotationText(raw)
+        const angle = parseDraftRotation(raw)
+        if (angle !== null) setDraftRotation(angle)
+    }
     const [deleting, setDeleting] = useState(false)
     const [algorithm, setAlgorithm] = useState('baseline')
-    const [quantities, setQuantities] = useState<Record<number, number>>({})
+    const [quantities, setQuantities] = useState<Record<number, string>>({})
     const [rotations, setRotations] = useState('0, 90, 180, 270')
     const [keepExisting, setKeepExisting] = useState(true)
     const [closePreview, setClosePreview] = useState<PendingNesting | null>(null)
@@ -140,6 +168,7 @@ function Workspace({
     const [historyRevision, setHistoryRevision] = useState(0)
     const [result, setResult] = useState<NestingResult | null>(null)
     const [resultAlgorithm, setResultAlgorithm] = useState('')
+    const [responseSeconds, setResponseSeconds] = useState<number | null>(null)
     useEffect(() => {
         let active = true
         async function load() {
@@ -235,15 +264,20 @@ function Workspace({
         const { project_pattern_id, x, y, rotation } = item
         return { project_pattern_id, x, y, rotation }
     }
-    async function add(x: number, y: number) {
-        if (!patternId) return
+    async function add(x: number, y: number, rotation: number) {
+        if (!patternId || !adding || editingDisabled || pending.current) return
+        if (parseDraftRotation(draftRotationText) === null) {
+            setError('Укажите конечный угол поворота.')
+            return
+        }
         await mutate(async () => {
-            const item = await requestCreate({ project_pattern_id: patternId, x, y, rotation: 0 })
+            const item = await requestCreate({ project_pattern_id: patternId, x, y, rotation })
             setPlacements((items) => [...items, item])
             setHistory((value) =>
                 recordPlacement(value, { id: item.id, before: null, after: poseOf(item) }),
             )
             setSelected(item.id)
+            openInspector('properties')
             setAdding(false)
         })
     }
@@ -330,6 +364,9 @@ function Workspace({
         await mutate(async () => {
             if ((refreshRequired || operation) && !retry) return
             if (retry && !isPendingSaveScope(retry, userId, projectId, surfaceId)) return
+            const began = performance.now()
+            setResult(null)
+            setResponseSeconds(null)
             const current = retry ?? {
                 key: crypto.randomUUID(),
                 request,
@@ -361,6 +398,7 @@ function Workspace({
                     setOperation({ ...current, confirmed: true })
                     setActivity({ kind: 'syncing' })
                     setResult(response)
+                    setResponseSeconds((performance.now() - began) / 1000)
                     setHistory({ undo: [], redo: [] })
                     setHistoryRevision((value) => value + 1)
                     setResultAlgorithm(current.request.algorithm)
@@ -450,6 +488,9 @@ function Workspace({
                 setError(validation)
                 return
             }
+            const began = performance.now()
+            setResult(null)
+            setResponseSeconds(null)
             const current: PendingNesting = retry ?? {
                 kind: 'preview',
                 key: crypto.randomUUID(),
@@ -469,6 +510,7 @@ function Workspace({
                     headers: { 'Idempotency-Key': current.key },
                     body: JSON.stringify(current.request),
                 })
+                setResponseSeconds((performance.now() - began) / 1000)
                 setProposal({
                     result,
                     request: current.request,
@@ -561,9 +603,12 @@ function Workspace({
     }
     function prepareRun(preview = false) {
         const angles = parseNestingAngles(rotations)
-        const requested = Object.entries(quantities)
-            .filter(([, quantity]) => quantity !== 0)
-            .map(([id, quantity]) => ({ project_pattern_id: Number(id), quantity }))
+        const parsed = parseQuantityDrafts(quantities)
+        if (parsed.error) {
+            setError(parsed.error)
+            return
+        }
+        const requested = parsed.patterns
         const request = {
             algorithm,
             patterns: requested,
@@ -620,7 +665,24 @@ function Workspace({
         <section
             className="nesting-page"
             onKeyDown={(event) => {
-                if (event.key === 'Escape') setAdding(false)
+                const element = event.target instanceof HTMLElement ? event.target : null
+                const action = draftKeyAction(event.key, {
+                    adding,
+                    blocked: editingDisabled,
+                    editable: !!element?.closest('input,textarea,select,[contenteditable="true"]'),
+                    modal: !!document.querySelector('dialog[open]'),
+                    shift: event.shiftKey,
+                    ctrl: event.ctrlKey,
+                    alt: event.altKey,
+                    meta: event.metaKey,
+                })
+                if (action === null) return
+                event.preventDefault()
+                if (action === 'cancel') setAdding(false)
+                else
+                    changeDraftRotation(
+                        String(parseDraftRotation(String(draftRotation + action)) ?? 0),
+                    )
             }}
         >
             <header>
@@ -772,13 +834,28 @@ function Workspace({
                     </button>
                 </div>
             )}
+            {result && !busy && !operation && !proposal && (
+                <div role="status" className="nesting-result-summary">
+                    <strong>
+                        Сохранено · размещено {result.metrics.placed_count} из{' '}
+                        {result.metrics.requested_count}
+                    </strong>
+                    <span>
+                        Не размещено {result.metrics.requested_count - result.metrics.placed_count}.
+                        {responseSeconds !== null
+                            ? ` Время ответа ${format(responseSeconds)} с.`
+                            : ''}
+                    </span>
+                    {result.metrics.placed_count === 0 && (
+                        <p>
+                            Расчёт завершён успешно, но подходящих свободных позиций не найдено.
+                            Проверьте размеры, углы и занятые места.
+                        </p>
+                    )}
+                </div>
+            )}
             {!surface && !error && <p role="status">Загружаем рабочую поверхность…</p>}
             <div className="nesting-status">
-                {adding && (
-                    <button disabled={busy} onClick={() => setAdding(false)}>
-                        Отменить добавление
-                    </button>
-                )}
                 {execution ? (
                     <>
                         <span role="status">
@@ -797,13 +874,24 @@ function Workspace({
                         >
                             Отменить расчёт
                         </button>
+                        <ExecutionProgress
+                            key={execution.key}
+                            request={operation?.request}
+                            saving={execution.kind === 'saving_preview'}
+                        />
                     </>
                 ) : proposal ? (
                     <>
                         <span role="status">
                             Предпросмотр · размещено {proposal.result.metrics.placed_count} из{' '}
                             {proposal.result.metrics.requested_count}. Сохранённая раскладка
-                            прежняя.
+                            прежняя. Не размещено{' '}
+                            {proposal.result.metrics.requested_count -
+                                proposal.result.metrics.placed_count}
+                            .
+                            {responseSeconds !== null
+                                ? ` Время ответа ${format(responseSeconds)} с.`
+                                : ''}
                         </span>
                         <button className="nesting-button" onClick={() => setProposal(null)}>
                             Закрыть предпросмотр
@@ -832,7 +920,12 @@ function Workspace({
                                     disabled={editingDisabled}
                                     aria-pressed={adding && item.id === patternId}
                                     onClick={() => {
+                                        if (adding && patternId === item.id) {
+                                            setAdding(false)
+                                            return
+                                        }
                                         setPatternId(item.id)
+                                        changeDraftRotation('0')
                                         setAdding(true)
                                         if (window.matchMedia('(max-width: 700px)').matches)
                                             setPatternsOpen(false)
@@ -867,13 +960,68 @@ function Workspace({
                         busy={editingDisabled}
                         adding={!!addingPattern}
                         draftPattern={addingPattern?.geometry}
+                        draftRotation={draftRotation}
+                        draftControls={
+                            addingPattern ? (
+                                <div
+                                    className="nesting-draft-tools"
+                                    role="toolbar"
+                                    aria-label="Постановка лекала"
+                                >
+                                    <strong>На курсоре: {addingPattern.name}</strong>
+                                    <label>
+                                        Поворот до постановки, °
+                                        <input
+                                            type="number"
+                                            step="any"
+                                            value={draftRotationText}
+                                            disabled={editingDisabled}
+                                            onChange={(event) =>
+                                                changeDraftRotation(event.target.value)
+                                            }
+                                            onBlur={() => {
+                                                const angle = parseDraftRotation(draftRotationText)
+                                                if (angle !== null)
+                                                    changeDraftRotation(String(angle))
+                                            }}
+                                            aria-invalid={
+                                                parseDraftRotation(draftRotationText) === null
+                                            }
+                                        />
+                                    </label>
+                                    <div className="nesting-tools">
+                                        {[0, 90, 180, 270].map((angle) => (
+                                            <button
+                                                type="button"
+                                                key={angle}
+                                                aria-pressed={draftRotation === angle}
+                                                disabled={editingDisabled}
+                                                onClick={() => changeDraftRotation(String(angle))}
+                                            >
+                                                {angle}°
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <button type="button" onClick={() => setAdding(false)}>
+                                        Отменить добавление
+                                    </button>
+                                    <small>
+                                        R: +90° · Shift+R: −90° · Esc: отмена вне поля ввода. Новое
+                                        лекало начинает с 0°.
+                                    </small>
+                                    {parseDraftRotation(draftRotationText) === null && (
+                                        <span role="alert">Укажите конечный угол.</span>
+                                    )}
+                                </div>
+                            ) : null
+                        }
                         proposedPlacements={proposal?.result.placements}
                         showSaved={!proposal || proposal.includeSaved}
                         onSelect={(id) => {
                             setSelected(id)
                             if (id !== null) setPanel('properties')
                         }}
-                        onAdd={(x, y) => void add(x, y)}
+                        onAdd={(x, y, rotation) => void add(x, y, rotation)}
                         onMove={(id, x, y, rotation) => void update(id, x, y, rotation)}
                     />
                     <aside hidden={!inspectorOpen} aria-label="Свойства раскроя">
@@ -922,6 +1070,9 @@ function Workspace({
                                 <h2>Автоматический раскрой</h2>
                                 <fieldset className="nesting-quantities">
                                     <legend>Количество лекал</legend>
+                                    <small>
+                                        Пусто или 0 — не выбирать лекало. Всего не более 500.
+                                    </small>
                                     {patterns.map((item) => (
                                         <label key={item.id}>
                                             {item.name}
@@ -930,12 +1081,13 @@ function Workspace({
                                                 min="0"
                                                 max="500"
                                                 step="1"
-                                                value={quantities[item.id] ?? 0}
+                                                value={quantities[item.id] ?? ''}
+                                                placeholder="0"
                                                 disabled={busy}
                                                 onChange={(event) =>
                                                     setQuantities({
                                                         ...quantities,
-                                                        [item.id]: Number(event.target.value),
+                                                        [item.id]: event.target.value,
                                                     })
                                                 }
                                             />
@@ -973,30 +1125,53 @@ function Workspace({
                                     />{' '}
                                     Учитывать сохранённые размещения
                                 </label>
-                                <button
-                                    disabled={
-                                        busy || !!operation || refreshRequired || !patterns.length
-                                    }
-                                    onClick={() => prepareRun(true)}
-                                >
-                                    Предпросмотр
-                                </button>
-                                <button
-                                    className="nesting-primary"
-                                    disabled={
-                                        busy || refreshRequired || !!operation || !patterns.length
-                                    }
-                                    onClick={() => (proposal ? saveProposal() : prepareRun())}
-                                >
-                                    {proposal ? 'Сохранить предпросмотр' : 'Рассчитать и сохранить'}
-                                </button>
+                                <p>
+                                    Предпросмотр: рассчитать и показать, не изменяя сохранённую
+                                    раскладку. Расчёт и сохранение сразу записывают результат в
+                                    проект. Предел расчёта — 120 секунд.
+                                </p>
+                                {keepExisting && (
+                                    <p>
+                                        Новые лекала рассчитываются с учётом всех текущих
+                                        размещений: {placements.length}.
+                                    </p>
+                                )}
+                                <div className="nesting-auto-actions">
+                                    <button
+                                        disabled={
+                                            busy ||
+                                            !!operation ||
+                                            refreshRequired ||
+                                            !patterns.length
+                                        }
+                                        onClick={() => prepareRun(true)}
+                                    >
+                                        Предпросмотр
+                                    </button>
+                                    <button
+                                        className="nesting-primary"
+                                        disabled={
+                                            busy ||
+                                            refreshRequired ||
+                                            !!operation ||
+                                            !patterns.length
+                                        }
+                                        onClick={() => (proposal ? saveProposal() : prepareRun())}
+                                    >
+                                        {proposal
+                                            ? 'Сохранить этот предпросмотр'
+                                            : 'Рассчитать и сохранить'}
+                                    </button>
+                                </div>
                                 {proposal && (
                                     <p>
                                         Не размещено:{' '}
                                         {proposal.result.metrics.requested_count -
                                             proposal.result.metrics.placed_count}
-                                        . Можно сохранить показанную раскладку без повторного
-                                        расчёта.
+                                        .{' '}
+                                        {proposal.result.metrics.placed_count === 0 &&
+                                            'Подходящих свободных позиций не найдено; проверьте размеры, углы и занятые места. '}
+                                        Можно сохранить показанную раскладку без повторного расчёта.
                                     </p>
                                 )}
                             </section>

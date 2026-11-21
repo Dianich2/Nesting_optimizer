@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test'
+import { installDiagnostics } from './diagnostics.mjs'
+installDiagnostics(test)
 import { fileURLToPath } from 'node:url'
 import { readFile } from 'node:fs/promises'
 
@@ -133,7 +135,7 @@ for (const width of [1440, 1366, 768, 700, 390]) {
             expect(preview.placements).toHaveLength(1)
             expect(await count()).toBe(before + 1)
             const saving = page.waitForResponse((r) => r.url().endsWith('/nesting') && r.request().method() === 'POST')
-            await page.getByRole('button', { name: 'Сохранить предпросмотр', exact: true }).click()
+            await page.getByRole('button', { name: 'Сохранить этот предпросмотр', exact: true }).click()
             const savedResponse = await saving
             expect(savedResponse.status()).toBe(200)
             expect(savedResponse.request().postDataJSON().preview_id).toBe(preview.preview_id)
@@ -203,7 +205,7 @@ for (const width of [1440, 1366, 768, 700, 390]) {
                 const staleKeys = []
                 page.on('request', (r) => { if (r.url().endsWith('/nesting') && r.method() === 'POST') staleKeys.push(r.headers()['idempotency-key']) })
                 const staleSave = page.waitForResponse((r) => r.url().endsWith('/nesting') && r.request().method() === 'POST' && r.status() === 409)
-                await page.getByRole('button', { name: 'Сохранить предпросмотр', exact: true }).click()
+                await page.getByRole('button', { name: 'Сохранить этот предпросмотр', exact: true }).click()
                 const rejected = await staleSave
                 expect(rejected.status()).toBe(409)
                 expect((await rejected.json()).error.code).toBe('nesting_stale')

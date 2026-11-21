@@ -39,7 +39,6 @@ interface GeometrySnapshot {
     vertex: number | null
 }
 
-
 function CoordinateInput({
     value,
     label,
@@ -143,6 +142,7 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
         ),
     )
     const [gridStep, setGridStep] = useState(10)
+    const [gridStepText, setGridStepText] = useState('10')
     const [showGrid, setShowGrid] = useState(true)
     const [panMode, setPanMode] = useState(false)
     const [confirmRectangle, setConfirmRectangle] = useState(false)
@@ -1037,10 +1037,15 @@ export function CreateLibraryItemDialog({ kind, onClose, onSave, initialItem }: 
                                         type="number"
                                         min="0.01"
                                         step="any"
-                                        value={gridStep}
+                                        value={gridStepText}
                                         onChange={(event) => {
+                                            setGridStepText(event.target.value)
                                             const value = Number(event.target.value)
-                                            if (Number.isFinite(value) && value > 0)
+                                            if (
+                                                event.target.value.trim() &&
+                                                Number.isFinite(value) &&
+                                                value >= 0.01
+                                            )
                                                 setGridStep(value)
                                         }}
                                     />
