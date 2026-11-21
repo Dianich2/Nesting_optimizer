@@ -96,7 +96,10 @@ func (uc *RunNestingUseCase) runCoordinated(ctx context.Context, input RunNestin
 	output, operationErr = execute(ctx, input, func(tx context.Context, result RunNestingOutput) error {
 		return uc.Operations.Finish(tx, input.ProjectSurfaceID, key, token, OperationStatus{Status: "completed", Result: &result})
 	})
-	if cause := context.Cause(ctx); operationErr != nil && cause != nil && !errors.Is(cause, context.Canceled) && !errors.Is(cause, context.DeadlineExceeded) {
+	// A cancelled PostgreSQL query can return a driver error (e.g. SQLSTATE
+	// 57014), wrapped as Internal, rather than context.Canceled. Preserve the
+	// coordinated context's cause before stop() cancels it during cleanup.
+	if cause := context.Cause(ctx); operationErr != nil && cause != nil {
 		operationErr = cause
 	}
 	return output, operationErr

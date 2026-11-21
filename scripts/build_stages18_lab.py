@@ -58,6 +58,18 @@ func(uc *RunNestingUseCase) LabOptimizeMetrics()map[string]any {
  out:=map[string]any{};for i,name:=range []string{"baseline","nfp_greedy","genetic","simulated_annealing","hybrid"}{out[name]=map[string]int64{"calls":uc.labOptCalls[i].Load(),"elapsed_total_ns":uc.labOptNS[i].Load(),"elapsed_max_ns":uc.labOptMax[i].Load()}};return out
 }
 '''
+# Stage20 timings: test overlay only; initial snapshot includes buildProblem,
+# while atomic commit includes its own CAS reload. Expose those scopes explicitly.
+r=r.replace('labOptCalls [5]atomic.Int64','labOptCalls [5]atomic.Int64\nlabStageNS [5]atomic.Int64\nlabStageCalls [5]atomic.Int64',1)
+needle='snapshot, err := uc.prepare(ctx, input)';assert r.count(needle)==1
+r=r.replace(needle,'labPrepareAt:=time.Now()\n snapshot, err := uc.prepare(context.WithValue(ctx,labPrepareKey{},true), input)\n uc.labRecordStage(0,time.Since(labPrepareAt))',1)
+needle='problem, err := buildProblem(';assert r.count(needle)==1;r=r.replace(needle,'labBuildAt:=time.Now()\n '+needle,1)
+needle='\tencoded, err := json.Marshal(struct {';assert r.count(needle)==1;r=r.replace(needle,'if ctx.Value(labPrepareKey{})==true {uc.labRecordStage(1,time.Since(labBuildAt))}\n'+needle,1)
+needle='preparedPlacements, err := validateResult(ctx, uc.geometryEngine, input.ProjectSurfaceID, problem, result)';assert r.count(needle)==1;r=r.replace(needle,'labValidateAt:=time.Now()\n '+needle+'\n uc.labRecordStage(2,time.Since(labValidateAt))',1)
+needle='placements, err := validateResult(ctx, uc.geometryEngine, input.ProjectSurfaceID, computed.snapshot.Problem, computed.result)';assert r.count(needle)==1;r=r.replace(needle,'labRevalidateAt:=time.Now()\n '+needle+'\n uc.labRecordStage(4,time.Since(labRevalidateAt))',1)
+needle='computed.placements = placements';assert r.count(needle)==1;r=r.replace(needle,needle+'\n labCommitAt:=time.Now();defer func(){uc.labRecordStage(3,time.Since(labCommitAt))}()',1)
+r=r.replace('out:=map[string]any{};for i,name:=range []string', 'out:=map[string]any{};phases:=map[string]any{};for i,name:=range []string{"initial_snapshot_including_build","initial_build_problem","validate_result","atomic_commit_including_CAS_reload","commit_revalidation"}{phases[name]=map[string]int64{"calls":uc.labStageCalls[i].Load(),"elapsed_total_ns":uc.labStageNS[i].Load()}};out["phases"]=phases;for i,name:=range []string',1)
+r+='\ntype labPrepareKey struct{}\nfunc(uc *RunNestingUseCase)labRecordStage(i int,d time.Duration){uc.labStageNS[i].Add(d.Nanoseconds());uc.labStageCalls[i].Add(1)}\n'
 run_source=(a.evidence/'run-observed.go.txt').resolve();run_source.write_text(r)
 subprocess.run(['gofmt','-w',str(run_source)],check=True)
 overlay=(a.evidence/'overlay.json').resolve();overlay.write_text(json.dumps({'Replace':{str(original):str(source),str(run_original):str(run_source)}}))

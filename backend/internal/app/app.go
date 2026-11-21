@@ -39,6 +39,11 @@ func New() (*App, error) {
 		return nil, fmt.Errorf("create db connection pool: %w", err)
 	}
 
+	if err = postgres.ValidateSchema(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
 	deps, err := container.New(db, cfg)
 	if err != nil {
 		if err := db.Close(); err != nil {

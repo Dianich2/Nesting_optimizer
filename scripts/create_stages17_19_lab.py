@@ -23,6 +23,11 @@ for attempt in range(80):
  if ready.returncode==0:break
  time.sleep(.25)
 else:raise SystemExit('Own lab readiness failed; IDs preserved for diagnosis')
-gate=docker('exec',metadata['container'],'psql','-X','-v','ON_ERROR_STOP=1','-U',metadata['user'],'-d','nesting_test','-Atc','BEGIN READ ONLY;SELECT current_database(),current_user,postgis_version();ROLLBACK;')
-assert 'nesting_test|nesting_lab|3.4' in gate
+# pg_isready can succeed on the temporary initialization server before the
+# PostGIS extension scripts finish. Wait for the actual capability as well.
+for attempt in range(100):
+ result=subprocess.run(['docker','exec',metadata['container'],'psql','-X','-v','ON_ERROR_STOP=1','-U',metadata['user'],'-d','nesting_test','-Atc','BEGIN READ ONLY;SELECT current_database(),current_user,postgis_version();ROLLBACK;'],capture_output=True,text=True)
+ if result.returncode==0 and 'nesting_test|nesting_lab|3.4' in result.stdout:break
+ time.sleep(.25)
+else:raise SystemExit('Own PostGIS capability readiness failed; IDs preserved')
 print('Created own bounded lab:',name,'; private metadata:',args.metadata)

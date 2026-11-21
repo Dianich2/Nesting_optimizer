@@ -769,7 +769,7 @@ func TestRealProcessLifecycle(t *testing.T) {
 			case 503:
 				overloaded++
 			default:
-				t.Fatalf("load HTTP %d error %v", r.status, r.err)
+				t.Fatalf("load HTTP %d error %v application_error=%v", r.status, r.err, r.body["error"])
 			}
 		}
 		t.Logf("capacity jobs=%d total_running=4 completed=%d stale=%d overloaded=%d", jobs, accepted, stale, overloaded)
