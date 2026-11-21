@@ -1,6 +1,7 @@
 package httperror
 
 import (
+	"errors"
 	"server_nesting_optimizer/pkg/apperror"
 
 	"github.com/gofiber/fiber/v3"
@@ -20,6 +21,9 @@ func Handle(
 	c fiber.Ctx,
 	err error,
 ) error {
+	if errors.Is(err, fiber.ErrRequestEntityTooLarge) {
+		return c.Status(fiber.StatusRequestEntityTooLarge).JSON(NewErrorResponse(string(apperror.AppCodeValidation), "request body is too large", nil))
+	}
 	appError, ok := apperror.As(err)
 	if !ok {
 		return writeInternalError(c)

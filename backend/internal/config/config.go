@@ -2,6 +2,9 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"net/url"
+	"strconv"
 
 	"github.com/ilyakaznacheev/cleanenv"
 )
@@ -62,13 +65,16 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("read config: %w", err)
 		}
 	}
-	if cfg.Nesting.Workers < 1 || cfg.Nesting.Workers > 32 || cfg.Nesting.Queue < 0 || cfg.Nesting.Queue > 128 {
-		return Config{}, fmt.Errorf("NESTING_WORKERS must be 1..32 and NESTING_QUEUE must be 0..128")
+	if err := cfg.Validate(); err != nil {
+		return Config{}, err
 	}
 	return cfg, nil
 }
 
 func (c DBConfig) DSN() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		c.User, c.Password, c.Host, c.Port, c.DBName, c.SSLMode)
+	u := url.URL{Scheme: "postgres", User: url.UserPassword(c.User, c.Password), Host: net.JoinHostPort(c.Host, strconv.Itoa(c.Port)), Path: "/" + c.DBName}
+	q := url.Values{}
+	q.Set("sslmode", c.SSLMode)
+	u.RawQuery = q.Encode()
+	return u.String()
 }

@@ -298,21 +298,7 @@ func (e *Engine) CoveredBy(
 		return true, nil
 	}
 
-	sfInner := toSimpleFeaturesPolygon(inner)
-	sfOuter := toSimpleFeaturesPolygon(outer)
-
-	isCoveredBy, err := geom.CoveredBy(
-		sfInner.AsGeometry(),
-		sfOuter.AsGeometry(),
-	)
-	if err != nil {
-		return false, fmt.Errorf(
-			"covered by: %w",
-			err,
-		)
-	}
-
-	return isCoveredBy, nil
+	return strictCoveredBy(inner, outer, &strictState{})
 }
 
 func (e *Engine) InteriorsIntersect(

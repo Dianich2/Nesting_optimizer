@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	domainprojectsurface "server_nesting_optimizer/internal/domain/project_surface"
+	geometryerror "server_nesting_optimizer/internal/usecase/geometry_error"
 	"time"
 
 	"github.com/google/uuid"
@@ -83,7 +84,7 @@ func (uc *RunNestingUseCase) runCoordinated(ctx context.Context, input RunNestin
 		if readErr == nil && saved != nil && saved.Failure != nil {
 			failure = saved.Failure
 		}
-		operationErr = &apperror.AppError{Code: failure.Code, Message: failure.Message, Details: failure.Details}
+		operationErr = geometryerror.Restore(&apperror.AppError{Code: failure.Code, Message: failure.Message, Details: failure.Details})
 	}()
 	ctx, stop := uc.watchCancellation(ctx, input.ProjectSurfaceID, key, token)
 	defer stop()
@@ -135,7 +136,7 @@ func (uc *RunNestingUseCase) awaitOperation(ctx context.Context, surfaceID int64
 			return RunNestingOutput{}, apperror.Conflict("idempotency key already used for different nesting parameters")
 		}
 		if saved.Failure != nil {
-			return RunNestingOutput{}, &apperror.AppError{Code: saved.Failure.Code, Message: saved.Failure.Message, Details: saved.Failure.Details}
+			return RunNestingOutput{}, geometryerror.Restore(&apperror.AppError{Code: saved.Failure.Code, Message: saved.Failure.Message, Details: saved.Failure.Details})
 		}
 		if saved.Status == "completed" && saved.Result != nil {
 			return *saved.Result, nil

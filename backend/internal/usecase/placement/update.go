@@ -6,6 +6,7 @@ import (
 	domainplacement "server_nesting_optimizer/internal/domain/placement"
 	domainprojectsurface "server_nesting_optimizer/internal/domain/project_surface"
 	"server_nesting_optimizer/internal/geometry"
+	geometryerror "server_nesting_optimizer/internal/usecase/geometry_error"
 	projecttransaction "server_nesting_optimizer/internal/usecase/project_transaction"
 	"server_nesting_optimizer/pkg/apperror"
 )
@@ -126,6 +127,9 @@ func (uc *UpdatePlacementUseCase) execute(
 		projectSurface.Geometry,
 	)
 	if err != nil {
+		if errors.Is(err, geometry.ErrComplexity) {
+			return UpdatePlacementOutput{}, geometryerror.Complexity(err)
+		}
 		return UpdatePlacementOutput{}, apperror.Internal(
 			"failed to check whether pattern is covered by surface",
 			err,
@@ -169,6 +173,9 @@ func (uc *UpdatePlacementUseCase) execute(
 			existingGeometry,
 		)
 		if err != nil {
+			if errors.Is(err, geometry.ErrComplexity) {
+				return UpdatePlacementOutput{}, geometryerror.Complexity(err)
+			}
 			return UpdatePlacementOutput{}, apperror.Internal(
 				"failed to check placement intersection",
 				err,

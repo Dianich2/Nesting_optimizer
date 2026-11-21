@@ -35,7 +35,7 @@ func TestBrowserAuthRejectsForeignOrigin(t *testing.T) {
 			h := &BrowserAuthHandler{allowedOrigin: testBrowserOrigin}
 			tt.register(app, h)
 
-			for _, origin := range []string{"http://untrusted.example", ""} {
+			for _, origin := range []string{"http://untrusted.example", "", testBrowserOrigin + "/"} {
 				req := httptest.NewRequest(http.MethodPost, tt.path, nil)
 				if origin != "" {
 					req.Header.Set("Origin", origin)

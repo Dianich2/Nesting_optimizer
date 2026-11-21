@@ -14,6 +14,7 @@ import (
 	domainprojectsurface "server_nesting_optimizer/internal/domain/project_surface"
 	"server_nesting_optimizer/internal/geometry"
 	"server_nesting_optimizer/internal/nesting"
+	geometryerror "server_nesting_optimizer/internal/usecase/geometry_error"
 	projecttransaction "server_nesting_optimizer/internal/usecase/project_transaction"
 	"server_nesting_optimizer/pkg/apperror"
 	"sort"
@@ -307,7 +308,7 @@ func (uc *RunNestingUseCase) calculate(ctx context.Context, input RunNestingInpu
 		}
 
 		if errors.Is(err, geometry.ErrComplexity) {
-			return calculatedLayout{}, apperror.Validation(err.Error(), apperror.NewFieldError("geometry", apperror.FieldCodeTooLong, "nesting complexity budget exceeded"))
+			return calculatedLayout{}, geometryerror.Complexity(err)
 		}
 		return calculatedLayout{}, apperror.Internal(
 			"failed to optimize nesting problem",
@@ -318,6 +319,9 @@ func (uc *RunNestingUseCase) calculate(ctx context.Context, input RunNestingInpu
 	duration := time.Since(startAt)
 	preparedPlacements, err := validateResult(ctx, uc.geometryEngine, input.ProjectSurfaceID, problem, result)
 	if err != nil {
+		if errors.Is(err, geometry.ErrComplexity) {
+			return calculatedLayout{}, geometryerror.Complexity(err)
+		}
 		return calculatedLayout{}, apperror.Internal("optimizer returned an invalid layout", err)
 	}
 
@@ -445,6 +449,9 @@ func (uc *RunNestingUseCase) commit(ctx context.Context, input RunNestingInput, 
 	// matching the complete source hash proves these same inputs are still valid.
 	placements, err := validateResult(ctx, uc.geometryEngine, input.ProjectSurfaceID, computed.snapshot.Problem, computed.result)
 	if err != nil {
+		if errors.Is(err, geometry.ErrComplexity) {
+			return RunNestingOutput{}, geometryerror.Complexity(err)
+		}
 		return RunNestingOutput{}, apperror.Internal("revalidate nesting result", err)
 	}
 	computed.placements = placements

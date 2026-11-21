@@ -50,6 +50,9 @@ func newTestSchema(t *testing.T) *sqlx.DB {
 	if err = db.Get(&user, "SELECT current_user"); err != nil {
 		t.Fatal(err)
 	}
+	if expected := os.Getenv("NESTING_EXPECTED_TEST_USER"); expected != "" && user != expected {
+		t.Fatal("test database user gate failed")
+	}
 	if err = db.Get(&postgis, "SELECT postgis_version()"); err != nil {
 		t.Fatal("test database must have PostGIS installed in public before tests")
 	}

@@ -56,6 +56,12 @@ func TestBrowserAcceptanceAPI(t *testing.T) {
 	db.SetMaxOpenConns(8)
 	db.SetMaxIdleConns(4)
 	cfg := config.Config{HTTP: config.HTTPConfig{BrowserOrigin: origin}, JWT: config.JWTConfig{Issuer: "browser-tests", AccessSecret: "browser-only-test-access", RefreshSecret: "browser-only-test-refresh", AccessTTLMin: 15, RefreshTTLMin: 60}, Security: config.SecurityConfig{BcryptCost: 4}, Nesting: config.NestingConfig{Workers: 2, Queue: 4}}
+	if secret := os.Getenv("NESTING_LAB_ACCESS_SECRET"); secret != "" {
+		cfg.JWT.AccessSecret = secret
+	}
+	if secret := os.Getenv("NESTING_LAB_REFRESH_SECRET"); secret != "" {
+		cfg.JWT.RefreshSecret = secret
+	}
 	deps, err := container.New(db, cfg)
 	if err != nil {
 		t.Fatal(err)

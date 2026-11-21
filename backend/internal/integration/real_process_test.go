@@ -15,10 +15,14 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"reflect"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -202,16 +206,46 @@ func TestRealProcessWorker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var stopProfile func()
+	if directory := os.Getenv("NESTING_LAB_PROFILE_DIR"); directory != "" {
+		file, e := os.OpenFile(filepath.Join(directory, fmt.Sprintf("cpu-api-%d.pprof", os.Getpid())), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if e != nil {
+			t.Fatal("test CPU profile output unavailable")
+		}
+		if e = pprof.StartCPUProfile(file); e != nil {
+			t.Fatal(e)
+		}
+		var once sync.Once
+		stopProfile = func() { once.Do(func() { pprof.StopCPUProfile(); _ = file.Close() }) }
+		defer stopProfile()
+	}
 	// Separate test-only diagnostics; never compiled into cmd/api.
+	var janitorRuns, janitorDeleted, janitorErrors atomic.Int64
 	diagnostic := http.NewServeMux()
 	diagnostic.HandleFunc("/stats", func(w http.ResponseWriter, _ *http.Request) {
 		var memory runtime.MemStats
 		runtime.ReadMemStats(&memory)
 		_ = json.NewEncoder(w).Encode(struct {
 			sql.DBStats
-			Goroutines int
-			HeapAlloc  uint64
-		}{db.Stats(), runtime.NumGoroutine(), memory.HeapAlloc})
+			Goroutines                                 int
+			HeapAlloc                                  uint64
+			TotalAlloc                                 uint64
+			HeapSys                                    uint64
+			NumGC                                      uint32
+			PauseTotalNs                               uint64
+			SampleUnixMS                               int64
+			Optimizer                                  map[string]any
+			JanitorRuns, JanitorDeleted, JanitorErrors int64
+			FDs                                        int
+			Process                                    processResourceUsage
+			Limiter                                    map[string]any
+		}{db.Stats(), runtime.NumGoroutine(), memory.HeapAlloc, memory.TotalAlloc, memory.HeapSys, memory.NumGC, memory.PauseTotalNs, time.Now().UnixMilli(), readProcessOptimizer(deps.RunNestingUseCase), janitorRuns.Load(), janitorDeleted.Load(), janitorErrors.Load(), processFDCount(), readProcessUsage(), readProcessLimiter(deps.RunNestingUseCase.Limiter)})
+	})
+	diagnostic.HandleFunc("/profile-stop", func(w http.ResponseWriter, _ *http.Request) {
+		if stopProfile != nil {
+			stopProfile()
+		}
+		w.WriteHeader(204)
 	})
 	diagnostic.HandleFunc("/network-off", func(w http.ResponseWriter, _ *http.Request) { network.disconnect(); w.WriteHeader(204) })
 	diagnostic.HandleFunc("/close-pool", func(w http.ResponseWriter, _ *http.Request) { _ = db.Close(); w.WriteHeader(204) })
@@ -223,6 +257,43 @@ func TestRealProcessWorker(t *testing.T) {
 	go func() { _ = control.Serve(ctl) }()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// Match app.cleanupPreviews scheduling/bounds for the production-like soak.
+	// The production function is private; this helper calls the SAME repository
+	// purge,1000-row batches,5s pass deadline, immediate then once per minute.
+	if os.Getenv("NESTING_STAGE18_SOAK") == "1" {
+		cleanupCtx, cancel := context.WithCancel(ctx)
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			ticker := time.NewTicker(time.Minute)
+			defer ticker.Stop()
+			repo := postgres.NewNestingPreviewRepository(db)
+			for {
+				pass, stop := context.WithTimeout(cleanupCtx, 5*time.Second)
+				janitorRuns.Add(1)
+				for pass.Err() == nil {
+					n, e := repo.PurgeExpired(pass, 1000)
+					if e != nil {
+						if cleanupCtx.Err() == nil {
+							janitorErrors.Add(1)
+						}
+						break
+					}
+					janitorDeleted.Add(n)
+					if n < 1000 {
+						break
+					}
+				}
+				stop()
+				select {
+				case <-cleanupCtx.Done():
+					return
+				case <-ticker.C:
+				}
+			}
+		}()
+		defer func() { cancel(); <-done }()
+	}
 	go func() {
 		<-ctx.Done()
 		c, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -252,7 +323,11 @@ func startProcess(t *testing.T, dsn string, native bool) *processAPI {
 	if explicit := os.Getenv("NESTING_TEST_PROCESS_BINARY"); explicit != "" {
 		binary = explicit
 	}
-	args := []string{"-test.run=^TestRealProcessWorker$", "-test.timeout=180s"}
+	childTimeout := "180s"
+	if os.Getenv("NESTING_STAGE18") == "1" {
+		childTimeout = "30m"
+	}
+	args := []string{"-test.run=^TestRealProcessWorker$", "-test.timeout=" + childTimeout}
 	cmd := exec.Command(binary, args...)
 	if loader := os.Getenv("NESTING_TEST_CHILD_LOADER"); loader != "" {
 		cmd = exec.Command(loader, append([]string{"--library-path", os.Getenv("NESTING_TEST_CHILD_LIBRARY"), binary}, args...)...)
@@ -672,6 +747,13 @@ func TestRealProcessLifecycle(t *testing.T) {
 		if err = f.db.Get(&concurrent, "SELECT count(*) FROM process_calls WHERE ended IS NULL AND pid IN($1,$2)", a.pid, b.pid); err != nil || concurrent != 4 {
 			t.Fatalf("global running=%d %v", concurrent, err)
 		}
+
+		var activeKey string
+		requireProcessGet(t, f.db, &activeKey, "SELECT operation_key::text FROM nesting_operations WHERE state='running' ORDER BY operation_key LIMIT 1")
+		began := time.Now()
+		requireProcessStatus(t, status(b, activeKey, false), 200)
+		requireProcessStatus(t, processRequest(b.base, token, "DELETE", base+"/operations/"+activeKey, "", ""), 204)
+		t.Logf("FULL_QUEUE_READ_CANCEL elapsed=%s", time.Since(began))
 		gate(true, false)
 		accepted := 0
 		stale := 0
@@ -680,6 +762,8 @@ func TestRealProcessLifecycle(t *testing.T) {
 			switch r.status {
 			case 200:
 				accepted++
+			case 408:
+				stale++ // Explicit cancellation under full queue; no commit allowed.
 			case 409:
 				stale++
 			case 503:
@@ -807,6 +891,38 @@ func TestRealProcessLifecycle(t *testing.T) {
 		}
 		a = startProcess(suite, parsed.String(), false)
 	})
+	t.Run("crash-after-optimize-before-commit", func(t *testing.T) {
+		gate(true, true)
+		var before, barriers int
+		requireProcessGet(t, f.db, &before, "SELECT count(*) FROM nesting_runs")
+		requireProcessGet(t, f.db, &barriers, "SELECT count(*) FROM process_commits")
+		key := uuid.NewString()
+		first := launch(a, base, key, body)
+		processEventually(t, func() bool {
+			var n int
+			requireProcessGet(t, f.db, &n, "SELECT count(*) FROM process_commits")
+			return n > barriers
+		})
+		a.stop(true)
+		<-first
+		if _, err = f.db.Exec("UPDATE nesting_operations SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE operation_key=$1", key); err != nil {
+			t.Fatal(err)
+		}
+		terminal := status(b, key, false)
+		requireProcessStatus(t, terminal, 200)
+		if terminal.body["status"] != "failed" {
+			t.Fatal("crashed precommit operation falsely completed")
+		}
+		var after int
+		requireProcessGet(t, f.db, &after, "SELECT count(*) FROM nesting_runs")
+		if before != after {
+			t.Fatal("precommit crash wrote history")
+		}
+		gate(true, false)
+		requireProcessStatus(t, processRequest(b.base, token, "POST", base, key, body), 408)
+		requireProcessStatus(t, processRequest(b.base, token, "POST", base, uuid.NewString(), body), 200)
+		a = startProcess(suite, parsed.String(), false)
+	})
 	t.Run("timeout-at-commit", func(t *testing.T) {
 		gate(true, true)
 		key := uuid.NewString()
@@ -861,8 +977,103 @@ func TestRealProcessLifecycle(t *testing.T) {
 		}
 	})
 
+	t.Run("graceful-active-and-queued", func(t *testing.T) {
+		gate(false, false)
+		before := count()
+		var runs int
+		requireProcessGet(t, f.db, &runs, "SELECT count(*) FROM nesting_runs")
+		keys := []string{uuid.NewString(), uuid.NewString(), uuid.NewString()}
+		replies := make([]<-chan processReply, 0, 3)
+		for _, key := range keys {
+			replies = append(replies, launch(a, base, key, body))
+		}
+		processEventually(t, func() bool {
+			var n int
+			requireProcessGet(t, f.db, &n, "SELECT count(*) FROM nesting_operations WHERE operation_key IN($1,$2,$3)", keys[0], keys[1], keys[2])
+			return n == 3 && count() == before+2
+		})
+		stopped := make(chan struct{})
+		go func() { a.stop(false); close(stopped) }()
+		select {
+		case <-stopped:
+		case <-time.After(6 * time.Second):
+			_ = a.cmd.Process.Kill()
+			<-stopped
+			t.Fatal("graceful shutdown exceeded bounded six-second guard")
+		}
+		for _, r := range replies {
+			reply := <-r
+			if reply.status == 200 {
+				t.Fatal("held optimizer completed during shutdown")
+			}
+		}
+		for _, key := range keys {
+			if _, err = f.db.Exec("UPDATE nesting_operations SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE operation_key=$1", key); err != nil {
+				t.Fatal(err)
+			}
+			terminal := status(b, key, false)
+			requireProcessStatus(t, terminal, 200)
+			if terminal.body["status"] != "failed" {
+				t.Fatal("shutdown left stuck or false-completed operation")
+			}
+		}
+		var after int
+		requireProcessGet(t, f.db, &after, "SELECT count(*) FROM nesting_runs")
+		if after != runs {
+			t.Fatal("shutdown committed partial history")
+		}
+		gate(true, false)
+		a = startProcess(suite, parsed.String(), false)
+	})
 	t.Run("native-smoke", func(t *testing.T) {
 		native := startProcess(t, parsed.String(), true)
 		requireProcessStatus(t, processRequest(native.base, token, "POST", base+"/preview", uuid.NewString(), body), 200)
 	})
+}
+
+func processFDCount() int {
+	entries, err := os.ReadDir("/proc/self/fd")
+	if err != nil {
+		return -1
+	}
+	return len(entries)
+}
+
+type processResourceUsage struct {
+	UserSeconds, SystemSeconds float64
+	MaxRSSKiB                  int64
+	Status                     string
+}
+
+func readProcessUsage() processResourceUsage {
+	var r syscall.Rusage
+	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &r)
+	data, _ := os.ReadFile("/proc/self/status")
+	var status []string
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "VmRSS:") || strings.HasPrefix(line, "Threads:") {
+			status = append(status, line)
+		}
+	}
+	return processResourceUsage{float64(r.Utime.Sec) + float64(r.Utime.Usec)/1e6, float64(r.Stime.Sec) + float64(r.Stime.Usec)/1e6, r.Maxrss, strings.Join(status, "; ")}
+}
+
+// Channel Len is a concurrency-safe observation, without changing limiter code.
+func readProcessLimiter(l *uc.ComputeLimiter) map[string]any {
+	if l == nil {
+		return nil
+	}
+	v := reflect.ValueOf(l).Elem()
+	result := map[string]any{"running": v.FieldByName("running").Len(), "admitted": v.FieldByName("admitted").Len(), "duplicates": v.FieldByName("responses").Len()}
+	if method := reflect.ValueOf(l).MethodByName("LabMetrics"); method.IsValid() {
+		result["observed"] = method.Call(nil)[0].Interface()
+	}
+	return result
+}
+
+func readProcessOptimizer(u *uc.RunNestingUseCase) map[string]any {
+	if method := reflect.ValueOf(u).MethodByName("LabOptimizeMetrics"); method.IsValid() {
+		return method.Call(nil)[0].Interface().(map[string]any)
+	}
+	return nil
 }

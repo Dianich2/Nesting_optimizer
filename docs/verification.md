@@ -136,3 +136,52 @@ Corpus сохраняет исходные523 rows/order и добавляет40
 Для E2E используются scripts/run_stage16_browser.py, test-only browser helper, отдельный собственный `nesting-stage16-db` и private schema. Test DB после приёмки остановлена; перед повторением отдельно подготовьте этот изолированный стенд, не подставляйте рабочий DSN. Wrapper проверяет DB/PID/origin, использует loopback5188, retries0/traceoff и сохраняет JSON report. Финальные прогоны выполнены с `/tmp/nesting-stage16-api-race.test`, API logs отдельно проверены на DATA RACE. Полный рецепт — в отчёте16.
 
 Физический телефон, pinch gesture, Firefox/WebKit (не установлены), исходный SVG и человеческое удобство не объявляются проверенными. Chrome native touch emulation покрыла tap/drag/pan и zoom-кнопки. Нет обещания оптимальности или arbitrary500/120s.
+
+## Этапы 17–19: изолированный audit/load lab
+
+Для этих этапов рабочий `nesting_postgres` и прежний `nesting-reliability-final`
+не используются. `scripts/create_stages17_19_lab.py --metadata <private-path>`
+создаёт собственные уникальные container/network/volume, PostgreSQL/PostGIS
+`nesting_test` и файл mode0600. Скрипт требует уже установленный локальный image;
+не устанавливает новую инфраструктуру и не переиспользует чужие тома. Метаданные
+содержат тестовые секреты: не добавляйте их в Git и общедоступные отчёты.
+
+`run_stages18_19_lab.py` принимает только эти метаданные, проверяет реальные
+container/network/volume IDs, loopback port binding, database/user/PostGIS.
+Пишущий Go fixture дополнительно проверяет private schema и 12 таблиц миграций.
+Runner: CPU2, hard RAM1536MiB, swap off, pids256, read-only source/root,
+deadline25min, DB size2GiB/WAL delta512MiB guards. БД отдельно CPU1/RAM1GiB.
+Долгий idle-in-transaction (>5s) останавливает нагрузку; краткое состояние между
+SQL statements учитывается отдельно. Каждый этап запускается последовательно.
+
+Пример команд после подготовки собственной лаборатории:
+
+```bash
+CGO_ENABLED=0 GOMAXPROCS=2 python3 scripts/build_stages18_lab.py \
+  --backend "$PWD/backend" --output /tmp/nesting-load.test \
+  --evidence /path/to/private-test-artifacts/observer
+python3 scripts/run_stages18_19_lab.py --metadata /private/path/lab.json \
+  --binary /tmp/nesting-load.test --test TestStage18MixedLoad \
+  --output /path/to/test-artifacts/ramp
+python3 scripts/run_stages18_19_lab.py --metadata /private/path/lab.json \
+  --binary /tmp/nesting-load.test --test TestStage18GeometryProfiles \
+  --output /path/to/test-artifacts/geometry
+python3 scripts/summarize_stages18_19.py /path/to/test-artifacts/ramp
+```
+
+Builder использует Go `-overlay` только для bounded atomic counters и histogram
+ожидания очереди. Production `limiter.go` не меняется; его SHA256 сверён с HEAD.
+Сохраняйте overlaid source/JSON рядом с результатами и учитывайте observer overhead.
+Нормальные Go/race/SQL/E2E gates запускаются также без этого overlay.
+`--compare` ограничивает mixed load двумя 30s окнами 8clients/1 или2API;
+`--smoke` — дополнительный короткий 10s тест новых частей harness.
+При одном активном API весь бизнес-трафик, включая UUID replay, идёт в него.
+Второй процесс в этот период обслуживает только отдельную test diagnostics.
+
+Только после успешного этапа18 запускаются `TestRealProcessLifecycle`,
+`TestStage19PendingIdentityChanges`, `TestStage19StatusTransportFaults` и
+`TestStage19PGRecovery`. Последний останавливает/запускает исключительно записанный
+ID собственной БД, после явного barrier marker. `--soak` запускает 10min mixed
+native-all-five-algorithms и5min idle; UUID/tombstones не очищаются.
+Дефекты стенда/невалидный протокол benchmark должны отмечаться отдельно от
+ошибок продукта. Отчёты17–19 содержат фактически выполненные результаты и пропуски.

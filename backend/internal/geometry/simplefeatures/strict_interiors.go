@@ -132,7 +132,9 @@ func (s *strictState) edges(p dg.Polygon) []strictEdge {
 		}
 		left := s.orient(points[prev], points[k], points[next])
 		if left == 0 {
-			s.err = geometry.ErrInvalidPolygon
+			if s.err == nil {
+				s.err = geometry.ErrInvalidPolygon
+			}
 			return
 		}
 		if hole {
@@ -250,6 +252,10 @@ func (s *strictState) midpointLocation(a, b dg.Point, edges []strictEdge) int {
 // classify open subsegments by exact midpoints. This covers crossings through
 // shared vertices and T junctions, which vertex containment alone misses.
 func (s *strictState) contactIntervals(edges, other []strictEdge) bool {
+	return s.intervalsHaveLocation(edges, other, 1)
+}
+
+func (s *strictState) intervalsHaveLocation(edges, other []strictEdge, location int) bool {
 	for _, e := range edges {
 		cuts := []dg.Point{e.a, e.b}
 		for _, f := range other {
@@ -279,7 +285,7 @@ func (s *strictState) contactIntervals(edges, other []strictEdge) bool {
 		})
 		cuts = slices.Compact(cuts)
 		for i := 1; i < len(cuts); i++ {
-			if s.midpointLocation(cuts[i-1], cuts[i], other) == 1 {
+			if s.midpointLocation(cuts[i-1], cuts[i], other) == location {
 				return true
 			}
 			if s.err != nil {
