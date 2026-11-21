@@ -90,6 +90,12 @@ func (uc *RunNestingUseCase) runCoordinated(ctx context.Context, input RunNestin
 	defer stop()
 	release, err := uc.Limiter.Acquire(ctx)
 	if err != nil {
+		// Preserve a monitor failure while the operation waits for capacity.
+		if errors.Is(err, context.Canceled) {
+			if cause := context.Cause(ctx); cause != nil {
+				return output, cause
+			}
+		}
 		return output, err
 	}
 	defer release()
