@@ -32,6 +32,7 @@ import { allProjectPatterns, allProjectSurfaces } from '../features/nesting/api'
 import type { Placement, NestingRequest, NestingResult } from '../features/nesting/api'
 import { NestingCanvas } from '../features/nesting/NestingCanvas'
 import { PlacementProperties } from '../features/nesting/PlacementProperties'
+import { PatternPreviewDialog, PatternThumbnail } from '../features/nesting/PatternPreviewDialog'
 import { layoutMetrics } from '../features/nesting/geometry'
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog'
 import { ApiError } from '../shared/api/http'
@@ -121,6 +122,7 @@ function Workspace({
     const [projectName, setProjectName] = useState('')
     const [surface, setSurface] = useState<ProjectSurface | null>(null)
     const [patterns, setPatterns] = useState<ProjectPattern[]>([])
+    const [patternPreview, setPatternPreview] = useState<ProjectPattern | null>(null)
     const [history, setHistory] = useState<PlacementHistory>({ undo: [], redo: [] })
     const [placements, setPlacements] = useState<Placement[]>([])
     const [error, setError] = useState<string | null>(null)
@@ -675,7 +677,7 @@ function Workspace({
         if (!request.keep_existing) setReplacement(request)
         else void run(request)
     }
-    function prepareRun(preview = false) {
+    function prepareRun() {
         const angles = parseNestingAngles(rotations)
         const parsed = parseQuantityDrafts(quantities)
         if (parsed.error) {
@@ -694,8 +696,7 @@ function Workspace({
             setError(validation)
             return
         }
-        if (preview) void previewRun(request)
-        else if (!keepExisting) setReplacement(request)
+        if (!keepExisting) setReplacement(request)
         else void run(request)
     }
     function exportSaved(format: 'svg' | 'json') {
@@ -1035,7 +1036,21 @@ function Workspace({
                         {!patterns.length && <p>Добавьте лекала на странице проекта.</p>}
                         {patterns.map((item) => (
                             <div className="nesting-pattern" key={item.id}>
-                                <strong>{item.name}</strong>
+                                <div className="nesting-pattern-summary">
+                                    <PatternThumbnail geometry={item.geometry} />
+                                    <div className="nesting-pattern-description">
+                                        <strong>{item.name}</strong>
+                                        <small>Лекало №{item.id}</small>
+                                        <button
+                                        type="button"
+                                        className="nesting-button nesting-pattern-preview-button"
+                                        onClick={() => setPatternPreview(item)}
+                                        aria-label={`Предпросмотр лекала «${item.name}»`}
+                                    >
+                                            Предпросмотр
+                                        </button>
+                                    </div>
+                                </div>
                                 <button
                                     className="nesting-button"
                                     disabled={editingDisabled}
@@ -1227,9 +1242,8 @@ function Workspace({
                                     Учитывать сохранённые размещения
                                 </label>
                                 <p>
-                                    Предпросмотр: рассчитать и показать, не изменяя сохранённую
-                                    раскладку. Расчёт и сохранение сразу записывают результат в
-                                    проект. Предел расчёта — 120 секунд.
+                                    «Рассчитать и сохранить» сразу записывает корректный
+                                    результат в проект. Предел расчёта — 120 секунд.
                                 </p>
                                 {keepExisting && (
                                     <p>
@@ -1238,17 +1252,6 @@ function Workspace({
                                     </p>
                                 )}
                                 <div className="nesting-auto-actions">
-                                    <button
-                                        disabled={
-                                            busy ||
-                                            !!operation ||
-                                            refreshRequired ||
-                                            !patterns.length
-                                        }
-                                        onClick={() => prepareRun(true)}
-                                    >
-                                        Предпросмотр
-                                    </button>
                                     <button
                                         className="nesting-primary"
                                         disabled={
@@ -1360,6 +1363,12 @@ function Workspace({
                         )}
                     </aside>
                 </div>
+            )}
+            {patternPreview && (
+                <PatternPreviewDialog
+                    pattern={patternPreview}
+                    onClose={() => setPatternPreview(null)}
+                />
             )}
             {deleting && selectedPlacement && selectedPlacement.id !== -1 && (
                 <ConfirmDialog

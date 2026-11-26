@@ -1,5 +1,19 @@
 import type { PolygonGeometry } from '../project-resources/types'
 
+/** Axis-aligned dimensions of the original, unplaced outer contour. */
+export function polygonDimensions(polygon: PolygonGeometry) {
+    const points = polygon.exterior.points
+    if (points.length === 0) return { width: 0, height: 0 }
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+    for (const point of points) {
+        minX = Math.min(minX, point.x)
+        maxX = Math.max(maxX, point.x)
+        minY = Math.min(minY, point.y)
+        maxY = Math.max(maxY, point.y)
+    }
+    return { width: maxX - minX, height: maxY - minY }
+}
+
 export function polygonPath(polygon: PolygonGeometry): string {
     return [polygon.exterior, ...polygon.holes]
         .filter((ring) => ring.points.length > 0)

@@ -164,6 +164,84 @@ body:has(.nesting-page) {
     padding-block: 10px;
     border-bottom: 1px solid var(--color-border);
 }
+.nesting-pattern-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+.nesting-pattern-description {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+.nesting-pattern-description strong {
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+.nesting-pattern-description small {
+    color: var(--color-text-muted);
+    font-size: 11px;
+}
+.nesting-pattern-thumbnail {
+    display: block;
+    flex: 0 0 54px;
+    width: 54px;
+    height: 54px;
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+}
+.nesting-page button.nesting-pattern-preview-button {
+    min-height: 28px;
+    padding: 3px 7px;
+    justify-self: start;
+    font-size: 12px;
+    color: var(--color-text);
+}
+.nesting-pattern-dialog {
+    width: min(880px, calc(100% - 32px));
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+}
+.nesting-pattern-dialog h2 {
+    margin: 0;
+}
+.nesting-pattern-large-svg {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-height: 50dvh;
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+}
+.nesting-pattern-preview-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 18px;
+    margin: 0;
+}
+.nesting-pattern-preview-stats > div {
+    display: grid;
+    gap: 4px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-border);
+}
+.nesting-pattern-preview-stats dt {
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+.nesting-pattern-preview-stats dd {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+@media (max-width: 480px) {
+    .nesting-pattern-preview-stats { grid-template-columns: 1fr; }
+    .nesting-pattern-large-svg { aspect-ratio: 1 / 1; }
+}
 .nesting-tabs {
     display: flex;
     flex-wrap: wrap;
