@@ -1,5 +1,7 @@
 import { parseQuantityDrafts } from '../features/nesting/quantityDraft'
 import { draftKeyAction, parseDraftRotation } from '../features/nesting/placementDraft'
+import { placementIssue, transformPattern } from '../features/nesting/manualPlacement'
+import { ManualDraftDialog } from '../features/nesting/ManualDraftDialog'
 import { isPendingSaveScope } from '../features/nesting/saveRecovery'
 import type { SaveOutcome } from '../features/nesting/saveRecovery'
 import {
@@ -84,6 +86,13 @@ export function NestingPage() {
     )
 }
 
+type ManualDraft = {
+    id: number // -1 denotes a new, not-yet-created placement
+    kind: 'new' | 'existing'
+    pose: PlacementPose
+    notice?: string
+}
+
 type WorkspaceActivity =
     | { kind: 'idle' | 'loading' | 'manual' | 'syncing' | 'recovering' }
     | {
@@ -149,6 +158,29 @@ function Workspace({
 
     const pending = useRef(false)
     const [selected, setSelected] = useState<number | null>(null)
+    const [manualDraft, setManualDraft] = useState<ManualDraft | null>(null)
+    const [manualFormRevision, setManualFormRevision] = useState(0)
+    const [showDraftDecision, setShowDraftDecision] = useState(false)
+    const deferredManualAction = useRef<(() => void) | null>(null)
+    function requestManualTransition(action: () => void) {
+        if (!manualDraft) { action(); return }
+        deferredManualAction.current = action
+        setShowDraftDecision(true)
+    }
+    function finishManualTransition() {
+        const action = deferredManualAction.current
+        deferredManualAction.current = null
+        setManualDraft(null)
+        setShowDraftDecision(false)
+        setSelected(null)
+        action?.()
+    }
+    useEffect(() => {
+        if (!manualDraft) return
+        const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+        window.addEventListener('beforeunload', warn)
+        return () => window.removeEventListener('beforeunload', warn)
+    }, [manualDraft])
     const [patternId, setPatternId] = useState<number | null>(null)
     const [adding, setAdding] = useState(false)
     const [draftRotation, setDraftRotation] = useState(0)
@@ -264,40 +296,82 @@ function Workspace({
         const { project_pattern_id, x, y, rotation } = item
         return { project_pattern_id, x, y, rotation }
     }
+    function issueForPose(id: number, pose: PlacementPose) {
+        if (!surface) return 'Поверхность ещё не загружена.'
+        const pattern = patterns.find((item) => item.id === pose.project_pattern_id)
+        if (!pattern) return 'Лекало проекта недоступно.'
+        const shape = transformPattern(pattern.geometry, pose)
+        return placementIssue(surface.geometry, shape,
+            placements.filter((item) => item.id !== id).map((item) => item.geometry))
+    }
+    async function commitManualDraft(next: ManualDraft, forceServer = false) {
+        if (pending.current) return
+        const problem = issueForPose(next.id, next.pose)
+        setManualDraft({ ...next, notice: undefined })
+        setSelected(next.id)
+        setAdding(false)
+        openInspector('properties')
+        if (problem && !forceServer) return
+        await mutate(async () => {
+            try {
+                if (next.kind === 'new') {
+                    const item = await requestCreate(next.pose)
+                    setPlacements((items) => [...items, item])
+                    setHistory((value) => recordPlacement(value, {
+                        id: item.id, before: null, after: poseOf(item),
+                    }))
+                    setSelected(item.id)
+                } else {
+                    const previous = placements.find((item) => item.id === next.id)
+                    if (!previous) throw new Error('placement disappeared')
+                    const item = await requestPatch(previous, next.pose)
+                    setPlacements((items) => items.map((current) =>
+                        current.id === next.id ? item : current))
+                    setHistory((value) => recordPlacement(value, {
+                        id: next.id, before: poseOf(previous), after: poseOf(item),
+                    }))
+                }
+                setManualDraft(null)
+            } catch (caught) {
+                // The server remains authoritative: failed validation, stale data
+                // and network errors must never discard the local draft.
+                setManualDraft({ ...next, notice: getApiErrorMessage(caught) })
+            }
+        })
+    }
+    function editManualDraft(id: number, x: number, y: number, rotation: number) {
+        const previous = manualDraft?.id === id
+            ? manualDraft.pose
+            : placements.find((item) => item.id === id)
+        if (!previous) return null
+        const next: ManualDraft = {
+            id, kind: id === -1 ? 'new' : 'existing',
+            pose: { project_pattern_id: previous.project_pattern_id, x, y,
+                rotation: parseDraftRotation(String(rotation)) ?? rotation },
+        }
+        setManualDraft(next)
+        return next
+    }
     async function add(x: number, y: number, rotation: number) {
         if (!patternId || !adding || editingDisabled || pending.current) return
         if (parseDraftRotation(draftRotationText) === null) {
             setError('Укажите конечный угол поворота.')
             return
         }
-        await mutate(async () => {
-            const item = await requestCreate({ project_pattern_id: patternId, x, y, rotation })
-            setPlacements((items) => [...items, item])
-            setHistory((value) =>
-                recordPlacement(value, { id: item.id, before: null, after: poseOf(item) }),
-            )
-            setSelected(item.id)
-            openInspector('properties')
-            setAdding(false)
-        })
+        await commitManualDraft({ id: -1, kind: 'new',
+            pose: { project_pattern_id: patternId, x, y, rotation } })
     }
     async function update(id: number, x: number, y: number, rotation?: number) {
-        const previous = placements.find((item) => item.id === id)
+        const previous = manualDraft?.id === id
+            ? manualDraft.pose : placements.find((item) => item.id === id)
         if (!previous) return
-        const target = { ...poseOf(previous), x, y, rotation: rotation ?? previous.rotation }
-        if (
-            target.x === previous.x &&
-            target.y === previous.y &&
-            target.rotation === previous.rotation
-        )
-            return
-        await mutate(async () => {
-            const item = await requestPatch(previous, target)
-            setPlacements((items) => items.map((current) => (current.id === id ? item : current)))
-            setHistory((value) =>
-                recordPlacement(value, { id, before: poseOf(previous), after: poseOf(item) }),
-            )
-        })
+        const nextRotation = rotation ?? previous.rotation
+        if (x === previous.x && y === previous.y && nextRotation === previous.rotation) return
+        const next = editManualDraft(id, x, y, nextRotation)
+        if (next) {
+            setManualFormRevision((value) => value + 1)
+            await commitManualDraft(next)
+        }
     }
     async function replay(direction: 'undo' | 'redo') {
         const change = history[direction].at(-1)
@@ -656,7 +730,36 @@ function Workspace({
     }
     const addingPattern = adding ? patterns.find((item) => item.id === patternId) : undefined
     const editingDisabled = busy || !!proposal || refreshRequired || !!operation
-    const selectedPlacement = placements.find((item) => item.id === selected)
+    const manualDraftIssue = manualDraft ? issueForPose(manualDraft.id, manualDraft.pose) : null
+    const visualPlacements = useMemo(() => {
+        if (!manualDraft) return placements
+        const pattern = patterns.find((item) => item.id === manualDraft.pose.project_pattern_id)
+        if (!pattern) return placements
+        const rendered: Placement = {
+            id: manualDraft.id,
+            project_surface_id: surfaceId,
+            updated_at: '',
+            ...manualDraft.pose,
+            geometry: transformPattern(pattern.geometry, manualDraft.pose),
+        }
+        if (manualDraft.kind === 'new') return [...placements, rendered]
+        return placements.map((item) => item.id === manualDraft.id
+            ? { ...item, ...manualDraft.pose, geometry: rendered.geometry } : item)
+    }, [manualDraft, patterns, placements, surfaceId])
+    const selectedPlacement = visualPlacements.find((item) => item.id === selected)
+    function removeSelectedPlacement() {
+        if (editingDisabled) return
+        if (selectedPlacement?.id === -1) {
+            // A new unsaved placement has never been written to PostgreSQL.
+            setManualDraft(null)
+            setSelected(null)
+        } else if (selectedPlacement) {
+            // Existing placements are removed only through explicit confirmation.
+            setDeleting(true)
+        } else if (addingPattern) {
+            setAdding(false)
+        }
+    }
     const metrics = useMemo(
         () => (surface ? layoutMetrics(surface.geometry, placements) : null),
         [surface, placements],
@@ -679,14 +782,16 @@ function Workspace({
                 if (action === null) return
                 event.preventDefault()
                 if (action === 'cancel') setAdding(false)
-                else
-                    changeDraftRotation(
-                        String(parseDraftRotation(String(draftRotation + action)) ?? 0),
-                    )
+                else changeDraftRotation(String(parseDraftRotation(String(draftRotation + action)) ?? 0))
             }}
         >
             <header>
-                <Link to={`/projects/${projectId}/editor`}>← Состав проекта</Link>
+                <Link to={`/projects/${projectId}/editor`} onClick={(event) => {
+                    if (manualDraft) {
+                        event.preventDefault()
+                        requestManualTransition(() => navigate(`/projects/${projectId}/editor`))
+                    }
+                }}>← Состав проекта</Link>
                 {projectName && <p>{projectName}</p>}
                 {surfaceList.length > 1 && (
                     <label>
@@ -695,9 +800,10 @@ function Workspace({
                             value={surfaceId}
                             disabled={busy}
                             onChange={(event) => {
-                                navigate(
-                                    `/projects/${projectId}/surfaces/${Number(event.target.value)}/nesting`,
-                                )
+                                const destination = Number(event.target.value)
+                                requestManualTransition(() => navigate(
+                                    `/projects/${projectId}/surfaces/${destination}/nesting`,
+                                ))
                             }}
                         >
                             {surfaceList.map(({ id, name }) => (
@@ -738,10 +844,10 @@ function Workspace({
                         <button
                             className="nesting-primary"
                             aria-label="Автоматический раскрой"
-                            onClick={() => {
+                            onClick={() => requestManualTransition(() => {
                                 openInspector('automatic')
                                 setAdding(false)
-                            }}
+                            })}
                         >
                             Автораскрой
                         </button>
@@ -750,20 +856,20 @@ function Workspace({
                             <div className="nesting-menu-content">
                                 <button
                                     disabled={editingDisabled || !history.undo.length}
-                                    onClick={() => void replay('undo')}
+                                    onClick={() => requestManualTransition(() => { void replay('undo') })}
                                 >
                                     Отменить действие
                                 </button>
                                 <button
                                     disabled={editingDisabled || !history.redo.length}
-                                    onClick={() => void replay('redo')}
+                                    onClick={() => requestManualTransition(() => { void replay('redo') })}
                                 >
                                     Повторить действие
                                 </button>
-                                <button disabled={busy} onClick={() => exportSaved('svg')}>
+                                <button disabled={busy} onClick={() => requestManualTransition(() => exportSaved('svg'))}>
                                     Экспорт SVG
                                 </button>
-                                <button disabled={busy} onClick={() => exportSaved('json')}>
+                                <button disabled={busy} onClick={() => requestManualTransition(() => exportSaved('json'))}>
                                     Экспорт отчёта JSON
                                 </button>
                             </div>
@@ -901,10 +1007,25 @@ function Workspace({
                     <span role="status">
                         {busy
                             ? 'Синхронизация с сервером…'
+                            : manualDraft
+                              ? manualDraft.notice || (manualDraftIssue ?? 'Положение изменено. Завершите ввод — корректная позиция сохранится автоматически.')
                             : addingPattern
                               ? `Щёлкните по поверхности, чтобы добавить «${addingPattern.name}»`
-                              : 'Ручные изменения сохраняются автоматически'}
+                              : 'Корректные ручные перемещения сохраняются автоматически'}
                     </span>
+                )}
+                {!editingDisabled && (selectedPlacement || addingPattern) && (
+                    <button
+                        type="button"
+                        className="nesting-button nesting-delete-action"
+                        onClick={removeSelectedPlacement}
+                    >
+                        {selectedPlacement?.id === -1
+                            ? 'Убрать несохранённую деталь'
+                            : selectedPlacement
+                              ? `Удалить размещение №${selectedPlacement.id}`
+                              : 'Отменить добавление'}
+                    </button>
                 )}
             </div>
             {surface && (
@@ -919,7 +1040,7 @@ function Workspace({
                                     className="nesting-button"
                                     disabled={editingDisabled}
                                     aria-pressed={adding && item.id === patternId}
-                                    onClick={() => {
+                                    onClick={() => requestManualTransition(() => {
                                         if (adding && patternId === item.id) {
                                             setAdding(false)
                                             return
@@ -931,7 +1052,7 @@ function Workspace({
                                             setPatternsOpen(false)
                                         setSelected(null)
                                         setError(null)
-                                    }}
+                                    })}
                                 >
                                     Добавить на поверхность
                                     <span className="visually-hidden"> · {item.name}</span>
@@ -945,8 +1066,11 @@ function Workspace({
                                 disabled={editingDisabled}
                                 aria-pressed={selected === item.id}
                                 onClick={() => {
-                                    setSelected(item.id)
-                                    setAdding(false)
+                                    if (manualDraft?.id === item.id) return
+                                    requestManualTransition(() => {
+                                        setSelected(item.id)
+                                        setAdding(false)
+                                    })
                                 }}
                             >
                                 №{item.id} · лекало №{item.project_pattern_id}
@@ -955,12 +1079,17 @@ function Workspace({
                     </aside>
                     <NestingCanvas
                         surface={surface.geometry}
-                        placements={placements}
+                        placements={visualPlacements}
                         selected={selected}
                         busy={editingDisabled}
                         adding={!!addingPattern}
                         draftPattern={addingPattern?.geometry}
+                        draftPatternId={addingPattern?.id}
                         draftRotation={draftRotation}
+                        manualDraftId={manualDraft?.id}
+                        manualDraftIssue={manualDraftIssue || manualDraft?.notice}
+                        validatePose={issueForPose}
+                        canEdit={(id) => !manualDraft || manualDraft.id === id}
                         draftControls={
                             addingPattern ? (
                                 <div
@@ -1006,8 +1135,8 @@ function Workspace({
                                         Отменить добавление
                                     </button>
                                     <small>
-                                        R: +90° · Shift+R: −90° · Esc: отмена вне поля ввода. Новое
-                                        лекало начинает с 0°.
+                                        ←/→: ±1° · Shift+←/→: ±15° · R: +90° · Shift+R: −90° · Esc: отмена.
+                                        Для точного угла контур останется видимым при переходе в поле ввода.
                                     </small>
                                     {parseDraftRotation(draftRotationText) === null && (
                                         <span role="alert">Укажите конечный угол.</span>
@@ -1018,8 +1147,11 @@ function Workspace({
                         proposedPlacements={proposal?.result.placements}
                         showSaved={!proposal || proposal.includeSaved}
                         onSelect={(id) => {
-                            setSelected(id)
-                            if (id !== null) setPanel('properties')
+                            if (id === selected) return
+                            requestManualTransition(() => {
+                                setSelected(id)
+                                if (id !== null) setPanel('properties')
+                            })
                         }}
                         onAdd={(x, y, rotation) => void add(x, y, rotation)}
                         onMove={(id, x, y, rotation) => void update(id, x, y, rotation)}
@@ -1036,17 +1168,17 @@ function Workspace({
                             <button
                                 type="button"
                                 aria-pressed={panel === 'automatic'}
-                                onClick={() => {
+                                onClick={() => requestManualTransition(() => {
                                     setPanel('automatic')
                                     setAdding(false)
-                                }}
+                                })}
                             >
                                 Автораскрой
                             </button>
                             <button
                                 type="button"
                                 aria-pressed={panel === 'history'}
-                                onClick={() => setPanel('history')}
+                                onClick={() => requestManualTransition(() => setPanel('history'))}
                             >
                                 История
                             </button>
@@ -1056,13 +1188,17 @@ function Workspace({
                         )}
                         {panel === 'properties' && selectedPlacement && (
                             <PlacementProperties
-                                key={`${selectedPlacement.id}:${selectedPlacement.x}:${selectedPlacement.y}:${selectedPlacement.rotation}`}
+                                key={`${selectedPlacement.id}:${manualFormRevision}`}
                                 placement={selectedPlacement}
                                 busy={editingDisabled}
-                                onSave={(x, y, angle) =>
-                                    void update(selectedPlacement.id, x, y, angle)
-                                }
-                                onDelete={() => setDeleting(true)}
+                                newPlacement={selectedPlacement.id === -1}
+                                onDraftChange={(x, y, angle) => {
+                                    editManualDraft(selectedPlacement.id, x, y, angle)
+                                }}
+                                onSave={(x, y, angle) => {
+                                    const next = editManualDraft(selectedPlacement.id, x, y, angle)
+                                    if (next) void commitManualDraft(next)
+                                }}
                             />
                         )}
                         {panel === 'automatic' && (
@@ -1235,24 +1371,30 @@ function Workspace({
                     </aside>
                 </div>
             )}
-            {deleting && selectedPlacement && (
+            {deleting && selectedPlacement && selectedPlacement.id !== -1 && (
                 <ConfirmDialog
                     title="Удалить размещение?"
                     onClose={() => setDeleting(false)}
                     onConfirm={() =>
                         mutate(async () => {
-                            await requestDelete(selectedPlacement)
+                            // Use persisted data, not the possibly invalid visual draft.
+                            const savedPlacement = placements.find(
+                                (item) => item.id === selectedPlacement.id,
+                            )
+                            if (!savedPlacement) throw new Error('Размещение уже недоступно.')
+                            await requestDelete(savedPlacement)
                             setHistory((value) =>
                                 recordPlacement(value, {
-                                    id: selectedPlacement.id,
-                                    before: poseOf(selectedPlacement),
+                                    id: savedPlacement.id,
+                                    before: poseOf(savedPlacement),
                                     after: null,
                                 }),
                             )
                             setPlacements((items) =>
-                                items.filter((item) => item.id !== selectedPlacement.id),
+                                items.filter((item) => item.id !== savedPlacement.id),
                             )
                             setSelected(null)
+                            setManualDraft(null)
                             setDeleting(false)
                         }, true)
                     }
@@ -1284,6 +1426,27 @@ function Workspace({
                     проверьте статус. Сохранённая раскладка не изменится. Новый расчёт запускается
                     только вручную.
                 </ConfirmDialog>
+            )}
+            {showDraftDecision && manualDraft && (
+                <ManualDraftDialog
+                    newPlacement={manualDraft.kind === 'new'}
+                    onContinue={() => {
+                        setShowDraftDecision(false)
+                        deferredManualAction.current = null
+                    }}
+                    onDiscard={finishManualTransition}
+                    onDelete={async () => {
+                        const previous = placements.find((item) => item.id === manualDraft.id)
+                        if (!previous) throw new Error('Сохранённое размещение не найдено.')
+                        // Explicit, version-checked deletion only after user confirmation.
+                        await requestDelete(previous)
+                        setPlacements((items) => items.filter((item) => item.id !== previous.id))
+                        setHistory((value) => recordPlacement(value, {
+                            id: previous.id, before: poseOf(previous), after: null,
+                        }))
+                        finishManualTransition()
+                    }}
+                />
             )}
             {replacement && (
                 <ConfirmDialog

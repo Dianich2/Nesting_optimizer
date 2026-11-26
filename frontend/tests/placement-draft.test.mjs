@@ -23,6 +23,10 @@ test('draft normalization and invalid raw input', () => {
 test('R Shift+R Esc and unsafe/editable contexts', () => {
     assert.equal(draftKeyAction('r', active), 90)
     assert.equal(draftKeyAction('R', { ...active, shift: true }), -90)
+    assert.equal(draftKeyAction('ArrowLeft', active), -1)
+    assert.equal(draftKeyAction('ArrowRight', active), 1)
+    assert.equal(draftKeyAction('ArrowLeft', { ...active, shift: true }), -15)
+    assert.equal(draftKeyAction('ArrowRight', { ...active, shift: true }), 15)
     assert.equal(draftKeyAction('Escape', active), 'cancel')
     for (const flag of ['editable', 'modal', 'ctrl', 'alt', 'meta']) {
         assert.equal(draftKeyAction('R', { ...active, [flag]: true }), null)

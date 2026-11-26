@@ -1,5 +1,6 @@
 import { draftGhostTransform } from './placementDraft'
 import { useWheelZoom } from '../../shared/geometry/useWheelZoom'
+import type { PlacementPose } from './placementHistory'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { PointerEvent, ReactNode } from 'react'
 import type { PolygonGeometry } from '../project-resources/types'
@@ -23,8 +24,13 @@ interface Props {
     busy: boolean
     adding: boolean
     draftPattern?: PolygonGeometry
+    draftPatternId?: number
     draftRotation?: number
     draftControls?: ReactNode
+    manualDraftId?: number | null
+    manualDraftIssue?: string | null
+    validatePose?: (id: number, pose: PlacementPose) => string | null
+    canEdit?: (id: number) => boolean
     proposedPlacements?: Placement[]
     showSaved: boolean
     onSelect: (id: number | null) => void
@@ -38,8 +44,13 @@ export function NestingCanvas({
     busy,
     adding,
     draftPattern,
+    draftPatternId,
     draftRotation = 0,
     draftControls,
+    manualDraftId = null,
+    manualDraftIssue = null,
+    validatePose,
+    canEdit,
     proposedPlacements,
     showSaved,
     onSelect,
@@ -72,6 +83,7 @@ export function NestingCanvas({
         dx?: number
         dy?: number
         rotation?: number
+        issue?: string | null
     } | null>(null)
     const drag = useRef<{
         pointer: number
@@ -86,6 +98,7 @@ export function NestingCanvas({
     useWheelZoom(svg, visible, setView, () => !drag.current)
     const selection = placements.find((item) => item.id === selected)
     const fit = fitDrawingView(surface, aspect)
+    const ghostPosition = cursor ?? { x: visible.x + visible.width / 2, y: visible.y + visible.height / 2 }
     function snapped(x: number, y: number) {
         return { x: snapCoordinate(x, step, snap), y: snapCoordinate(y, step, snap) }
     }
@@ -147,9 +160,14 @@ export function NestingCanvas({
         const dx = (event.clientX - current.x) * current.scale
         const dy = (event.clientY - current.y) * current.scale
         if (current.item && current.initialAngle !== undefined) {
+            const rotation = rotationAt(event, current.item, current.initialAngle)
             setPreview({
                 id: current.item.id,
-                rotation: rotationAt(event, current.item, current.initialAngle),
+                rotation,
+                issue: validatePose?.(current.item.id, {
+                    project_pattern_id: current.item.project_pattern_id,
+                    x: current.item.x, y: current.item.y, rotation,
+                }),
             })
         } else if (current.item) {
             const target = snapped(current.item.x + dx, current.item.y + dy)
@@ -157,6 +175,10 @@ export function NestingCanvas({
                 id: current.item.id,
                 dx: target.x - current.item.x,
                 dy: target.y - current.item.y,
+                issue: validatePose?.(current.item.id, {
+                    project_pattern_id: current.item.project_pattern_id,
+                    x: target.x, y: target.y, rotation: current.item.rotation,
+                }),
             })
         } else setView({ ...current.view, x: current.view.x - dx, y: current.view.y - dy })
     }
@@ -265,7 +287,10 @@ export function NestingCanvas({
                 tabIndex={0}
                 onPointerDown={start}
                 onPointerMove={move}
-                onPointerLeave={() => setCursor(null)}
+                onPointerLeave={() => {
+                    // Preserve ghost position while the user edits the angle field.
+                    if (!adding) setCursor(null)
+                }}
                 onPointerUp={(event) => stop(event)}
                 onPointerCancel={(event) => stop(event, true)}
                 onLostPointerCapture={(event) => {
@@ -313,10 +338,14 @@ export function NestingCanvas({
                                         : `translate(${preview.dx} ${preview.dy})`
                                     : undefined
                             }
-                            fill={selected === item.id ? '#e9434b' : '#60a5fa'}
+                            fill={preview?.id === item.id && preview.issue
+                                ? '#dc2626' : manualDraftId === item.id
+                                  ? manualDraftIssue ? '#dc2626' : '#f59e0b'
+                                  : selected === item.id ? '#e9434b' : '#60a5fa'}
                             fillOpacity="0.65"
                             fillRule="evenodd"
-                            stroke={selected === item.id ? '#e9434b' : 'currentColor'}
+                            stroke={preview?.id === item.id && preview.issue || manualDraftId === item.id && manualDraftIssue
+                                ? '#dc2626' : selected === item.id ? '#e9434b' : 'currentColor'}
                             strokeWidth={visible.width / 600}
                             tabIndex={busy ? -1 : 0}
                             role="button"
@@ -338,6 +367,10 @@ export function NestingCanvas({
                                     !svg.current
                                 )
                                     return
+                                if (canEdit && !canEdit(item.id)) {
+                                    onSelect(item.id)
+                                    return
+                                }
                                 onSelect(item.id)
                                 drag.current = {
                                     pointer: event.pointerId,
@@ -365,14 +398,18 @@ export function NestingCanvas({
                         pointerEvents="none"
                     />
                 ))}
-                {adding && !pan && !busy && ghost && cursor && (
+                {adding && !pan && !busy && ghost && (
                     <path
                         d={ghost.path}
-                        transform={draftGhostTransform(ghost, cursor, draftRotation)}
+                        transform={draftGhostTransform(ghost, ghostPosition, draftRotation)}
                         data-placement-ghost="true"
-                        fill="#6da5ee"
+                        fill={draftPatternId && validatePose?.(-1, {
+                            project_pattern_id: draftPatternId, x: ghostPosition.x, y: ghostPosition.y, rotation: draftRotation,
+                        }) ? '#dc2626' : '#6da5ee'}
                         fillOpacity="0.35"
-                        stroke="#4089d6"
+                        stroke={draftPatternId && validatePose?.(-1, {
+                            project_pattern_id: draftPatternId, x: ghostPosition.x, y: ghostPosition.y, rotation: draftRotation,
+                        }) ? '#dc2626' : '#4089d6'}
                         strokeDasharray="4 3"
                         strokeWidth="2"
                         vectorEffect="non-scaling-stroke"
@@ -392,6 +429,7 @@ export function NestingCanvas({
                             event.stopPropagation()
                             if (
                                 busy ||
+                                (canEdit && !canEdit(selection.id)) ||
                                 drag.current ||
                                 !event.isPrimary ||
                                 event.button !== 0 ||
@@ -416,6 +454,16 @@ export function NestingCanvas({
                     </circle>
                 )}
             </svg>
+            {(manualDraftId !== null || preview?.issue) && (
+                <div className={preview?.issue || manualDraftIssue
+                    ? 'nesting-manual-feedback nesting-manual-feedback-invalid'
+                    : 'nesting-manual-feedback'}
+                    role={preview?.issue || manualDraftIssue ? 'alert' : 'status'}>
+                    {preview?.issue || manualDraftIssue
+                        ? `Некорректное размещение — не сохранено. ${preview?.issue || manualDraftIssue} Переместите или поверните лекало.`
+                        : 'Положение пока не сохранено. Нажмите «Проверить и сохранить» либо продолжайте редактирование.'}
+                </div>
+            )}
         </div>
     )
 }

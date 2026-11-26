@@ -16,7 +16,7 @@ export function draftKeyAction(
         alt?: boolean
         meta?: boolean
     },
-): 'cancel' | 90 | -90 | null {
+): 'cancel' | 90 | -90 | 15 | -15 | 1 | -1 | null {
     if (
         !options.adding ||
         options.editable ||
@@ -27,7 +27,10 @@ export function draftKeyAction(
     )
         return null
     if (key === 'Escape') return 'cancel'
-    if (options.blocked || key.toLowerCase() !== 'r') return null
+    if (options.blocked) return null
+    if (key === 'ArrowLeft') return options.shift ? -15 : -1
+    if (key === 'ArrowRight') return options.shift ? 15 : 1
+    if (key.toLowerCase() !== 'r') return null
     return options.shift ? -90 : 90
 }
 

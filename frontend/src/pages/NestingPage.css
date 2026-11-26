@@ -360,6 +360,32 @@ body:has(.nesting-page) {
     outline: 2px solid var(--color-accent);
     outline-offset: -3px;
 }
+.manual-draft-dialog-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.nesting-manual-feedback {
+    flex: 0 0 auto;
+    padding: 9px 12px;
+    font-size: 13px;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    overflow-wrap: anywhere;
+}
+.nesting-manual-feedback-invalid {
+    color: #dc2626;
+    background: rgba(220, 38, 38, .08);
+}
+
+.nesting-page button.nesting-delete-action {
+    border-color: #dc2626;
+    color: #dc2626;
+    font-weight: 600;
+}
+.nesting-page button.nesting-delete-action:hover:not(:disabled) {
+    background: rgba(220, 38, 38, .08);
+}
 
 .nesting-workspace aside {
     padding: 16px;
