@@ -5,7 +5,6 @@ import { ManualDraftDialog } from '../features/nesting/ManualDraftDialog'
 import { isPendingSaveScope } from '../features/nesting/saveRecovery'
 import type { SaveOutcome } from '../features/nesting/saveRecovery'
 import {
-    classifyPreviewFailure,
     mayClosePreview,
     parseNestingAngles,
     previewStatusOutcome,
@@ -17,7 +16,6 @@ import type { PlacementHistory, PlacementPose } from '../features/nesting/placem
 import { NestingHistory } from '../features/nesting/NestingHistory'
 import { downloadLayout, exportLayoutSVG } from '../features/nesting/exportLayout'
 import {
-    nestingRequestTimeout,
     readPendingNesting,
     runNesting,
     reconcileSavedNesting,
@@ -97,7 +95,7 @@ type ManualDraft = {
 type WorkspaceActivity =
     | { kind: 'idle' | 'loading' | 'manual' | 'syncing' | 'recovering' }
     | {
-          kind: 'calculating_preview' | 'calculating_saved' | 'saving_preview'
+          kind: 'calculating_saved' | 'saving_preview'
           key: string
           cancelling: boolean
       }
@@ -549,7 +547,7 @@ function Workspace({
                     setSyncError(
                         status.status === 'running'
                             ? 'Сервер выполняет этот запуск.'
-                            : 'Статус пока неизвестен: запрос ещё может быть в пути. Повторите тот же запуск с прежним ключом; новый расчёт автоматически не запускается.',
+                            : 'Статус предпросмотра пока неизвестен. Проверьте статус позднее или закройте ожидание.',
                     )
                 }
             },
@@ -557,106 +555,12 @@ function Workspace({
             { kind: 'recovering' },
         )
     }
-    async function previewRun(request: NestingRequest, retry?: PendingNesting) {
-        await mutate(async () => {
-            const validation = validateNestingRequest(retry?.request ?? request)
-            if (validation) {
-                setError(validation)
-                return
-            }
-            const began = performance.now()
-            setResult(null)
-            setResponseSeconds(null)
-            const current: PendingNesting = retry ?? {
-                kind: 'preview',
-                key: crypto.randomUUID(),
-                userId,
-                projectId,
-                surfaceId,
-                request,
-            }
-            sessionStorage.setItem(storageKey, JSON.stringify(current))
-            setOperation(current)
-            setProposal(null)
-            setActivity({ kind: 'calculating_preview', key: current.key, cancelling: false })
-            try {
-                const result = await authorizedRequest<NestingResult>(`${base}/nesting/preview`, {
-                    method: 'POST',
-                    signal: AbortSignal.timeout(nestingRequestTimeout),
-                    headers: { 'Idempotency-Key': current.key },
-                    body: JSON.stringify(current.request),
-                })
-                setResponseSeconds((performance.now() - began) / 1000)
-                setProposal({
-                    result,
-                    request: current.request,
-                    includeSaved: current.request.keep_existing,
-                })
-                sessionStorage.removeItem(storageKey)
-                setOperation(null)
-                setSyncError(null)
-            } catch (caught) {
-                const category = classifyPreviewFailure(caught, !!retry)
-                if (category === 'rejected') {
-                    sessionStorage.removeItem(storageKey)
-                    setOperation(null)
-                    setError(getApiErrorMessage(caught))
-                    setSyncError(null)
-                    return
-                }
-                if (category === 'check_status') {
-                    try {
-                        const status = await authorizedRequest<NestingOperationStatus>(
-                            `${base}/nesting/operations/${current.key}?kind=preview`,
-                            { signal: AbortSignal.timeout(10_000) },
-                        )
-                        const outcome = previewStatusOutcome(current, status)
-                        if (outcome.kind === 'completed') {
-                            setProposal(outcome.proposal)
-                            openInspector('automatic')
-                            sessionStorage.removeItem(storageKey)
-                            setOperation(null)
-                            setSyncError(null)
-                            return
-                        }
-                        if (outcome.kind === 'failed') {
-                            sessionStorage.removeItem(storageKey)
-                            setOperation(null)
-                            setError(
-                                outcome.failure
-                                    ? getApiErrorMessage(
-                                          new ApiError(
-                                              500,
-                                              outcome.failure.code,
-                                              outcome.failure.message,
-                                          ),
-                                      )
-                                    : getApiErrorMessage(caught),
-                            )
-                            return
-                        }
-                    } catch {
-                        /* Retain the key when reconciliation is unavailable. */
-                    }
-                    setError(getApiErrorMessage(caught))
-                }
-                setSyncError(
-                    category === 'check_status'
-                        ? 'Этот повтор отклонён сервером. Исход предыдущего запроса ещё не подтверждён. Проверьте статус или закройте ожидание предпросмотра.'
-                        : caught instanceof ApiError
-                          ? 'Получен ответ об ошибке, но итог операции пока неизвестен. Проверьте статус или повторите запрос с тем же ключом.'
-                          : 'Ответ предпросмотра не получен. Проверьте статус или повторите запрос с тем же ключом.',
-                )
-            }
-        })
-    }
-
     async function cancelExecution() {
         if (!execution || cancelling) return
         setActivity({ ...execution, cancelling: true })
         try {
             await authorizedRequest<void>(
-                `${base}/nesting/operations/${execution.key}${execution.kind === 'calculating_preview' ? '?kind=preview' : ''}`,
+                `${base}/nesting/operations/${execution.key}`,
                 {
                     method: 'DELETE',
                     signal: AbortSignal.timeout(10_000),
@@ -913,16 +817,14 @@ function Workspace({
                                 : 'Запросить отмену сохранения'}
                         </button>
                     )}
-                    <button
-                        disabled={busy}
-                        onClick={() =>
-                            void (operation.kind === 'preview'
-                                ? previewRun(operation.request, operation)
-                                : run(operation.request, false, operation))
-                        }
-                    >
-                        Повторить тот же запуск
-                    </button>
+                    {operation.kind !== 'preview' && (
+                        <button
+                            disabled={busy}
+                            onClick={() => void run(operation.request, false, operation)}
+                        >
+                            Повторить тот же запуск
+                        </button>
+                    )}
                 </div>
             )}
             {syncError && (
@@ -968,11 +870,9 @@ function Workspace({
                         <span role="status">
                             {cancelling
                                 ? 'Останавливаем расчёт…'
-                                : execution.kind === 'calculating_preview'
-                                  ? 'Расчёт предпросмотра…'
-                                  : execution.kind === 'saving_preview'
-                                    ? 'Сохранение предпросмотра…'
-                                    : 'Расчёт с сохранением…'}
+                                : execution.kind === 'saving_preview'
+                                  ? 'Сохранение предпросмотра…'
+                                  : 'Расчёт с сохранением…'}
                         </span>
                         <button
                             className="nesting-button"
