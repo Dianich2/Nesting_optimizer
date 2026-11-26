@@ -1093,54 +1093,19 @@ function Workspace({
                         draftControls={
                             addingPattern ? (
                                 <div
-                                    className="nesting-draft-tools"
-                                    role="toolbar"
+                                    className="nesting-draft-tools nesting-draft-tools-compact"
+                                    role="status"
                                     aria-label="Постановка лекала"
                                 >
-                                    <strong>На курсоре: {addingPattern.name}</strong>
-                                    <label>
-                                        Поворот до постановки, °
-                                        <input
-                                            type="number"
-                                            step="any"
-                                            value={draftRotationText}
-                                            disabled={editingDisabled}
-                                            onChange={(event) =>
-                                                changeDraftRotation(event.target.value)
-                                            }
-                                            onBlur={() => {
-                                                const angle = parseDraftRotation(draftRotationText)
-                                                if (angle !== null)
-                                                    changeDraftRotation(String(angle))
-                                            }}
-                                            aria-invalid={
-                                                parseDraftRotation(draftRotationText) === null
-                                            }
-                                        />
-                                    </label>
-                                    <div className="nesting-tools">
-                                        {[0, 90, 180, 270].map((angle) => (
-                                            <button
-                                                type="button"
-                                                key={angle}
-                                                aria-pressed={draftRotation === angle}
-                                                disabled={editingDisabled}
-                                                onClick={() => changeDraftRotation(String(angle))}
-                                            >
-                                                {angle}°
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <button type="button" onClick={() => setAdding(false)}>
-                                        Отменить добавление
-                                    </button>
+                                    <strong>Добавление: {addingPattern.name}</strong>
+                                    <output aria-label="Угол поворота до постановки">
+                                        Угол: <strong>{format(draftRotation)}°</strong>
+                                    </output>
                                     <small>
-                                        ←/→: ±1° · Shift+←/→: ±15° · R: +90° · Shift+R: −90° · Esc: отмена.
-                                        Для точного угла контур останется видимым при переходе в поле ввода.
+                                        ←/→ — поворот на 1° · Shift+←/→ — на 15° · R / Shift+R — на 90°.
+                                        Щёлкните по поверхности для постановки; Esc — отмена.
+                                        После постановки точный угол и координаты доступны в «Свойствах».
                                     </small>
-                                    {parseDraftRotation(draftRotationText) === null && (
-                                        <span role="alert">Укажите конечный угол.</span>
-                                    )}
                                 </div>
                             ) : null
                         }
@@ -1321,27 +1286,52 @@ function Workspace({
                             />
                         )}
                         {panel === 'properties' && metrics && (
-                            <section>
+                            <section className="nesting-metrics">
                                 <h2>Текущая раскладка</h2>
-                                <p>Доступная площадь {format(metrics.surfaceArea)}</p>
-                                {metrics.holesArea > 0 && (
-                                    <p>
-                                        Внешний контур {format(metrics.outerArea)} · отверстия{' '}
-                                        {format(metrics.holesArea)}
-                                    </p>
-                                )}
-                                <p>Занято {format(metrics.placedArea)}</p>
-                                <p>Свободно {format(metrics.freeArea)}</p>
-                                <p>
-                                    Коэффициент {format(metrics.utilization)} · использование{' '}
-                                    {format(metrics.utilization * 100)}%
-                                </p>
-                                <p>Размещений {placements.length}</p>
-                                {Object.entries(metrics.counts).map(([id, count]) => (
-                                    <p key={id}>
-                                        Лекало №{id} — {count}
-                                    </p>
-                                ))}
+                                <dl className="nesting-metrics-list">
+                                    <div>
+                                        <dt>Доступная площадь</dt>
+                                        <dd>{format(metrics.surfaceArea)}</dd>
+                                    </div>
+                                    {metrics.holesArea > 0 && (
+                                        <>
+                                            <div>
+                                                <dt>Внешний контур</dt>
+                                                <dd>{format(metrics.outerArea)}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>Отверстия</dt>
+                                                <dd>{format(metrics.holesArea)}</dd>
+                                            </div>
+                                        </>
+                                    )}
+                                    <div>
+                                        <dt>Занято</dt>
+                                        <dd>{format(metrics.placedArea)}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Свободно</dt>
+                                        <dd>{format(metrics.freeArea)}</dd>
+                                    </div>
+                                    <div className="nesting-metrics-highlight">
+                                        <dt>Использование</dt>
+                                        <dd>{format(metrics.utilization * 100)}%</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Коэффициент</dt>
+                                        <dd>{format(metrics.utilization)}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Размещений</dt>
+                                        <dd>{placements.length}</dd>
+                                    </div>
+                                    {Object.entries(metrics.counts).map(([id, count]) => (
+                                        <div key={id}>
+                                            <dt>Лекало №{id}</dt>
+                                            <dd>{count}</dd>
+                                        </div>
+                                    ))}
+                                </dl>
                             </section>
                         )}
                         {result && (

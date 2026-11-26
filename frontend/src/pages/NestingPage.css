@@ -356,6 +356,62 @@ body:has(.nesting-page) {
 .nesting-draft-tools small {
     flex-basis: 100%;
 }
+.nesting-draft-tools-compact {
+    gap: 6px 14px;
+    padding-block: 9px;
+}
+.nesting-draft-tools-compact output {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.nesting-draft-tools-compact small {
+    display: block;
+    margin-top: 3px;
+    line-height: 1.65;
+    color: var(--color-text-muted);
+}
+.nesting-metrics-list {
+    display: grid;
+    gap: 0;
+    margin: 0 0 14px;
+}
+.nesting-metrics-list > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 9px;
+    min-width: 0;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--color-border);
+}
+.nesting-metrics-list dt {
+    min-width: 0;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+.nesting-metrics-list dd {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+    overflow-wrap: anywhere;
+}
+.nesting-metrics-list > .nesting-metrics-highlight dd {
+    color: var(--color-accent);
+    font-size: 15px;
+}
+.nesting-placement-properties > .nesting-tools {
+    margin-bottom: 12px;
+}
+.nesting-placement-properties > small {
+    display: block;
+    margin-top: 10px;
+    padding-top: 8px;
+    line-height: 1.65;
+    color: var(--color-text-muted);
+}
 .nesting-canvas svg:focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: -3px;

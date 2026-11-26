@@ -51,7 +51,8 @@ export function NestingHistory({
     const current = state?.query === query ? state : undefined
     return (
         <section aria-label="История запусков" className="nesting-history">
-            <h2>История запусков</h2>
+            <h2>История сохранённых раскладок</h2>
+            <p>Здесь показываются только успешно сохранённые раскладки. Предпросмотры и отменённые расчёты пока в этот список не входят.</p>
             {!current && <p role="status">Загружаем историю…</p>}
             {current?.error && (
                 <p role="alert">

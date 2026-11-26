@@ -111,7 +111,10 @@ export function placementIssue(surface: PolygonGeometry, candidate: PolygonGeome
     if (vertices.some((p) => !Number.isFinite(p.x) || !Number.isFinite(p.y))) return 'Некорректные координаты.'
     const totalOtherVertices = others.reduce((sum, item) => sum + ringPoints(item).flat().length, 0)
     if (vertices.length * totalOtherVertices > 250_000) {
-        return 'Геометрия слишком сложна для быстрой проверки. Нажмите «Проверить и сохранить», чтобы проверить её на сервере.'
+        // The browser has reached its quick-check budget. The backend will
+        // still validate exact containment and intersections before writing.
+        // Do not block a placement merely because the local preview is too complex.
+        return null
     }
     if (vertices.some((p) => inRing(p, boundary) === 'outside') || boundaryCrosses(candidate, {exterior:surface.exterior, holes:[]})) {
         return 'Деталь выходит за границу поверхности.'

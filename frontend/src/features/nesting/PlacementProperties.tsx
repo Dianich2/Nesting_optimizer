@@ -33,6 +33,7 @@ export function PlacementProperties({ placement, busy, onSave, onDraftChange, ne
     }
     return (
         <form
+            className="nesting-placement-properties"
             onBlur={(event) => {
                 // Moving between properties and preset buttons is still one edit.
                 if (event.currentTarget.contains(event.relatedTarget)) return
