@@ -384,11 +384,11 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
     await page.getByRole('spinbutton', { name: 'Прямоугольное лекало' }).fill('0')
     // P1: obvious invalid inputs never send POST or create pending storage.
     let validationPosts = 0
-    await page.route('**/nesting/preview', async (route) => {
+    await page.route('**/nesting', async (route) => {
         validationPosts++
         await route.continue()
     })
-    const previewButton = page.getByRole('button', { name: 'Предпросмотр', exact: true })
+    const runButton = page.getByRole('button', { name: 'Рассчитать и сохранить', exact: true })
     const pendingPreviewCount = () =>
         page.evaluate(
             () =>
@@ -396,83 +396,28 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
                     .length,
         )
     await page.getByRole('spinbutton', { name: 'Угловое лекало' }).fill('501')
-    await previewButton.click()
+    await runButton.click()
     await expect(page.getByRole('alert')).toContainText('целое число от 0 до 500')
     await expect.poll(pendingPreviewCount).toBe(0)
-    await expect(previewButton).toBeEnabled()
+    await expect(runButton).toBeEnabled()
     await page.getByRole('spinbutton', { name: 'Угловое лекало' }).fill('1')
     await page
         .getByLabel('Углы через запятую')
         .fill(Array.from({ length: 37 }, (_, i) => i).join(','))
-    await previewButton.click()
+    await runButton.click()
     await expect(page.getByRole('alert')).toContainText('не более 36')
     expect(validationPosts).toBe(0)
     await expect.poll(pendingPreviewCount).toBe(0)
     await page.getByLabel('Углы через запятую').fill('0,90,180,270')
-    await page.unroute('**/nesting/preview')
+    await page.unroute('**/nesting')
 
-    // Real API rejection AFTER a valid UI request: alter only the submitted body.
-    await page.route(
-        '**/nesting/preview',
-        async (route) => {
-            const body = route.request().postDataJSON()
-            body.patterns[0].quantity = 501
-            const response = await route.fetch({ postData: JSON.stringify(body) })
-            expect(response.status()).toBe(400)
-            await route.fulfill({ response })
-        },
-        { times: 1 },
-    )
-    await previewButton.click()
-    await expect(page.getByRole('alert')).toContainText('не более 500')
-    await expect(previewButton).toBeEnabled()
-    await expect.poll(pendingPreviewCount).toBe(0)
-
-    // An unregistered request may still be in transit. Closing is explicit and
-    // read-only; a DELETE 404 does not mean the future POST was cancelled.
-    await page.route('**/nesting/preview', (route) => route.abort('failed'), { times: 1 })
-    await previewButton.click()
-    await page.getByRole('button', { name: 'Проверить статус', exact: true }).click()
-    await expect(page.getByText(/Статус пока неизвестен:/)).toBeVisible()
-    await page.evaluate(() => sessionStorage.setItem('unrelated-save', 'preserve'))
-    await page.getByRole('button', { name: 'Закрыть ожидание предпросмотра', exact: true }).click()
-    const closeWaiting = page.getByRole('dialog', { name: 'Закрыть ожидание предпросмотра?' })
-    await expect(closeWaiting).toContainText('Серверный расчёт может продолжаться')
-    await closeWaiting.getByRole('button', { name: 'Закрыть ожидание', exact: true }).click()
-    await expect.poll(pendingPreviewCount).toBe(0)
-    expect(await page.evaluate(() => sessionStorage.getItem('unrelated-save'))).toBe('preserve')
-    await expect(previewButton).toBeEnabled()
-
-    const retryKeys = []
-    await page.route('**/nesting/preview', async (route) => {
-        retryKeys.push(route.request().headers()['idempotency-key'])
-        if (retryKeys.length === 1) await route.abort('failed')
-        else await route.continue()
-    })
-    await previewButton.click()
-    await page.getByRole('button', { name: 'Проверить статус', exact: true }).click()
-    await expect(page.getByText(/Статус пока неизвестен:/)).toBeVisible()
-    await page.getByRole('button', { name: 'Запросить отмену предпросмотра', exact: true }).click()
-    await expect(page.getByRole('alert')).toContainText(
-        'Сервер ещё не начал расчёт или уже завершил его.',
-    )
-    expect(await pendingPreviewCount()).toBe(1)
-    await page.getByRole('button', { name: 'Повторить тот же запуск', exact: true }).click()
-    await expect(page.getByText(/Предпросмотр · размещено 1 из 1/)).toBeVisible()
-    expect(retryKeys.length).toBe(2)
-    expect(retryKeys[0]).toBe(retryKeys[1])
-    await page.unroute('**/nesting/preview')
-    await page.getByRole('button', { name: 'Закрыть предпросмотр', exact: true }).click()
-    await page.getByRole('button', { name: 'Предпросмотр', exact: true }).click()
-    await expect(page.getByText(/Предпросмотр · размещено 1 из 1/)).toBeVisible()
-    await expect(placement).toHaveCount(2)
-    await page.screenshot({ path: testInfo.outputPath('raskroj-light-preview.png') })
-    await page.getByRole('button', { name: 'Закрыть предпросмотр' }).click()
+    // The save-specific rejection and lost-response checks below cover recovery.
+    // Cancellation must leave the saved layout unchanged.
     await expect(placement).toHaveCount(2)
     await page.getByRole('combobox', { name: 'Алгоритм', exact: true }).selectOption('hybrid')
     await page.getByRole('spinbutton', { name: 'Прямоугольное лекало' }).fill('60')
-    await page.getByRole('button', { name: 'Предпросмотр', exact: true }).click()
-    const running = page.getByText('Расчёт предпросмотра…', { exact: true })
+    await runButton.click()
+    const running = page.getByText('Расчёт с сохранением…', { exact: true })
     await expect(running).toBeVisible()
     const beforeZoom = await canvas.getAttribute('viewBox')
     await canvas.hover()
@@ -487,6 +432,8 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
     await page.getByRole('button', { name: 'Отменить расчёт' }).click()
     await cancelled
     await expect(page.getByRole('alert')).toContainText('Расчёт отменён')
+    await expect.poll(pendingPreviewCount).toBe(0)
+    await expect(runButton).toBeEnabled()
     await expect(placement).toHaveCount(2)
     await page.getByRole('button', { name: 'Уместить поверхность' }).click()
     await page.getByRole('combobox', { name: 'Алгоритм', exact: true }).selectOption('baseline')
@@ -639,62 +586,58 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
     await page.getByRole('button', { name: 'Автоматический раскрой', exact: true }).click()
     await page.getByRole('spinbutton', { name: 'Угловое лекало' }).fill('0')
     await page.getByRole('spinbutton', { name: 'Прямоугольное лекало' }).fill('1')
-    let exactPreview
-    let previewPosts = 0
-    let resolveLost
-    const lost = new Promise((resolve) => {
-        resolveLost = resolve
-    })
-    await page.route('**/nesting/preview', async (route) => {
-        previewPosts++
-        const response = await route.fetch()
-        exactPreview = await response.json()
-        await route.abort('failed')
-        resolveLost()
-    })
-    await page.getByRole('button', { name: 'Предпросмотр', exact: true }).click()
-    await lost
-    await expect(page.getByRole('button', { name: 'Проверить статус', exact: true })).toBeVisible()
-    await page.reload()
-    await page.getByRole('button', { name: 'Проверить статус', exact: true }).click()
-    await expect(page.getByText(/Предпросмотр · размещено/)).toBeVisible()
-    expect(previewPosts).toBe(1)
-    await page.unroute('**/nesting/preview')
-    await expect(
-        page.getByRole('button', { name: 'Сохранить этот предпросмотр', exact: true }),
-    ).toBeEnabled()
+    // Commit a real direct save, lose its response, and recover it after reload.
     let exactSaved
-    let previewSaveKey
-    await page.route(
-        '**/nesting',
-        async (route) => {
-            expect(route.request().postDataJSON().preview_id).toBe(exactPreview.preview_id)
-            previewSaveKey = route.request().headers()['idempotency-key']
-            const response = await route.fetch()
-            expect(response.status()).toBe(200)
-            exactSaved = await response.json()
-            await route.abort('failed')
-        },
-        { times: 1 },
-    )
-    await page.getByRole('button', { name: 'Сохранить этот предпросмотр', exact: true }).click()
-    await expect(page.getByRole('button', { name: 'Проверить статус', exact: true })).toBeEnabled()
-    expect((await readSave()).request.preview_id).toBe(exactPreview.preview_id)
-    await page.getByRole('button', { name: 'Проверить статус', exact: true }).click()
+    let directSaveKey
+    let directSaveRequest
+    let placementsURL
+    let authorization
+    let directPosts = 0
+    await page.route('**/nesting', async (route) => {
+        if (route.request().method() !== 'POST') return route.continue()
+        directPosts++
+        const original = route.request()
+        directSaveKey = original.headers()['idempotency-key']
+        directSaveRequest = original.postDataJSON()
+        expect(directSaveRequest.preview_id).toBeUndefined()
+        placementsURL = original.url().replace(/\/nesting$/, '/placements')
+        authorization = original.headers().authorization
+        const response = await route.fetch()
+        expect(response.status()).toBe(200)
+        exactSaved = await response.json()
+        await route.abort('failed')
+    })
+    await page.getByRole('button', { name: 'Рассчитать и сохранить', exact: true }).click()
+    const checkStatus = page.getByRole('button', { name: 'Проверить статус', exact: true })
+    await expect(checkStatus).toBeEnabled()
+    expect(directSaveKey).toBeTruthy()
+    expect((await readSave()).key).toBe(directSaveKey)
+    expect((await readSave()).request).toEqual(directSaveRequest)
+    await page.reload()
+    await expect(checkStatus).toBeEnabled()
+    expect((await readSave()).key).toBe(directSaveKey)
+    await checkStatus.click()
+    await expect.poll(pendingPreviewCount).toBe(0)
     await expect(placement).toHaveCount(4)
-    expect(previewPosts).toBe(1)
-    expect(previewSaveKey).toBeTruthy()
+    expect(directPosts).toBe(1)
+    await page.unroute('**/nesting')
 
-    const poses = (items) =>
-        items.map(({ project_pattern_id, x, y, rotation, geometry }) => ({
-            project_pattern_id,
-            x,
-            y,
-            rotation,
-            geometry,
-        }))
-    expect(poses(exactSaved.placements)).toEqual(poses(exactPreview.placements))
-    expect(exactSaved.placements.every((item) => item.id > 0)).toBe(true)
+    expect(exactSaved.placements).toHaveLength(1)
+    expect(exactSaved.placements[0].id).toBeGreaterThan(0)
+    const response = await page.request.get(placementsURL, {
+        headers: { Authorization: authorization },
+    })
+    expect(response.status()).toBe(200)
+    const { items } = await response.json()
+    expect(items).toHaveLength(4)
+    const savedPlacement = exactSaved.placements[0]
+    expect(items.find((item) => item.id === savedPlacement.id)).toMatchObject({
+        project_pattern_id: savedPlacement.project_pattern_id,
+        x: savedPlacement.x,
+        y: savedPlacement.y,
+        rotation: savedPlacement.rotation,
+        geometry: savedPlacement.geometry,
+    })
     await expect(placement).toHaveCount(4)
     await page.getByRole('button', { name: 'История', exact: true }).click()
     await expect(page.getByRole('table').getByRole('row')).toHaveCount(3)

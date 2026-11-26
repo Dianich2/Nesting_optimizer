@@ -5,12 +5,9 @@ import { ManualDraftDialog } from '../features/nesting/ManualDraftDialog'
 import { isPendingSaveScope } from '../features/nesting/saveRecovery'
 import type { SaveOutcome } from '../features/nesting/saveRecovery'
 import {
-    mayClosePreview,
     parseNestingAngles,
-    previewStatusOutcome,
     validateNestingRequest,
-} from '../features/nesting/previewRecovery'
-import type { NestingOperationStatus } from '../features/nesting/previewRecovery'
+} from '../features/nesting/nestingValidation'
 import { confirmReplay, recordPlacement } from '../features/nesting/placementHistory'
 import type { PlacementHistory, PlacementPose } from '../features/nesting/placementHistory'
 import { NestingHistory } from '../features/nesting/NestingHistory'
@@ -33,7 +30,6 @@ import { PlacementProperties } from '../features/nesting/PlacementProperties'
 import { PatternPreviewDialog, PatternThumbnail } from '../features/nesting/PatternPreviewDialog'
 import { layoutMetrics } from '../features/nesting/geometry'
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog'
-import { ApiError } from '../shared/api/http'
 import './NestingPage.css'
 
 const format = (value: number) => value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })
@@ -131,11 +127,6 @@ function Workspace({
     const busy = activity.kind !== 'idle'
     const execution = 'key' in activity ? activity : null
     const cancelling = execution?.cancelling ?? false
-    const [proposal, setProposal] = useState<{
-        result: NestingResult
-        includeSaved: boolean
-        request: NestingRequest
-    } | null>(null)
     const [patternsOpen, setPatternsOpen] = useState(() => window.innerWidth > 700)
     const [inspectorOpen, setInspectorOpen] = useState(() => window.innerWidth > 700)
     useEffect(() => {
@@ -195,7 +186,6 @@ function Workspace({
     const [quantities, setQuantities] = useState<Record<number, string>>({})
     const [rotations, setRotations] = useState('0, 90, 180, 270')
     const [keepExisting, setKeepExisting] = useState(true)
-    const [closePreview, setClosePreview] = useState<PendingNesting | null>(null)
     const [replacement, setReplacement] = useState<NestingRequest | null>(null)
     const [historyRevision, setHistoryRevision] = useState(0)
     const [result, setResult] = useState<NestingResult | null>(null)
@@ -450,7 +440,6 @@ function Workspace({
             }
             sessionStorage.setItem(storageKey, JSON.stringify(current))
             setOperation(current)
-            setProposal(null)
             setActivity({
                 kind: current.request.preview_id ? 'saving_preview' : 'calculating_saved',
                 key: current.key,
@@ -488,68 +477,30 @@ function Workspace({
     async function checkOperation(current: PendingNesting) {
         await mutate(
             async () => {
-                if (current.kind === undefined) {
-                    if (!isPendingSaveScope(current, userId, projectId, surfaceId)) return
-                    const outcome = await reconcileSavedNesting(
-                        authorizedRequest,
-                        base,
-                        current.key,
-                        (response) => {
-                            sessionStorage.setItem(
-                                storageKey,
-                                JSON.stringify({ ...current, confirmed: true }),
-                            )
-                            setOperation({ ...current, confirmed: true })
-                            setActivity({ kind: 'syncing' })
-                            setResult(response)
-                            setResultAlgorithm(current.request.algorithm)
-                            setHistory({ undo: [], redo: [] })
-                            setHistoryRevision((value) => value + 1)
-                            setSelected(null)
-                        },
-                        setPlacements,
-                    )
-                    finishSavedOutcome(outcome, () => {
-                        sessionStorage.removeItem(storageKey)
-                        setOperation(null)
-                    })
-                    return
-                }
-                const status = await authorizedRequest<NestingOperationStatus>(
-                    `${base}/nesting/operations/${current.key}${current.kind === 'preview' ? '?kind=preview' : ''}`,
-                    {
-                        signal: AbortSignal.timeout(10_000),
+                if (!isPendingSaveScope(current, userId, projectId, surfaceId)) return
+                const outcome = await reconcileSavedNesting(
+                    authorizedRequest,
+                    base,
+                    current.key,
+                    (response) => {
+                        sessionStorage.setItem(
+                            storageKey,
+                            JSON.stringify({ ...current, confirmed: true }),
+                        )
+                        setOperation({ ...current, confirmed: true })
+                        setActivity({ kind: 'syncing' })
+                        setResult(response)
+                        setResultAlgorithm(current.request.algorithm)
+                        setHistory({ undo: [], redo: [] })
+                        setHistoryRevision((value) => value + 1)
+                        setSelected(null)
                     },
+                    setPlacements,
                 )
-                if (status.status === 'completed' && status.result) {
-                    if (current.kind === 'preview') {
-                        openInspector('automatic')
-                        const recovered = previewStatusOutcome(current, status)
-                        if (recovered.kind !== 'completed') return
-                        setProposal(recovered.proposal)
-                        sessionStorage.removeItem(storageKey)
-                        setOperation(null)
-                        setSyncError(null)
-                        return
-                    }
-                } else if (status.status === 'failed') {
+                finishSavedOutcome(outcome, () => {
                     sessionStorage.removeItem(storageKey)
                     setOperation(null)
-                    setRefreshRequired(false)
-                    setSyncError(
-                        status.failure
-                            ? getApiErrorMessage(
-                                  new ApiError(500, status.failure.code, status.failure.message),
-                              )
-                            : 'Сервер отклонил запуск. Раскладка сохранена в прежнем состоянии.',
-                    )
-                } else {
-                    setSyncError(
-                        status.status === 'running'
-                            ? 'Сервер выполняет этот запуск.'
-                            : 'Статус предпросмотра пока неизвестен. Проверьте статус позднее или закройте ожидание.',
-                    )
-                }
+                })
             },
             false,
             { kind: 'recovering' },
@@ -574,12 +525,6 @@ function Workspace({
                     : current,
             )
         }
-    }
-    function saveProposal() {
-        if (!proposal?.result.preview_id) return
-        const request = { ...proposal.request, preview_id: proposal.result.preview_id }
-        if (!request.keep_existing) setReplacement(request)
-        else void run(request)
     }
     function prepareRun() {
         const angles = parseNestingAngles(rotations)
@@ -634,7 +579,7 @@ function Workspace({
         })
     }
     const addingPattern = adding ? patterns.find((item) => item.id === patternId) : undefined
-    const editingDisabled = busy || !!proposal || refreshRequired || !!operation
+    const editingDisabled = busy || refreshRequired || !!operation
     const manualDraftIssue = manualDraft ? issueForPose(manualDraft.id, manualDraft.pose) : null
     const visualPlacements = useMemo(() => {
         if (!manualDraft) return placements
@@ -792,18 +737,13 @@ function Workspace({
                     <button disabled={busy} onClick={() => void checkOperation(operation)}>
                         Проверить статус
                     </button>
-                    {operation.kind === 'preview' && (
-                        <button disabled={busy} onClick={() => setClosePreview(operation)}>
-                            Закрыть ожидание предпросмотра
-                        </button>
-                    )}
                     {!operation.confirmed && (
                         <button
                             disabled={busy}
                             onClick={() =>
                                 void mutate(async () => {
                                     await authorizedRequest<void>(
-                                        `${base}/nesting/operations/${operation.key}${operation.kind === 'preview' ? '?kind=preview' : ''}`,
+                                        `${base}/nesting/operations/${operation.key}`,
                                         { method: 'DELETE', signal: AbortSignal.timeout(10_000) },
                                     )
                                     setSyncError(
@@ -812,9 +752,7 @@ function Workspace({
                                 })
                             }
                         >
-                            {operation.kind === 'preview'
-                                ? 'Запросить отмену предпросмотра'
-                                : 'Запросить отмену сохранения'}
+                            Запросить отмену сохранения
                         </button>
                     )}
                     {operation.kind !== 'preview' && (
@@ -843,7 +781,7 @@ function Workspace({
                     </button>
                 </div>
             )}
-            {result && !busy && !operation && !proposal && (
+            {result && !busy && !operation && (
                 <div role="status" className="nesting-result-summary">
                     <strong>
                         Сохранено · размещено {result.metrics.placed_count} из{' '}
@@ -886,23 +824,6 @@ function Workspace({
                             request={operation?.request}
                             saving={execution.kind === 'saving_preview'}
                         />
-                    </>
-                ) : proposal ? (
-                    <>
-                        <span role="status">
-                            Предпросмотр · размещено {proposal.result.metrics.placed_count} из{' '}
-                            {proposal.result.metrics.requested_count}. Сохранённая раскладка
-                            прежняя. Не размещено{' '}
-                            {proposal.result.metrics.requested_count -
-                                proposal.result.metrics.placed_count}
-                            .
-                            {responseSeconds !== null
-                                ? ` Время ответа ${format(responseSeconds)} с.`
-                                : ''}
-                        </span>
-                        <button className="nesting-button" onClick={() => setProposal(null)}>
-                            Закрыть предпросмотр
-                        </button>
                     </>
                 ) : (
                     <span role="status">
@@ -1024,8 +945,6 @@ function Workspace({
                                 </div>
                             ) : null
                         }
-                        proposedPlacements={proposal?.result.placements}
-                        showSaved={!proposal || proposal.includeSaved}
                         onSelect={(id) => {
                             if (id === selected) return
                             requestManualTransition(() => {
@@ -1160,24 +1079,11 @@ function Workspace({
                                             !!operation ||
                                             !patterns.length
                                         }
-                                        onClick={() => (proposal ? saveProposal() : prepareRun())}
+                                        onClick={prepareRun}
                                     >
-                                        {proposal
-                                            ? 'Сохранить этот предпросмотр'
-                                            : 'Рассчитать и сохранить'}
+                                        Рассчитать и сохранить
                                     </button>
                                 </div>
-                                {proposal && (
-                                    <p>
-                                        Не размещено:{' '}
-                                        {proposal.result.metrics.requested_count -
-                                            proposal.result.metrics.placed_count}
-                                        .{' '}
-                                        {proposal.result.metrics.placed_count === 0 &&
-                                            'Подходящих свободных позиций не найдено; проверьте размеры, углы и занятые места. '}
-                                        Можно сохранить показанную раскладку без повторного расчёта.
-                                    </p>
-                                )}
                             </section>
                         )}
                         {panel === 'history' && (
@@ -1299,31 +1205,6 @@ function Workspace({
                     }
                 >
                     <p>Удалить размещение №{selectedPlacement.id}? Проектное лекало сохраняется.</p>
-                </ConfirmDialog>
-            )}
-            {closePreview && (
-                <ConfirmDialog
-                    title="Закрыть ожидание предпросмотра?"
-                    confirmLabel="Закрыть ожидание"
-                    onClose={() => setClosePreview(null)}
-                    onConfirm={async () => {
-                        if (
-                            !pending.current &&
-                            operation?.key === closePreview.key &&
-                            mayClosePreview(operation, userId, projectId, surfaceId)
-                        ) {
-                            sessionStorage.removeItem(storageKey)
-                            setOperation(null)
-                            setSyncError(null)
-                            setError(null)
-                        }
-                        setClosePreview(null)
-                    }}
-                >
-                    Это удалит только ожидание в этой вкладке. Серверный расчёт может продолжаться
-                    до своего deadline. Если расчёт выполняется, сначала запросите отмену и
-                    проверьте статус. Сохранённая раскладка не изменится. Новый расчёт запускается
-                    только вручную.
                 </ConfirmDialog>
             )}
             {showDraftDecision && manualDraft && (

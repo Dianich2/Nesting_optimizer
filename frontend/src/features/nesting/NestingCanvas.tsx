@@ -31,8 +31,6 @@ interface Props {
     manualDraftIssue?: string | null
     validatePose?: (id: number, pose: PlacementPose) => string | null
     canEdit?: (id: number) => boolean
-    proposedPlacements?: Placement[]
-    showSaved: boolean
     onSelect: (id: number | null) => void
     onAdd: (x: number, y: number, rotation: number) => void
     onMove: (id: number, x: number, y: number, rotation?: number) => void
@@ -51,8 +49,6 @@ export function NestingCanvas({
     manualDraftIssue = null,
     validatePose,
     canEdit,
-    proposedPlacements,
-    showSaved,
     onSelect,
     onAdd,
     onMove,
@@ -326,8 +322,7 @@ export function NestingCanvas({
                     fillRule="evenodd"
                     strokeWidth={visible.width / 800}
                 />
-                {showSaved &&
-                    placements.map((item) => (
+                {placements.map((item) => (
                         <path
                             key={item.id}
                             d={polygonPath(item.geometry)}
@@ -385,19 +380,6 @@ export function NestingCanvas({
                             }}
                         />
                     ))}
-                {proposedPlacements?.map((item, index) => (
-                    <path
-                        key={index}
-                        d={polygonPath(item.geometry)}
-                        fill="#9e77ed"
-                        fillOpacity="0.42"
-                        fillRule="evenodd"
-                        stroke="#7b51bd"
-                        strokeWidth="2"
-                        vectorEffect="non-scaling-stroke"
-                        pointerEvents="none"
-                    />
-                ))}
                 {adding && !pan && !busy && ghost && (
                     <path
                         d={ghost.path}
@@ -416,7 +398,7 @@ export function NestingCanvas({
                         pointerEvents="none"
                     />
                 )}
-                {showSaved && !busy && selection && !pan && !adding && (
+                {!busy && selection && !pan && !adding && (
                     <circle
                         cx={selection.x}
                         cy={selection.y - visible.width / 20}

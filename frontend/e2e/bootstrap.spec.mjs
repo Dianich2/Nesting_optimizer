@@ -10,16 +10,14 @@ const poses = (items) => items.map(({ x, y, rotation, geometry }) => ({ x, y, ro
 
 for (const width of [1440, 1366, 768, 700, 390]) {
     for (const theme of ['light', 'dark']) {
-        test(`radial exact preview, exports and layout ${width} ${theme}`, async ({ page, request }, info) => {
+        test(`radial direct save, exports and layout ${width} ${theme}`, async ({ page, request }, info) => {
             const errors = []
             const anonymousRefresh = []
             let signedIn = false
-            let expectingStale = false
             page.on('pageerror', () => errors.push('unhandled page error'))
             page.on('console', (message) => {
                 if (message.type() !== 'error') return
                 const location = message.location().url
-                if (expectingStale && location.endsWith('/nesting') && /status of (401|409)/.test(message.text())) return
                 if (!signedIn && location.endsWith('/api/v1/auth/browser/refresh') && message.text().includes('status of 400')) {
                     anonymousRefresh.push('expected missing-cookie 400 before login')
                     return
@@ -126,21 +124,17 @@ for (const width of [1440, 1366, 768, 700, 390]) {
             const before = await count()
             await page.getByRole('button', { name: 'Автоматический раскрой', exact: true }).click()
             await page.getByRole('spinbutton', { name: patternName }).fill('1')
-            const pending = page.waitForResponse((r) => r.url().endsWith('/nesting/preview') && r.request().method() === 'POST')
-            await page.getByRole('button', { name: 'Предпросмотр', exact: true }).click()
-            const previewResponse = await pending
-            expect(previewResponse.status()).toBe(200)
-            const preview = await previewResponse.json()
-            expect(preview.preview_id).toBeTruthy()
-            expect(preview.placements).toHaveLength(1)
-            expect(await count()).toBe(before + 1)
             const saving = page.waitForResponse((r) => r.url().endsWith('/nesting') && r.request().method() === 'POST')
-            await page.getByRole('button', { name: 'Сохранить этот предпросмотр', exact: true }).click()
+            await page.getByRole('button', { name: 'Рассчитать и сохранить', exact: true }).click()
             const savedResponse = await saving
             expect(savedResponse.status()).toBe(200)
-            expect(savedResponse.request().postDataJSON().preview_id).toBe(preview.preview_id)
+            const savedBody = savedResponse.request().postDataJSON()
+            const savedKey = savedResponse.request().headers()['idempotency-key']
+            expect(savedBody).not.toHaveProperty('preview_id')
+            expect(savedKey).toBeTruthy()
             const saved = await savedResponse.json()
-            expect(poses(saved.placements)).toEqual(poses(preview.placements))
+            expect(saved.placements).toHaveLength(1)
+            expect(saved.placements[0].id).toBeGreaterThan(0)
             expect(await count()).toBe(before + 1)
             await expect(placement).toHaveCount(1)
             await page.reload(); await expect(placement).toHaveCount(1)
@@ -183,38 +177,34 @@ for (const width of [1440, 1366, 768, 700, 390]) {
             await info.attach("expected-anonymous-refresh", { body: JSON.stringify(anonymousRefresh), contentType: "application/json" })
             expect(errors).toEqual([])
             if (width === 1440 && theme === 'light') {
-                // Real second-tab mutation, real 409; no route.fulfill or fake commit.
+                // A real second-tab edit must survive replay of the completed operation.
                 const startCalls = await count()
-                await page.getByRole('button', { name: 'Автоматический раскрой', exact: true }).click()
-                await page.getByRole('spinbutton', { name: patternName }).fill('1')
-                const calculating = page.waitForResponse((r) => r.url().endsWith('/nesting/preview') && r.request().method() === 'POST')
-                await page.getByRole('button', { name: 'Предпросмотр', exact: true }).click()
-                expect((await calculating).status()).toBe(200)
                 const second = await page.context().newPage()
-                second.on('pageerror', () => errors.push('second-tab pageerror'))
-                await second.goto(page.url())
-                const secondCanvas = second.getByLabel('Рабочая поверхность раскроя', { exact: true })
-                const secondToggle = second.getByRole('button', { name: 'Лекала', exact: true })
-                await expect(secondCanvas).toBeVisible()
-                if ((await secondToggle.getAttribute('aria-expanded')) === 'false') await secondToggle.click()
-                await second.getByRole('button', { name: new RegExp(`Добавить на поверхность.*${patternName}`) }).click()
-                const target = await secondCanvas.evaluate((svg) => { const p = new DOMPoint(75, 75).matrixTransform(svg.getScreenCTM()); return { x: p.x, y: p.y } })
-                await second.mouse.click(target.x, target.y)
-                await expect(secondCanvas.getByRole('button', { name: /Размещение №/ })).toHaveCount(2)
-                expectingStale = true
-                const staleKeys = []
-                page.on('request', (r) => { if (r.url().endsWith('/nesting') && r.method() === 'POST') staleKeys.push(r.headers()['idempotency-key']) })
-                const staleSave = page.waitForResponse((r) => r.url().endsWith('/nesting') && r.request().method() === 'POST' && r.status() === 409)
-                await page.getByRole('button', { name: 'Сохранить этот предпросмотр', exact: true }).click()
-                const rejected = await staleSave
-                expect(rejected.status()).toBe(409)
-                expect((await rejected.json()).error.code).toBe('nesting_stale')
-                expect(staleKeys.length).toBeGreaterThan(0)
-                expect(new Set(staleKeys).size).toBe(1)
-                await expect(page.getByRole('alert')).toBeVisible()
-                expect((await get(base + '/placements')).items).toHaveLength(2)
-                expect(await count()).toBe(startCalls + 1)
-                await second.close()
+                try {
+                    second.on('pageerror', () => errors.push('second-tab pageerror'))
+                    await second.goto(page.url())
+                    const secondCanvas = second.getByLabel('Рабочая поверхность раскроя', { exact: true })
+                    const secondToggle = second.getByRole('button', { name: 'Лекала', exact: true })
+                    await expect(secondCanvas).toBeVisible()
+                    if ((await secondToggle.getAttribute('aria-expanded')) === 'false') await secondToggle.click()
+                    await second.getByRole('button', { name: new RegExp(`Добавить на поверхность.*${patternName}`) }).click()
+                    const target = await secondCanvas.evaluate((svg) => { const p = new DOMPoint(75, 75).matrixTransform(svg.getScreenCTM()); return { x: p.x, y: p.y } })
+                    await second.mouse.click(target.x, target.y)
+                    await expect.poll(async () => (await get(base + '/placements')).items.length).toBe(2)
+                    const afterEdit = (await get(base + '/placements')).items
+                    const replay = await request.post(api + base + '/nesting', {
+                        data: savedBody,
+                        headers: { Authorization: authorization, 'Idempotency-Key': savedKey },
+                    })
+                    expect(replay.status()).toBe(200)
+                    expect(poses((await replay.json()).placements)).toEqual(poses(saved.placements))
+                    expect((await get(base + '/placements')).items).toEqual(afterEdit)
+                    expect(await count()).toBe(startCalls)
+                    await page.reload()
+                    await expect(placement).toHaveCount(2)
+                } finally {
+                    await second.close()
+                }
                 expect(errors).toEqual([])
             }
         })

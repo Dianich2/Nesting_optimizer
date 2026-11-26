@@ -59,11 +59,11 @@ test('malformed and legacy unowned pending requests are rejected', (t) => {
     assert.equal(readPendingNesting('key', 7, 1, 2), null)
 })
 
-test('preview pending preserves its kind and rejects save payloads and foreign scope', (t) => {
+test('retired preview pending is never recovered as a saving operation', (t) => {
     const storage = installStorage(t)
     const preview = { ...record, kind: 'preview' }
     storage.getItem = () => JSON.stringify(preview)
-    assert.equal(readPendingNesting('key', 7, 1, 2)?.kind, 'preview')
+    assert.equal(readPendingNesting('key', 7, 1, 2), null)
     assert.equal(readPendingNesting('key', 8, 1, 2), null)
     assert.equal(readPendingNesting('key', 7, 1, 3), null)
     storage.getItem = () => JSON.stringify({ ...preview, kind: 'other' })
@@ -71,6 +71,17 @@ test('preview pending preserves its kind and rejects save payloads and foreign s
     storage.getItem = () =>
         JSON.stringify({ ...preview, request: { ...record.request, preview_id: record.key } })
     assert.equal(readPendingNesting('key', 7, 1, 2), null)
+})
+
+test('legacy saving operation retains its original request and key', (t) => {
+    const storage = installStorage(t)
+    const saved = {
+        ...record,
+        request: { ...record.request, preview_id: '22222222-2222-4222-8222-222222222222' },
+    }
+    storage.getItem = () => JSON.stringify(saved)
+    assert.deepEqual(readPendingNesting('key', 7, 1, 2), saved)
+    assert.equal(readPendingNesting('key', 8, 1, 2), null)
 })
 
 test('confirmed save survives reload but cannot masquerade as preview', (t) => {

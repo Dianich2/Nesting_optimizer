@@ -17,6 +17,7 @@ export interface Placement {
     updated_at: string
 }
 export interface NestingRequest {
+    // Legacy pending saves must retain their original payload until reconciled.
     preview_id?: string
     algorithm: string
     patterns: { project_pattern_id: number; quantity: number }[]
@@ -24,8 +25,6 @@ export interface NestingRequest {
     keep_existing: boolean
 }
 export interface NestingResult {
-    preview_id?: string
-    preview_expires_at?: string
     placements: Placement[]
     unplaced: { project_pattern_id: number; quantity: number }[]
     metrics: {
@@ -36,6 +35,12 @@ export interface NestingResult {
         utilization: number
     }
 }
+export interface NestingOperationStatus {
+    status: 'unknown' | 'running' | 'completed' | 'failed'
+    result?: NestingResult
+    failure?: { code: string; message: string }
+}
+
 export type Request = AuthContextValue['authorizedRequest']
 
 export async function allProjectPatterns(

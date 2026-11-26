@@ -111,7 +111,7 @@ test('strict diagonal contact API, SQL preservation, versions, owner isolation a
     } finally { await otherContext.close() }
 })
 
-test('all five native previews save exact geometry once with real SQL history', async ({ page }) => {
+test('all five native algorithms save once with real SQL history', async ({ page }) => {
     const { call } = await session(page, 'five')
     const d = await dataset(call, 'Five algorithms')
     const initial = (await sqlStats(page, d.surface.id)).optimize_calls
@@ -123,21 +123,15 @@ test('all five native previews save exact geometry once with real SQL history', 
         await page.getByRole('button', { name: 'Автоматический раскрой', exact: true }).click()
         await page.getByRole('combobox', { name: 'Алгоритм', exact: true }).selectOption(algorithm)
         await page.getByRole('spinbutton', { name: 'Part 0', exact: true }).fill('1')
-        const waiting = page.waitForResponse((r) => r.url().endsWith('/nesting/preview') && r.request().method() === 'POST')
-        await page.getByRole('button', { name: 'Предпросмотр', exact: true }).click()
-        const previewResponse = await waiting
-        expect(previewResponse.status()).toBe(200)
-        const preview = await previewResponse.json()
-        expect(preview.preview_id).toBeTruthy()
-        expect(preview.placements).toHaveLength(1)
-        expect((await sqlStats(page, surface.id)).optimize_calls).toBe(initial + index + 1)
         const saving = page.waitForResponse((r) => r.url().endsWith('/nesting') && r.request().method() === 'POST')
-        await page.getByRole('button', { name: 'Сохранить этот предпросмотр', exact: true }).click()
+        await page.getByRole('button', { name: 'Рассчитать и сохранить', exact: true }).click()
         const savedResponse = await saving
         expect(savedResponse.status()).toBe(200)
-        expect(savedResponse.request().postDataJSON().preview_id).toBe(preview.preview_id)
+        expect(savedResponse.request().postDataJSON()).not.toHaveProperty('preview_id')
         const saved = await savedResponse.json()
-        expect(poses(saved.placements)).toEqual(poses(preview.placements))
+        expect(saved.placements).toHaveLength(1)
+        expect(saved.metrics).toMatchObject({ requested_count: 1, placed_count: 1 })
+        await expect(page.getByText('Сохранено · размещено 1 из 1', { exact: true })).toBeVisible()
         expect(poses((await call('GET', base + '/placements')).items)).toEqual(poses(saved.placements))
         expect(await sqlStats(page, surface.id)).toMatchObject({ optimize_calls: initial + index + 1, placements: 1, nesting_runs: 1 })
         const body = savedResponse.request().postDataJSON()

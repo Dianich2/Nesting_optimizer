@@ -1,8 +1,7 @@
 import { classifySaveFailure } from './saveRecovery.ts'
 import type { SaveOutcome } from './saveRecovery'
-import type { NestingOperationStatus } from './previewRecovery'
 import { ApiError } from '../../shared/api/http.ts'
-import type { NestingRequest, NestingResult, Placement, Request } from './api'
+import type { NestingOperationStatus, NestingRequest, NestingResult, Placement, Request } from './api'
 
 export const nestingRequestTimeout = 130_000
 
@@ -124,9 +123,9 @@ export function readPendingNesting(
         const input = value.request
         if (
             (value.confirmed !== undefined && value.confirmed !== true) ||
-            (value.kind === 'preview' && value.confirmed !== undefined) ||
-            (value.kind !== undefined && value.kind !== 'preview') ||
-            (value.kind === 'preview' && input?.preview_id !== undefined) ||
+            // Retired calculation-only requests cannot write placements.
+            // Do not recover them as saving operations.
+            value.kind !== undefined ||
             value.userId !== userId ||
             value.projectId !== projectId ||
             value.surfaceId !== surfaceId ||
