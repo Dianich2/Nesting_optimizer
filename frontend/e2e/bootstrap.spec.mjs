@@ -189,7 +189,18 @@ for (const width of [1440, 1366, 768, 700, 390]) {
                     if ((await secondToggle.getAttribute('aria-expanded')) === 'false') await secondToggle.click()
                     await second.getByRole('button', { name: new RegExp(`Добавить на поверхность.*${patternName}`) }).click()
                     const target = await secondCanvas.evaluate((svg) => { const p = new DOMPoint(75, 75).matrixTransform(svg.getScreenCTM()); return { x: p.x, y: p.y } })
+                    const secondSave = second.waitForResponse((r) =>
+                        r.request().method() === 'POST' && r.url().endsWith(base + '/placements'),
+                    )
                     await second.mouse.click(target.x, target.y)
+                    const secondSavedResponse = await secondSave
+                    expect(secondSavedResponse.status()).toBe(201)
+                    // Restoring the session in the second tab rotates its session ID.
+                    // Use the token that actually authorized the successful write.
+                    const secondAuthorization = secondSavedResponse.request().headers().authorization
+                    expect(Boolean(secondAuthorization)).toBe(true)
+                    expect(secondAuthorization !== authorization).toBe(true)
+                    authorization = secondAuthorization
                     await expect.poll(async () => (await get(base + '/placements')).items.length).toBe(2)
                     const afterEdit = (await get(base + '/placements')).items
                     const replay = await request.post(api + base + '/nesting', {

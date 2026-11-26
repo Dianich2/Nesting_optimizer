@@ -597,3 +597,21 @@ body:has(.nesting-page) {
         max-width: 185px;
     }
 }
+
+/* Keep the drawing area large after a saved run on narrow screens. */
+@media (max-width: 700px) {
+    .app-shell:has(.nesting-page) .app-header {
+        padding-block: 4px;
+        row-gap: 4px;
+    }
+    .nesting-page > header,
+    .nesting-page > .nesting-result-summary,
+    .nesting-status {
+        padding-block: 3px;
+        row-gap: 4px;
+    }
+    .nesting-canvas > .nesting-tools {
+        padding-block: 3px;
+        row-gap: 4px;
+    }
+}

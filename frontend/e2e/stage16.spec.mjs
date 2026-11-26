@@ -72,7 +72,7 @@ test('strict diagonal contact API, SQL preservation, versions, owner isolation a
     const placement = canvas.getByRole('button', { name: `Размещение №${contact.id}`, exact: true })
     await expect(placement).toBeVisible()
     await placement.focus(); await page.keyboard.press('Space')
-    const remove = page.getByRole('button', { name: 'Удалить размещение', exact: true })
+    const remove = page.getByRole('button', { name: `Удалить размещение №${contact.id}`, exact: true })
     await expect(remove).toBeVisible()
     await remove.focus(); await page.keyboard.press('Enter')
     const dialog = page.getByRole('dialog')
@@ -89,16 +89,31 @@ test('strict diagonal contact API, SQL preservation, versions, owner isolation a
     const external = await call('PATCH', `/projects/${d.project.id}/placements/${contact.id}`, { x: 30, y: 30 }, 200, { 'X-Placement-Version': contact.updated_at })
     expect(external.x).toBe(30)
     const updated = await sqlStats(page, d.surface.id)
-    await page.getByLabel('X центра').fill('20')
+    const xInput = page.getByLabel('X центра')
+    await xInput.fill('20')
     const conflict = page.waitForResponse((r) => r.request().method() === 'PATCH' && r.url().includes(`/placements/${contact.id}`))
-    await page.getByRole('button', { name: 'Сохранить положение', exact: true }).click()
+    // Leaving the properties form commits the draft. With multiple numeric
+    // inputs and no submit button, Enter does not implicitly submit it.
+    await canvas.focus()
     const response = await conflict
     expect(response.status()).toBe(409)
+    expect(response.request().postDataJSON().x).toBe(20)
+    expect(response.request().headers()['x-placement-version']).toBe(contact.updated_at)
     expect((await response.json()).error.details.some((item) => item.code === 'placement_version_conflict')).toBe(true)
-    await expect(page.getByRole('alert')).toBeVisible()
+    await expect(page.getByRole('status').filter({ hasText: 'Размещение изменилось после загрузки. Обновите раскладку.' })).toBeVisible()
     expect(await sqlStats(page, d.surface.id)).toEqual(updated)
     const refresh = page.waitForResponse((r) => r.url().endsWith('/auth/browser/refresh') && r.status() === 200)
-    await page.reload(); await refresh
+    // The rejected draft is retained; explicitly accept its loss on reload.
+    const acceptReload = async (dialog) => {
+        expect(dialog.type()).toBe('beforeunload')
+        await dialog.accept()
+    }
+    page.on('dialog', acceptReload)
+    try {
+        await page.reload(); await refresh
+    } finally {
+        page.off('dialog', acceptReload)
+    }
     await expect(canvas.getByRole('button', { name: /Размещение №/ })).toHaveCount(2)
     const otherContext = await browser.newContext()
     try {
@@ -207,6 +222,10 @@ test.describe('Chrome touch emulation', () => {
         const gesture = await page.evaluate(() => window.stage16LastGesture)
         expect(gesture.end.x - gesture.start.x).toBeGreaterThan(5)
         await expect.poll(async () => (await call('GET', d.base + '/placements')).items[0].x).toBeCloseTo(50 + gesture.end.x - gesture.start.x, 4)
+        // Saving a drag opens the properties overlay again on mobile.
+        if (await propertiesPanel.getAttribute('aria-expanded') === 'true')
+            await propertiesPanel.tap()
+        await expect(propertiesPanel).toHaveAttribute('aria-expanded', 'false')
         await page.getByRole('button', { name: 'Перемещение поля', exact: true }).tap()
         await expect(page.getByRole('button', { name: 'Перемещение поля', exact: true })).toHaveAttribute('aria-pressed', 'true')
         const original = await canvas.getAttribute('viewBox')

@@ -20,26 +20,32 @@ test('stage21 rotated draft real409 exact pose undo redo reload', async ({ page 
         [polygon(200, 300, 300, 300, 300, 340, 200, 340)],
         rect(50, 120),
     )
+    // The API must still reject invalid geometry, even though the UI now
+    // keeps invalid manual placements locally without making a POST.
+    const before = await sqlStats(page, d.surface.id)
+    const rejected = await call('POST', d.base + '/placements', {
+        project_pattern_id: d.patterns[0].id, x: 25, y: 60, rotation: 0,
+    }, 409)
+    expect(rejected.error.details).toEqual(expect.arrayContaining([
+        expect.objectContaining({ field: 'placement', code: 'placement_outside_surface' }),
+    ]))
+    expect(await sqlStats(page, d.surface.id)).toEqual(before)
+
     await page.goto(d.base + '/nesting')
+    const canvas = page.getByLabel('Рабочая поверхность раскроя', { exact: true })
+    const angle = page.getByLabel('Угол поворота до постановки', { exact: true })
+    let posts = 0
+    page.on('request', (r) => {
+        if (r.method() === 'POST' && r.url().endsWith('/placements')) posts++
+    })
     await page.getByRole('button', { name: /Добавить на поверхность.*Part 0/ }).click()
     await world(page, 25, 60)
-    await expect(ghost(page)).toBeVisible()
-    let waiting = page.waitForResponse(
-        (r) => r.url().endsWith('/placements') && r.request().method() === 'POST',
-    )
-    await world(page, 25, 60, true)
-    expect((await waiting).status()).toBe(409)
-    expect((await sqlStats(page, d.surface.id)).placements).toBe(0)
-    await expect(
-        page.getByText('Лекало выходит за границу поверхности.', { exact: true }),
-    ).toBeVisible()
-    await expect(ghost(page)).toBeVisible()
-    await page.getByLabel('Рабочая поверхность раскроя', { exact: true }).focus()
+    await expect(ghost(page)).toHaveAttribute('fill', '#dc2626')
+    await canvas.focus()
     await page.keyboard.press('r')
-    await expect(page.getByRole('spinbutton', { name: 'Поворот до постановки, °' })).toHaveValue(
-        '90',
-    )
+    await expect(angle).toHaveText('Угол: 90°')
     await world(page, 25, 60)
+    await expect(ghost(page)).toHaveAttribute('fill', '#6da5ee')
     const expected = await ghost(page).evaluate((p, points) => {
         const m = p.transform.baseVal.consolidate().matrix
         return points.map((p) => {
@@ -47,10 +53,21 @@ test('stage21 rotated draft real409 exact pose undo redo reload', async ({ page 
             return { x: q.x, y: q.y }
         })
     }, d.patterns[0].geometry.exterior.points)
-    waiting = page.waitForResponse(
+    await page.keyboard.press('Shift+R')
+    await expect(angle).toHaveText('Угол: 0°')
+    await world(page, 25, 60, true)
+    const draft = canvas.getByRole('button', { name: 'Размещение №-1', exact: true })
+    await expect(draft).toHaveAttribute('fill', '#dc2626')
+    await expect(page.locator('.nesting-status')).toContainText('Деталь выходит за границу поверхности.')
+    await expect(ghost(page)).toHaveCount(0)
+    expect(posts).toBe(0)
+    expect(await sqlStats(page, d.surface.id)).toEqual(before)
+
+    // Correct the actual unsaved draft; the preset applies immediately.
+    const waiting = page.waitForResponse(
         (r) => r.url().endsWith('/placements') && r.request().method() === 'POST',
     )
-    await world(page, 25, 60, true)
+    await page.getByRole('button', { name: '90°', exact: true }).click()
     const response = await waiting
     expect(response.status()).toBe(201)
     const posted = response.request().postDataJSON()
@@ -69,13 +86,17 @@ test('stage21 rotated draft real409 exact pose undo redo reload', async ({ page 
         expect(p.y).toBeCloseTo(posted.y + (src[i].x - cx), 8)
     })
     await expect(ghost(page)).toHaveCount(0)
+    await expect(draft).toHaveCount(0)
+    await expect(canvas.getByRole('button', { name: `Размещение №${item.id}`, exact: true })).toBeVisible()
+    expect(posts).toBe(1)
+    expect((await sqlStats(page, d.surface.id)).placements).toBe(1)
     await page.getByText('Ещё', { exact: true }).click()
     await page.getByRole('button', { name: 'Отменить действие', exact: true }).click()
     await expect.poll(async () => (await sqlStats(page, d.surface.id)).placements).toBe(0)
     await page.getByRole('button', { name: 'Повторить действие', exact: true }).click()
     await expect.poll(async () => (await sqlStats(page, d.surface.id)).placements).toBe(1)
     await page.reload()
-    await expect(page.getByLabel('Рабочая поверхность раскроя', { exact: true })).toBeVisible()
+    await expect(canvas.getByRole('button', { name: /Размещение №/ })).toHaveCount(1)
     const rows = (await call('GET', d.base + '/placements')).items
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({ x: posted.x, y: posted.y, rotation: 90 })
@@ -97,34 +118,47 @@ test('stage21 cancel and pattern switch never POST', async ({ page }) => {
     const first = page.getByRole('button', { name: /Добавить на поверхность.*Part 0/ }),
         second = page.getByRole('button', { name: /Добавить на поверхность.*Part 1/ }),
         canvas = page.getByLabel('Рабочая поверхность раскроя', { exact: true }),
-        angle = page.getByRole('spinbutton', { name: 'Поворот до постановки, °' })
+        angle = page.getByLabel('Угол поворота до постановки', { exact: true }),
+        controls = page.getByRole('status', { name: 'Постановка лекала', exact: true })
     await first.click()
     await world(page, 150, 100)
     await canvas.focus()
     await page.keyboard.press('Shift+R')
-    await expect(angle).toHaveValue('270')
+    await expect(angle).toHaveText('Угол: 270°')
     await first.click()
-    await expect(page.getByRole('toolbar', { name: 'Постановка лекала' })).toHaveCount(0)
+    await expect(controls).toHaveCount(0)
     await first.click()
-    await expect(angle).toHaveValue('0')
-    await angle.fill('45')
+    await expect(angle).toHaveText('Угол: 0°')
+    await canvas.focus()
+    await page.keyboard.press('Shift+ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    await expect(angle).toHaveText('Угол: 16°')
+    await page.keyboard.press('ArrowLeft')
+    await expect(angle).toHaveText('Угол: 15°')
     await second.click()
-    await expect(angle).toHaveValue('0')
+    await expect(angle).toHaveText('Угол: 0°')
     await canvas.focus()
     await page.keyboard.press('Escape')
     await expect(ghost(page)).toHaveCount(0)
     await first.click()
-    await angle.fill('')
-    await expect(angle).toHaveValue('')
-    await angle.press('r')
-    await expect(angle).not.toHaveValue('90')
+    // Hotkeys must not rotate a draft while editing another numeric field.
+    await page.getByText('Настройки сетки', { exact: true }).click()
+    const step = page.getByRole('spinbutton', { name: 'Шаг', exact: true })
+    await step.fill('')
+    await expect(step).toHaveValue('')
+    await step.press('r')
+    await expect(angle).toHaveText('Угол: 0°')
+    await step.fill('10')
+    await page.getByText('Настройки сетки', { exact: true }).click()
     await page.getByRole('button', { name: 'Отменить добавление', exact: true }).click()
-    await expect(page.getByRole('toolbar', { name: 'Постановка лекала' })).toHaveCount(0)
+    await expect(controls).toHaveCount(0)
     await first.click()
     await page
         .getByRole('combobox', { name: 'Поверхность', exact: true })
         .selectOption(String(another.id))
-    await expect(page.getByRole('toolbar', { name: 'Постановка лекала' })).toHaveCount(0)
+    await expect(controls).toHaveCount(0)
+    await expect(canvas).toBeVisible()
     expect(posts).toBe(0)
     expect(await sqlStats(page, d.surface.id)).toMatchObject({ placements: 0, nesting_runs: 0 })
+    expect(await sqlStats(page, another.id)).toMatchObject({ placements: 0, nesting_runs: 0 })
 })

@@ -340,43 +340,96 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
         await page.mouse.click(point.x, point.y)
     }
 
-    await addAt(10, 20)
     const placement = canvas.getByRole('button', { name: /Размещение №/ })
-    await expect(placement).toHaveCount(1)
+    const persisted = canvas.getByRole('button', { name: /^Размещение №[1-9]\d*$/ })
+    const draft = canvas.getByRole('button', { name: 'Размещение №-1', exact: true })
+    const manualStatus = page.locator('.nesting-status').getByRole('status')
+    const createResponse = () => page.waitForResponse((res) =>
+        res.request().method() === 'POST' && res.url().endsWith('/placements'),
+    )
+    const patchResponse = () => page.waitForResponse((res) =>
+        res.request().method() === 'PATCH' && /\/placements\/\d+$/.test(res.url()),
+    )
+    const initial = createResponse()
+    await addAt(10, 20)
+    expect((await initial).status()).toBe(201)
+    await expect(persisted).toHaveCount(1)
+    await expect(draft).toHaveCount(0)
     const from = await world(8, 18)
     const to = await world(18, 18)
+    const moved = patchResponse()
     await page.mouse.move(from.x, from.y)
     await page.mouse.down()
     await page.mouse.move(to.x, to.y, { steps: 8 })
     await page.mouse.up()
+    const movedResponse = await moved
+    expect(movedResponse.status()).toBe(200)
+    expect((await movedResponse.json()).x).toBeCloseTo(20, 1)
     await expect
         .poll(async () => Number(await page.getByLabel('X центра').inputValue()))
         .toBeCloseTo(20, 1)
+    // Rotation presets persist immediately; there is no separate Save button.
+    const rotated = patchResponse()
     await page.getByRole('button', { name: '90°' }).click()
-    await page.getByRole('button', { name: 'Сохранить положение' }).click()
+    const rotatedResponse = await rotated
+    expect(rotatedResponse.status()).toBe(200)
+    expect((await rotatedResponse.json()).rotation).toBe(90)
     await expect(page.getByLabel('Поворот, °')).toHaveValue('90')
     await page.locator('.nesting-page summary').filter({ hasText: 'Ещё' }).click()
+    const undone = patchResponse()
     await page.getByRole('button', { name: 'Отменить действие' }).click()
+    const undoneResponse = await undone
+    expect(undoneResponse.status()).toBe(200)
+    expect((await undoneResponse.json()).rotation).toBe(0)
     await expect(page.getByLabel('Поворот, °')).toHaveValue('0')
+    const redone = patchResponse()
     await page.getByRole('button', { name: 'Повторить действие' }).click()
+    const redoneResponse = await redone
+    expect(redoneResponse.status()).toBe(200)
+    expect((await redoneResponse.json()).rotation).toBe(90)
     await expect(page.getByLabel('Поворот, °')).toHaveValue('90')
     await page.locator('.nesting-page summary').filter({ hasText: 'Ещё' }).click()
 
+    // Invalid drafts are visible, but must never create persisted placements.
+    let manualPosts = 0
+    const countManualPosts = (req) => {
+        if (req.method() === 'POST' && req.url().endsWith('/placements')) manualPosts++
+    }
+    page.on('request', countManualPosts)
+    const discardDraft = page.getByRole('button', { name: 'Убрать несохранённую деталь', exact: true })
+    async function expectInvalidDraft(message) {
+        await expect(manualStatus).toContainText(message)
+        await expect(draft).toHaveAttribute('fill', '#dc2626')
+        await expect(placement).toHaveCount(2)
+        await expect(persisted).toHaveCount(1)
+        expect(manualPosts).toBe(0)
+    }
     await addAt(20, 20)
-    await expect(page.getByRole('alert')).toContainText('пересекает')
-    await page.getByRole('button', { name: /Отменить добавление/ }).click()
+    await expectInvalidDraft('пересекает другое размещение')
+    await discardDraft.click()
+    await expect(draft).toHaveCount(0)
     await addAt(80, 65)
-    await expect(page.getByRole('alert')).toContainText('отверстие')
-    await expect(placement).toHaveCount(1)
-    await page.getByRole('button', { name: /Отменить добавление/ }).click()
+    await expectInvalidDraft('пересекает отверстие')
+    await discardDraft.click()
+    await expect(draft).toHaveCount(0)
 
     await addAt(1, 1)
-    await expect(page.getByRole('alert')).toContainText(/за границ/)
-    const corrected = await world(40, 25)
-    await page.mouse.click(corrected.x, corrected.y)
-    await expect(placement).toHaveCount(2)
+    await expectInvalidDraft(/за границ/)
+    // Correct the existing draft, rather than starting another placement.
+    await page.getByLabel('X центра').fill('40')
+    await page.getByLabel('Y центра').fill('25')
+    expect(manualPosts).toBe(0)
+    const corrected = createResponse()
+    await canvas.focus()
+    const correctedResponse = await corrected
+    expect(correctedResponse.status()).toBe(201)
+    expect(await correctedResponse.json()).toMatchObject({ x: 40, y: 25 })
+    await expect(draft).toHaveCount(0)
+    await expect(persisted).toHaveCount(2)
+    expect(manualPosts).toBe(1)
+    page.off('request', countManualPosts)
     await page.reload()
-    await expect(placement).toHaveCount(2)
+    await expect(persisted).toHaveCount(2)
 
     const automatic = page.getByRole('button', { name: 'Автоматический раскрой', exact: true })
     await automatic.click()
@@ -591,7 +644,6 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
     let directSaveKey
     let directSaveRequest
     let placementsURL
-    let authorization
     let directPosts = 0
     await page.route('**/nesting', async (route) => {
         if (route.request().method() !== 'POST') return route.continue()
@@ -601,7 +653,6 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
         directSaveRequest = original.postDataJSON()
         expect(directSaveRequest.preview_id).toBeUndefined()
         placementsURL = original.url().replace(/\/nesting$/, '/placements')
-        authorization = original.headers().authorization
         const response = await route.fetch()
         expect(response.status()).toBe(200)
         exactSaved = await response.json()
@@ -614,9 +665,23 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
     expect((await readSave()).key).toBe(directSaveKey)
     expect((await readSave()).request).toEqual(directSaveRequest)
     await page.reload()
+    await expect(canvas).toBeVisible()
     await expect(checkStatus).toBeEnabled()
     expect((await readSave()).key).toBe(directSaveKey)
+    // Reload rotates the session. Read the actual authenticated synchronization
+    // response instead of making a separate GET with the invalidated token.
+    const recoveredStatus = page.waitForResponse((res) =>
+        res.request().method() === 'GET' && res.url().endsWith(`/nesting/operations/${directSaveKey}`),
+    )
+    const synchronized = page.waitForResponse((res) =>
+        res.request().method() === 'GET' && res.url() === placementsURL,
+    )
     await checkStatus.click()
+    const statusResponse = await recoveredStatus
+    expect(statusResponse.status()).toBe(200)
+    expect(await statusResponse.json()).toMatchObject({ status: 'completed', result: exactSaved })
+    const response = await synchronized
+    expect(response.status()).toBe(200)
     await expect.poll(pendingPreviewCount).toBe(0)
     await expect(placement).toHaveCount(4)
     expect(directPosts).toBe(1)
@@ -624,10 +689,6 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
 
     expect(exactSaved.placements).toHaveLength(1)
     expect(exactSaved.placements[0].id).toBeGreaterThan(0)
-    const response = await page.request.get(placementsURL, {
-        headers: { Authorization: authorization },
-    })
-    expect(response.status()).toBe(200)
     const { items } = await response.json()
     expect(items).toHaveLength(4)
     const savedPlacement = exactSaved.placements[0]
@@ -741,13 +802,13 @@ test('saved project copies, manual edits, automatic run recovery and exports', a
     await expect(placement).toHaveCount(4)
     await placement.first().focus()
     await placement.first().press('Enter')
-    await page.getByRole('button', { name: 'Удалить размещение', exact: true }).click()
+    await page.getByRole('button', { name: /^Удалить размещение №\d+$/ }).click()
     await page.getByRole('dialog').getByRole('button', { name: 'Отмена' }).click()
     await expect(placement).toHaveCount(4)
     for (const count of [3, 2, 1, 0]) {
         await placement.first().focus()
         await placement.first().press('Enter')
-        await page.getByRole('button', { name: 'Удалить размещение', exact: true }).click()
+        await page.getByRole('button', { name: /^Удалить размещение №\d+$/ }).click()
         await page.getByRole('dialog').getByRole('button', { name: 'Удалить', exact: true }).click()
         await expect(placement).toHaveCount(count)
     }

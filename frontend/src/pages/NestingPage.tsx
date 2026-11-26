@@ -392,6 +392,8 @@ function Workspace({
                         ? items.map((placement) => (placement.id === item.id ? saved : placement))
                         : [...items, saved],
                 )
+                // Undo/Redo can update the same selected ID: remount its numeric form.
+                setManualFormRevision((value) => value + 1)
                 setSelected(saved.id)
                 setHistory((value) => confirmReplay(value, direction, saved.id))
             }

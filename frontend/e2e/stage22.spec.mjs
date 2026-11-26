@@ -24,7 +24,7 @@ test('stage22 editable numeric drafts reject invalid counts before POST', async 
     })
     for (const raw of ['-1', '1.5', '501']) {
         await replace(quantity, raw)
-        await page.getByRole('button', { name: 'Предпросмотр', exact: true }).click()
+        await page.getByRole('button', { name: 'Рассчитать и сохранить', exact: true }).click()
         await expect(
             page.getByText('Количество: укажите целое число от 0 до 500. 0 — не выбирать лекало.', {
                 exact: true,
@@ -34,7 +34,7 @@ test('stage22 editable numeric drafts reject invalid counts before POST', async 
     }
     await replace(quantity, '500')
     await page.getByRole('spinbutton', { name: 'Part 1', exact: true }).fill('1')
-    await page.getByRole('button', { name: 'Предпросмотр', exact: true }).click()
+    await page.getByRole('button', { name: 'Рассчитать и сохранить', exact: true }).click()
     await expect(page.getByText(/Суммарно за один запуск/)).toBeVisible()
     expect(posts).toBe(0)
     await page.getByRole('spinbutton', { name: 'Part 1', exact: true }).fill('0')
@@ -48,6 +48,7 @@ test('stage22 editable numeric drafts reject invalid counts before POST', async 
     expect(saved.request().postDataJSON().patterns).toEqual([
         { project_pattern_id: d.patterns[0].id, quantity: 2 },
     ])
+    expect(saved.request().postDataJSON()).not.toHaveProperty('preview_id')
     await expect.poll(async () => (await sqlStats(page, d.surface.id)).placements).toBe(2)
     const placement = (await call('GET', d.base + '/placements')).items[0]
     await page
@@ -60,8 +61,15 @@ test('stage22 editable numeric drafts reject invalid counts before POST', async 
     const updated = page.waitForResponse(
         (r) => r.request().method() === 'PATCH' && r.url().endsWith(`/placements/${placement.id}`),
     )
-    await page.getByRole('button', { name: 'Сохранить положение', exact: true }).click()
-    expect((await updated).status()).toBe(200)
+    await page.getByLabel('Рабочая поверхность раскроя', { exact: true }).focus()
+    const patched = await updated
+    expect(patched.status()).toBe(200)
+    expect(patched.request().postDataJSON()).toMatchObject({
+        x: placement.x, y: placement.y, rotation: 90,
+    })
+    expect(await patched.json()).toMatchObject({
+        id: placement.id, x: placement.x, y: placement.y, rotation: 90,
+    })
     await page.getByText('Настройки сетки', { exact: true }).click()
     await replace(page.getByRole('spinbutton', { name: 'Шаг', exact: true }), '5')
     await page.goto(`/projects/${d.project.id}/editor`)
@@ -117,7 +125,10 @@ test('stage22 48 viewport theme zoom-equivalent layouts have spaced usable butto
                 await p.goto(d.base + '/nesting')
                 await p.getByRole('button', { name: 'Автоматический раскрой', exact: true }).click()
                 const actions = p.locator('.nesting-auto-actions')
-                await actions.scrollIntoViewIfNeeded()
+                const save = actions.getByRole('button', { name: 'Рассчитать и сохранить', exact: true })
+                await expect(actions.getByRole('button')).toHaveCount(1)
+                await save.scrollIntoViewIfNeeded()
+                await expect(save).toBeEnabled()
                 const result = await p.evaluate(() => {
                     const panel = document.querySelector('aside[aria-label="Свойства раскроя"]')
                     const buttons = [
@@ -134,7 +145,7 @@ test('stage22 48 viewport theme zoom-equivalent layouts have spaced usable butto
                         }
                     })
                     return {
-                        gap: buttons[1].y - buttons[0].bottom,
+                        actionsWidth: document.querySelector('.nesting-auto-actions').clientWidth,
                         buttons,
                         documentWidth: document.documentElement.scrollWidth,
                         viewportWidth: innerWidth,
@@ -151,7 +162,12 @@ test('stage22 48 viewport theme zoom-equivalent layouts have spaced usable butto
                     }
                 })
                 measurements.push({ width, theme, zoom, ...result })
-                expect(result.gap, `${width}/${theme}/${zoom}`).toBeGreaterThanOrEqual(8)
+                // Only one automatic action remains. Check its full width,
+                // minimum height, and actual clickability in every layout.
+                expect(result.buttons).toHaveLength(1)
+                expect(result.buttons[0].width).toBeGreaterThan(0)
+                expect(result.buttons[0].width).toBeCloseTo(result.actionsWidth, 0)
+                expect(result.buttons[0].height).toBeGreaterThanOrEqual(40)
                 expect(
                     result.documentWidth,
                     `${width}/${theme}/${zoom} document`,
@@ -162,12 +178,7 @@ test('stage22 48 viewport theme zoom-equivalent layouts have spaced usable butto
                         box.scrollWidth,
                         `${width}/${theme}/${zoom} ${box.class}`,
                     ).toBeLessThanOrEqual(box.width + 1)
-                await actions
-                    .getByRole('button', { name: 'Предпросмотр', exact: true })
-                    .click({ trial: true })
-                await actions
-                    .getByRole('button', { name: 'Рассчитать и сохранить', exact: true })
-                    .click({ trial: true })
+                await save.click({ trial: true })
                 await p.screenshot({
                     path: testInfo.outputPath(`layout-${width}-${theme}-${zoom}.png`),
                 })
